@@ -34,6 +34,9 @@ npm run test:e2e
 | `npm run test` / `test:watch` / `test:coverage` | Vitest                                          |
 | `npm run test:e2e`                              | Playwright                                      |
 | `npm run verify`                                | typecheck + lint + test — run before every push |
+| `npm run db:generate`                           | Generate a Drizzle migration from the schema    |
+| `npm run db:migrate`                            | Apply migrations (`DATABASE_URL_UNPOOLED`)      |
+| `npm run db:studio`                             | Drizzle Studio                                  |
 
 ## Tech stack
 

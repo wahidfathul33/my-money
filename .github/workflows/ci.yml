@@ -8,16 +8,50 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # Neon branch-per-PR (docs/13-deployment-vercel.md §1, §6): every PR gets
+    # a real, copy-on-write database branch, so migrations run against actual
+    # data structures before merge — not just against a schema diff. Reused
+    # by db-migrate below and by the test steps that need a live database
+    # (integration tests for postEntries, rollback, and reconciliation).
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+
+      - name: Create Neon branch for this PR
+        id: neon-branch
+        uses: neondatabase/create-branch-action@v5
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch_name: pr-${{ github.event.number || github.sha }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Run migrations against the PR branch
+        run: npm run db:migrate
+        env:
+          # drizzle.config.ts requires DATABASE_URL_UNPOOLED — see
+          # docs/13-deployment-vercel.md §4: migrations always run through the
+          # direct connection, never the pooler.
+          DATABASE_URL_UNPOOLED: ${{ steps.neon-branch.outputs.db_url }}
+
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test:coverage
+        env:
+          DATABASE_URL: ${{ steps.neon-branch.outputs.db_url_pooled }}
+          DATABASE_URL_UNPOOLED: ${{ steps.neon-branch.outputs.db_url }}
+
       - uses: actions/upload-artifact@v4
         with: { name: coverage, path: coverage/ }
+
+      - name: Delete Neon branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch: pr-${{ github.event.number || github.sha }}
+          api_key: ${{ secrets.NEON_API_KEY }}
 
   e2e:
     runs-on: ubuntu-latest

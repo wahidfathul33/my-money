@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { dbRead } from '@/lib/db/read';
 import { users } from '@/lib/db/schema';
 import { AppShell } from '@/components/layout/app-shell';
+import { getAddTransactionSheetData } from '@/features/transactions/sheet-data';
 
 /**
  * Session guard for every route under `(app)` — docs/12-security-and-auth.md
@@ -30,5 +31,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     redirect('/onboarding');
   }
 
-  return <AppShell>{children}</AppShell>;
+  // Fetched once per layout render (wallets + both types' quick/full
+  // category lists) so the FAB / "+ Tambah" sheet opens with everything
+  // already in hand — no loading state between the tap and a usable keypad
+  // (tasks/07-transactions-core/spec.md "Tidak ada tap tambahan").
+  const addTransactionSheetData = await getAddTransactionSheetData(session.user.id);
+
+  return <AppShell addTransactionSheetData={addTransactionSheetData}>{children}</AppShell>;
 }

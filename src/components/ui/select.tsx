@@ -33,17 +33,25 @@ export function Select({
   className,
   ...props
 }: SelectProps) {
+  // `aria-labelledby` is a whitespace-tokenized list of ID *references* —
+  // an id containing a space (e.g. a multi-word label like "Jenis dompet")
+  // gets parsed as two separate, nonexistent id tokens, so the reference
+  // silently fails to resolve and the trigger ends up with NO accessible
+  // name at all (confirmed via Playwright's accessibility snapshot while
+  // building task 05's wallet-type Select, which uses the two-word label
+  // "Jenis dompet"). Slugifying keeps this a no-op for every existing
+  // single-word label (e.g. "Dompet" in kitchen-sink-content.tsx) while
+  // fixing every future multi-word one.
+  const labelId = `${label.replace(/\s+/g, '-')}-label`;
+
   return (
     <div className="flex flex-col gap-1.5">
       <SelectPrimitive.Root {...props}>
-        <span
-          id={`${label}-label`}
-          className={cn('text-text text-sm font-medium', hideLabel && 'sr-only')}
-        >
+        <span id={labelId} className={cn('text-text text-sm font-medium', hideLabel && 'sr-only')}>
           {label}
         </span>
         <SelectPrimitive.Trigger
-          aria-labelledby={`${label}-label`}
+          aria-labelledby={labelId}
           className={cn(
             'rounded-input border-border bg-surface text-body text-text flex h-11 items-center justify-between gap-2 border px-3',
             'focus-visible:outline-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',

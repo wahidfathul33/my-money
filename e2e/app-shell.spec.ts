@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from './fixtures/authenticated';
 
 const MOBILE = { width: 375, height: 812 };
 const TABLET = { width: 900, height: 1024 };

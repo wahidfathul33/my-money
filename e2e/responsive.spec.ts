@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/authenticated';
 
 // tasks/02-app-shell-navigation/spec.md kriteria penerimaan: "Test
 // responsif lulus di 360/375/390/430/768/1024/1440 tanpa horizontal

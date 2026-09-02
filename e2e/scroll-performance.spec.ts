@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/authenticated';
 
 /**
  * Proksi untuk kriteria penerimaan "daftar 200 item tetap >=55fps di

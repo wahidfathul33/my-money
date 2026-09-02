@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/authenticated';
 
 test.describe('Batas error & not-found', () => {
   test('404: pesan actionable + tautan kembali ke Beranda', async ({ page }) => {

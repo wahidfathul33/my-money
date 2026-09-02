@@ -26,6 +26,12 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // The dev-mode route indicator overlay sits on top of the desktop
+  // sidebar's "+ Tambah" button and swallows its clicks (confirmed via
+  // Playwright's own action log: "<nextjs-portal> ... intercepts pointer
+  // events") — reproduced 3/3 in isolation. Dev-only cosmetic feature, safe
+  // to disable; doesn't affect production.
+  devIndicators: false,
   async headers() {
     return [
       {

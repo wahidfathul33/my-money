@@ -20,10 +20,24 @@ const baseURL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: './e2e',
+  // Every spec now authenticates via the real dbWrite session-seed fixture
+  // (e2e/fixtures/authenticated.ts), and most navigate through (app) routes
+  // that do their own DB reads. Combined with `next dev`/Turbopack's
+  // on-demand first-hit compile of a route, this occasionally exceeds the
+  // 30s default — e2e/auth.spec.ts already documented and worked around
+  // this per-test before the fixture existed; raising it globally now that
+  // every spec hits the same real network+compile cost.
+  timeout: 60_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Every spec now authenticates via a real dbWrite session-seed (the
+  // e2e/fixtures/authenticated.ts auto-fixture, added when task 04's auth
+  // guard started protecting the routes task 02's suites navigate to).
+  // Unbounded local parallelism (`undefined` = CPU count) hammers the real
+  // Neon connection hard enough to time out fixture setup itself — the same
+  // contention vitest.config.ts documents for integration test files.
+  workers: process.env.CI ? 1 : 4,
   reporter: [['html', { open: 'never' }]],
   use: {
     baseURL,

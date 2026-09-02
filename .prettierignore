@@ -1,0 +1,10 @@
+node_modules
+.next
+coverage
+playwright-report
+test-results
+package-lock.json
+
+# Spec content — authoritative prose, not reformatted by this tooling
+docs
+tasks

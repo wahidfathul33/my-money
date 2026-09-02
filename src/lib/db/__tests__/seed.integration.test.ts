@@ -13,7 +13,7 @@ import { dbWrite } from '@/lib/db/write';
 import { categories } from '@/lib/db/schema/categories';
 import { wallets } from '@/lib/db/schema/wallets';
 import { users } from '@/lib/db/schema/users';
-import { CANONICAL_CATEGORIES, seedNewUser, STARTER_WALLET_NAME } from '../seed';
+import { CATEGORY_CATALOG, seedNewUser, STARTER_WALLET_NAME } from '../seed';
 import { createTestUser, deleteTestUser } from './test-helpers';
 
 describe('seedNewUser', () => {
@@ -37,12 +37,12 @@ describe('seedNewUser', () => {
       .select()
       .from(categories)
       .where(eq(categories.userId, userId));
-    expect(seededCategories).toHaveLength(CANONICAL_CATEGORIES.length);
+    expect(seededCategories).toHaveLength(CATEGORY_CATALOG.length);
     expect(seededCategories.filter((c) => c.type === 'expense')).toHaveLength(10);
     expect(seededCategories.filter((c) => c.type === 'income')).toHaveLength(6);
     expect(seededCategories.every((c) => c.systemKey !== null)).toBe(true);
 
-    for (const canonical of CANONICAL_CATEGORIES) {
+    for (const canonical of CATEGORY_CATALOG) {
       const match = seededCategories.find((row) => row.systemKey === canonical.systemKey);
       expect(match, `missing category for system_key ${canonical.systemKey}`).toBeDefined();
       expect(match?.name).toBe(canonical.name);
@@ -82,7 +82,7 @@ describe('seedNewUser', () => {
       .select()
       .from(categories)
       .where(eq(categories.userId, userId));
-    expect(seededCategories).toHaveLength(CANONICAL_CATEGORIES.length);
+    expect(seededCategories).toHaveLength(CATEGORY_CATALOG.length);
 
     const seededWallets = await dbWrite.select().from(wallets).where(eq(wallets.userId, userId));
     expect(seededWallets).toHaveLength(1);

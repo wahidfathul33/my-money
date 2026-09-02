@@ -1,26 +1,474 @@
 @import 'tailwindcss';
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Token desain MyMoney — lihat docs/07-design-system.md §2-13.
+ * Nilai OKLCH disalin apa adanya dari dokumen; jangan sesuaikan tanpa
+ * memperbarui dokumennya terlebih dahulu.
+ */
+
+@theme {
+  /* ---------------------------------------------------------------- */
+  /* Warna — netral (§4)                                               */
+  /* ---------------------------------------------------------------- */
+  --color-bg: oklch(99% 0.002 250);
+  --color-surface: oklch(100% 0 0);
+  --color-surface-raised: oklch(97% 0.003 250);
+  --color-border: oklch(92% 0.004 250);
+  --color-separator: oklch(88% 0.005 250);
+  --color-text: oklch(21% 0.012 250);
+  --color-text-muted: oklch(52% 0.01 250);
+  --color-text-subtle: oklch(65% 0.008 250);
+  --color-scrim: oklch(21% 0.012 250 / 0.32);
+
+  /* Merek */
+  --color-brand: oklch(58% 0.118 195);
+  --color-brand-hover: oklch(52% 0.118 195);
+  --color-brand-subtle: oklch(96% 0.028 195);
+  --color-on-brand: oklch(100% 0 0);
+
+  /* Semantik finansial */
+  --color-positive: oklch(58% 0.145 152);
+  --color-positive-subtle: oklch(96% 0.035 152);
+  --color-negative: oklch(56% 0.185 25);
+  --color-negative-subtle: oklch(96% 0.04 25);
+  --color-neutral-flow: oklch(52% 0.01 250);
+
+  --color-warning: oklch(72% 0.15 75);
+  --color-warning-subtle: oklch(96% 0.045 75);
+  --color-danger: oklch(56% 0.185 25);
+
+  /* ---------------------------------------------------------------- */
+  /* Tipografi (§5)                                                    */
+  /* ---------------------------------------------------------------- */
+  /* var(--font-inter) diisi next/font (layout.tsx) — subset latin, hanya
+     varian variable, display: swap. */
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+  --text-hero: 2.5rem; /* 40px — nominal utama dashboard */
+  --text-display: 2rem; /* 32px — nominal besar */
+  --text-title: 1.375rem; /* 22px — judul halaman */
+  --text-heading: 1.0625rem; /* 17px — judul bagian */
+  --text-body: 1rem; /* 16px — dasar; batas bawah untuk input */
+  --text-sm: 0.875rem; /* 14px — sekunder */
+  --text-xs: 0.75rem; /* 12px — label, batas terkecil */
+
+  /* ---------------------------------------------------------------- */
+  /* Spasi & layout (§7)                                               */
+  /* ---------------------------------------------------------------- */
+  --space-page-x: 1rem;
+  --space-section: 1.5rem;
+  --space-card: 1rem;
+  --nav-height: 3.5rem;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+
+  /* ---------------------------------------------------------------- */
+  /* Bentuk & radius — konsentris (§6)                                 */
+  /* ---------------------------------------------------------------- */
+  --radius-sheet: 1.5rem; /* 24px — hanya sudut atas */
+  --radius-card: 1rem; /* 16px */
+  --radius-inner: 0.75rem; /* 12px — di dalam kartu ber-padding 4px */
+  --radius-input: 0.75rem; /* 12px */
+  --radius-chip: 9999px;
+  --radius-full: 9999px;
+
+  /* ---------------------------------------------------------------- */
+  /* Material & elevasi (§3)                                           */
+  /* ---------------------------------------------------------------- */
+  --material-blur: 24px;
+  --material-saturate: 180%;
+
+  --shadow-raised: 0 1px 2px oklch(21% 0.012 250 / 0.04), 0 2px 8px oklch(21% 0.012 250 / 0.06);
+  --shadow-float: 0 8px 32px oklch(21% 0.012 250 / 0.12);
+  --shadow-fab: 0 6px 16px oklch(58% 0.118 195 / 0.32);
+
+  /* ---------------------------------------------------------------- */
+  /* Gerak (§8)                                                        */
+  /* ---------------------------------------------------------------- */
+  /* Pegas ringan dengan sedikit overshoot — sheet, kartu, pop-in.
+     Di-generate dengan easing-generator (linear() spring approximator,
+     redaman ~0.7, kekakuan sedang) dan divalidasi di perangkat nyata
+     (iPhone 13 Safari, Pixel 7 Chrome) sebelum dikunci di sini. */
+  --ease-spring: linear(
+    0,
+    0.006,
+    0.024,
+    0.055,
+    0.098,
+    0.152,
+    0.217,
+    0.29,
+    0.371,
+    0.458,
+    0.549,
+    0.642,
+    0.735,
+    0.826,
+    0.913,
+    0.993 52%,
+    1.048,
+    1.078,
+    1.085,
+    1.073 68%,
+    1.045,
+    1.017,
+    0.998,
+    0.99 86%,
+    0.996,
+    1.001,
+    1
+  );
+  --ease-out-soft: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --dur-instant: 100ms;
+  --dur-fast: 200ms;
+  --dur-normal: 300ms;
+  --dur-sheet: 420ms;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/*
+ * PENTING: `@theme` TIDAK boleh dinest di dalam `@media` untuk override
+ * mode gelap, walau itu yang ditulis di docs/07-design-system.md §4 (sudah
+ * dikonfirmasi lewat CSS terkompilasi — lihat laporan task 01). `@theme`
+ * adalah mekanisme build-time Tailwind untuk mendaftarkan token & membuat
+ * utility class; menaruhnya di dalam `@media` membuat kompilernya
+ * menyatukan kedua blok `@theme` ke satu deklarasi `:root` tanpa syarat —
+ * versi gelap diam-diam MENIMPA versi terang secara permanen, membuat
+ * seluruh aplikasi selalu gelap terlepas dari preferensi OS.
+ *
+ * Pola yang benar: token terang tetap di `@theme` (nilai default & sumber
+ * utility class), override gelap ditulis sebagai `:root` biasa di dalam
+ * `@media` — custom property tetap sama, hanya nilainya yang berubah
+ * lewat cascade normal saat runtime.
+ */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --color-bg: oklch(15% 0.01 250);
+    --color-surface: oklch(19% 0.012 250);
+    --color-surface-raised: oklch(23% 0.012 250);
+    --color-border: oklch(28% 0.012 250);
+    --color-separator: oklch(32% 0.012 250);
+    --color-text: oklch(96% 0.004 250);
+    --color-text-muted: oklch(72% 0.01 250);
+    --color-text-subtle: oklch(58% 0.01 250);
+    --color-scrim: oklch(8% 0.01 250 / 0.56);
+
+    --color-brand: oklch(72% 0.115 195);
+    --color-brand-subtle: oklch(27% 0.045 195);
+    --color-positive: oklch(74% 0.15 152);
+    --color-positive-subtle: oklch(25% 0.045 152);
+    --color-negative: oklch(71% 0.16 25);
+    --color-negative-subtle: oklch(25% 0.05 25);
   }
 }
 
+/* ====================================================================== */
+/* Dasar dokumen                                                          */
+/* ====================================================================== */
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none; /* cegah pull-to-refresh tak sengaja */
+}
+
+/* Ring fokus konsisten di seluruh kontrol — tidak pernah outline: none
+   tanpa pengganti. */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* ====================================================================== */
+/* Angka finansial (§5.1)                                                 */
+/* ====================================================================== */
+
+.font-money {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.02em;
+}
+.text-hero,
+.text-display {
+  letter-spacing: -0.03em;
+}
+
+/* ====================================================================== */
+/* Material kaca (§3.1) — hanya untuk elemen mengambang berjumlah tetap    */
+/* ====================================================================== */
+
+.material-glass {
+  background: color-mix(in oklch, var(--color-surface) 72%, transparent);
+  -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  border-top: 0.5px solid color-mix(in oklch, var(--color-border) 60%, transparent);
+}
+
+/* Tanpa dukungan → permukaan solid, bukan transparan tanpa blur. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .material-glass {
+    background: var(--color-surface);
+  }
+}
+
+/* Hemat daya / preferensi pengguna → jangan bayar biaya blur. */
+@media (prefers-reduced-transparency: reduce) {
+  .material-glass {
+    background: var(--color-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* ====================================================================== */
+/* Gerak & preferensi pengguna (§8)                                       */
+/* ====================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Transform tidak dihormati preferensi ini — matikan secara eksplisit,
+     sisakan fade (opacity) yang tetap berjalan. */
+  .sheet,
+  .pressable,
+  [data-radix-popper-content-wrapper],
+  .dialog-content {
+    translate: 0 !important;
+    scale: 1 !important;
+  }
+}
+
+/* ====================================================================== */
+/* Umpan balik tekan tanpa haptik (§9.1)                                  */
+/* ====================================================================== */
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+[role='button'],
+a {
+  touch-action: manipulation;
+}
+
+/* Skala saja — dipakai SEMUA kontrol interaktif, termasuk tombol berwarna
+   solid (primary/danger). Pergeseran warna neutral (.pressable-tint di
+   bawah) sengaja dipisah: mencampur warna permukaan netral ke atas fill
+   brand/negative akan membuat tombol berwarna berkedip pucat saat ditekan. */
+.pressable {
+  scale: 1;
+  transition: scale var(--dur-instant) var(--ease-out-soft);
+}
+.pressable:active {
+  scale: 0.97;
+}
+
+/* Opt-in untuk permukaan netral (secondary/ghost/chip/card) — state layer
+   diturunkan dari token lewat color-mix, bukan token baru (docs/07 §2). */
+.pressable-tint {
+  transition: background-color var(--dur-instant) linear;
+}
+.pressable-tint:active {
+  background-color: color-mix(in oklch, var(--color-surface) 92%, var(--color-text));
+}
+
+.list-row:has(:active) {
+  background-color: var(--color-surface-raised);
+}
+
+/* Teks bertema brand di atas permukaan terang (surface/bg/brand-subtle) —
+   mis. Chip terpilih, Tabs underline aktif. `--color-brand` mentah gagal
+   AA di mode terang (3.64-4.05:1 tergantung latar) tapi lolos nyaman di
+   mode gelap (6.27-8.33:1) — kebalikan dari kasus tombol solid di atas.
+   Mode terang memakai warna yang diturunkan lebih gelap (bukan token
+   baru, bukan mengubah `--color-brand`); mode gelap tetap token aslinya
+   karena sudah lolos. Diverifikasi ulang lewat axe (bukan cuma hitungan
+   manual) — lihat laporan task 01. */
+.text-brand-readable {
+  color: oklch(46% 0.118 195);
+}
+@media (prefers-color-scheme: dark) {
+  .text-brand-readable {
+    color: var(--color-brand);
+  }
+}
+
+/* Sama, tapi untuk Tabs (variant="underline"): warnanya hanya berlaku
+   saat trigger aktif, dipicu lewat atribut `data-state` Radix — bukan
+   `data-[state=active]:` Tailwind karena `.text-brand-readable` bukan
+   utility (lihat src/components/ui/tabs.tsx). */
+.tabs-trigger-underline[data-state='active'] {
+  color: oklch(46% 0.118 195);
+}
+@media (prefers-color-scheme: dark) {
+  .tabs-trigger-underline[data-state='active'] {
+    color: var(--color-brand);
+  }
+}
+
+/* Teks `--color-positive` di atas bg/surface (mis. MoneyText tone
+   "positive") gagal AA di mode terang (3.68-4.01:1) tapi lolos nyaman di
+   mode gelap (7.77-9.06:1). Sama polanya dengan .text-brand-readable di
+   atas. */
+.text-positive-readable {
+  color: oklch(44% 0.145 152);
+}
+@media (prefers-color-scheme: dark) {
+  .text-positive-readable {
+    color: var(--color-positive);
+  }
+}
+
+/* Fill solid untuk Button variant="danger". --color-negative (56%/71% L)
+   dipasangkan teks putih (--color-on-brand) gagal AA di kedua mode
+   (2.76:1 di gelap, lihat src/app/__tests__/contrast.test.ts). Diturunkan
+   lewat color-mix dari token yang sama — bukan mengganti nilai OKLCH-nya
+   (dilarang tanpa persetujuan) dan bukan token baru. */
+.fill-negative-solid {
+  background: color-mix(in oklch, var(--color-negative) 80%, black);
+}
+
+/* ====================================================================== */
+/* Sheet & dialog — masuk/keluar tanpa JS (§8.1)                          */
+/* ====================================================================== */
+
+@property --sheet-y {
+  syntax: '<length-percentage>';
+  inherits: false;
+  initial-value: 100%;
+}
+
+.sheet-content[data-state='open'] {
+  translate: 0 0;
+  opacity: 1;
+}
+
+.sheet-content {
+  transition:
+    translate var(--dur-sheet) var(--ease-spring),
+    opacity var(--dur-fast) var(--ease-out-soft),
+    display var(--dur-sheet) allow-discrete,
+    overlay var(--dur-sheet) allow-discrete;
+}
+
+.sheet-content[data-state='closed'] {
+  translate: 0 100%;
+  opacity: 0;
+}
+
+@starting-style {
+  .sheet-content[data-state='open'] {
+    translate: 0 100%;
+    opacity: 0;
+  }
+}
+
+.dialog-content[data-state='open'] {
+  scale: 1;
+  opacity: 1;
+}
+
+.dialog-content {
+  transition:
+    scale var(--dur-normal) var(--ease-spring),
+    opacity var(--dur-fast) var(--ease-out-soft),
+    display var(--dur-normal) allow-discrete,
+    overlay var(--dur-normal) allow-discrete;
+}
+
+.dialog-content[data-state='closed'] {
+  scale: 0.96;
+  opacity: 0;
+}
+
+@starting-style {
+  .dialog-content[data-state='open'] {
+    scale: 0.96;
+    opacity: 0;
+  }
+}
+
+.overlay[data-state='open'] {
+  opacity: 1;
+}
+.overlay {
+  background: var(--color-scrim);
+  transition:
+    opacity var(--dur-fast) var(--ease-out-soft),
+    display var(--dur-fast) allow-discrete,
+    overlay var(--dur-fast) allow-discrete;
+}
+.overlay[data-state='closed'] {
+  opacity: 0;
+}
+@starting-style {
+  .overlay[data-state='open'] {
+    opacity: 0;
+  }
+}
+
+/* ====================================================================== */
+/* Progress ring — @property (§2, §12)                                    */
+/* ====================================================================== */
+
+/* Custom property yang dapat dianimasikan lewat transition tanpa memicu
+   layout — dipakai ProgressRing (src/components/ui/progress.tsx). */
+@property --progress-value {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.ring-progress {
+  --progress-value: 0;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: conic-gradient(
+    var(--color-brand) calc(var(--progress-value) * 1%),
+    var(--color-surface-raised) 0
+  );
+  transition: --progress-value var(--dur-normal) var(--ease-out-soft);
+}
+
+.ring-progress::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+}
+
+/* ====================================================================== */
+/* Scroll & overscroll (§10)                                              */
+/* ====================================================================== */
+
+.sheet-scroll {
+  overscroll-behavior: contain;
+  max-height: 85dvh;
+}
+
+/* ====================================================================== */
+/* Safe area / iOS PWA (§11)                                              */
+/* ====================================================================== */
+
+.safe-bottom {
+  padding-bottom: var(--safe-b);
+}
+.safe-top {
+  padding-top: var(--safe-t);
 }

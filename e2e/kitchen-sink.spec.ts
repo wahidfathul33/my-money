@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Locator } from '@playwright/test';
+import { type Locator } from '@playwright/test';
+import { expect, test } from './fixtures/base';
 
 const MOBILE_VIEWPORT = { width: 360, height: 800 };
 const MIN_TARGET_PX = 44;

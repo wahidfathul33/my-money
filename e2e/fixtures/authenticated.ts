@@ -1,6 +1,6 @@
-import { test as base, expect } from '@playwright/test';
 import { deleteTestUser } from '../../src/lib/db/__tests__/test-helpers';
 import { seedSessionUser, setSessionCookie } from '../helpers/auth-session';
+import { test as base, expect } from './base';
 
 /**
  * Drop-in replacement for `@playwright/test`'s `test` — every test in a

@@ -1,6 +1,6 @@
-import { test, expect } from '@playwright/test';
 import { deleteTestUser } from '../src/lib/db/__tests__/test-helpers';
 import { seedSessionUser, setSessionCookie, sessionExists } from './helpers/auth-session';
+import { test, expect } from './fixtures/base';
 
 /**
  * e2e/auth.spec.ts — login → onboarding → dashboard, logout revokes the

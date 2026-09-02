@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/base';
 
 // task 00's placeholder `src/app/page.tsx` (bootstrap) is superseded by
 // `src/app/(app)/page.tsx` (the real, protected dashboard — task 04) at the

@@ -34,7 +34,15 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="id" className={`${inter.variable} h-full antialiased`}>
+    // data-scroll-behavior tells Next.js the `scroll-behavior: smooth` in
+    // globals.css is deliberate (docs/07-design-system.md), silencing its
+    // dev-mode warning — which was intermittently intercepting e2e clicks
+    // via the dev overlay portal it renders alongside the message.
+    <html
+      lang="id"
+      className={`${inter.variable} h-full antialiased`}
+      data-scroll-behavior="smooth"
+    >
       <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );

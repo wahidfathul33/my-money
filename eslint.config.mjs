@@ -32,6 +32,18 @@ const eslintConfig = defineConfig([
     },
   },
 
+  // Playwright fixtures conventionally destructure a `use` callback (e.g.
+  // `async ({ page }, use) => { ... await use(x) ... }`) — eslint-plugin-
+  // react-hooks (from eslint-config-next) matches that against React's
+  // `use()` hook and flags it. e2e/**/*.ts isn't React code; disable the
+  // hooks rule there rather than littering per-line disable comments.
+  {
+    files: ['e2e/**/*.ts'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+    },
+  },
+
   // 3. dbWrite is the only connection allowed to touch financial tables, and
   // only lib/services/** may import it (docs/11-tech-architecture.md §3).
   // Everything else — Server Components, Client Components, features/**,

@@ -58,26 +58,30 @@ describe('fromRupiah', () => {
 });
 
 describe('formatIDR', () => {
-  it('formats a positive amount with thousands separators', () => {
-    expect(formatIDR(150000000n)).toBe('Rp 1.500.000');
+  // Format per docs/08-copywriting.md §4: "Rp" sticks to the number (no
+  // space), and a negative amount uses a proper minus sign (U+2212, "−"),
+  // not a hyphen. This supersedes the space-including example in
+  // docs/05-financial-integrity.md §2 — see the doc comment on formatIDR.
+  it('formats a positive amount with thousands separators, "Rp" with no space', () => {
+    expect(formatIDR(150000000n)).toBe('Rp1.500.000');
   });
 
   it('formats zero', () => {
-    expect(formatIDR(0n)).toBe('Rp 0');
+    expect(formatIDR(0n)).toBe('Rp0');
   });
 
-  it('formats a negative amount with a leading minus before "Rp"', () => {
-    expect(formatIDR(-150000000n)).toBe('-Rp 1.500.000');
+  it('formats a negative amount with a proper minus sign (U+2212) directly before "Rp"', () => {
+    expect(formatIDR(-150000000n)).toBe('−Rp1.500.000');
   });
 
   it('truncates minor units (sub-rupiah) when displaying', () => {
-    expect(formatIDR(150000050n)).toBe('Rp 1.500.000');
+    expect(formatIDR(150000050n)).toBe('Rp1.500.000');
   });
 
   it('formats amounts near the int64 boundary without precision loss', () => {
-    expect(formatIDR(INT64_MAX)).toBe('Rp ' + (INT64_MAX / MINOR_UNITS).toLocaleString('id-ID'));
+    expect(formatIDR(INT64_MAX)).toBe('Rp' + (INT64_MAX / MINOR_UNITS).toLocaleString('id-ID'));
     expect(formatIDR(INT64_MIN)).toBe(
-      '-Rp ' + (-INT64_MIN / MINOR_UNITS).toLocaleString('id-ID'),
+      '−Rp' + (-INT64_MIN / MINOR_UNITS).toLocaleString('id-ID'),
     );
   });
 });

@@ -36,12 +36,22 @@ export function fromRupiah(rupiah: number | string): Money {
   return negative ? -magnitude : magnitude;
 }
 
-/** Formats minor units as an "Rp "-prefixed, thousands-grouped string. */
+/**
+ * Formats minor units as an "Rp"-prefixed, thousands-grouped string, per
+ * docs/08-copywriting.md §4: `Rp` sticks to the number with no space, and a
+ * negative amount gets a proper minus sign (U+2212, not a hyphen) directly
+ * before `Rp` — `−Rp45.000`, not `-Rp 45.000`. docs/05-financial-integrity.md's
+ * own §2 code sample uses a space; docs/08 §4 explicitly supersedes it
+ * ("Ini mengubah formatIDR ... yang saat ini memakai spasi. Panduan ini yang
+ * berlaku"). This signature and behavior are relied on by
+ * src/components/finance/money-text.tsx (task 01) — keep them stable.
+ */
 export function formatIDR(amount: Money): string {
   const negative = amount < 0n;
   const abs = negative ? -amount : amount;
   const rupiah = abs / MINOR_UNITS;
-  return (negative ? '-' : '') + 'Rp ' + rupiah.toLocaleString('id-ID');
+  const formatted = 'Rp' + rupiah.toLocaleString('id-ID');
+  return negative ? `−${formatted}` : formatted;
 }
 
 /**

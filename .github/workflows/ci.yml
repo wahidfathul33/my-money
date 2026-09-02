@@ -65,3 +65,60 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: playwright-report, path: playwright-report/ }
+
+  # Anggaran performa (docs/11-tech-architecture.md §9, tasks/02-app-shell-
+  # navigation/spec.md). docs/13-deployment-vercel.md §6 menaruh job ini di
+  # atas preview deployment Vercel lewat `${{ steps.vercel.outputs.preview-
+  # url }}` — repo ini belum punya step Vercel Action yang menghasilkan URL
+  # itu (deploy masih murni lewat integrasi Git bawaan Vercel, tanpa Action
+  # terpisah di CI). Sampai step itu ditambahkan, anggaran diukur terhadap
+  # build produksi yang di-build & di-serve di runner ini sendiri — server
+  # dan kode yang sama persis dengan yang di-deploy, hanya tanpa jaringan
+  # Vercel edge di antaranya. `npm run build` menjalankan migrasi
+  # sungguhan (lihat job `verify`), jadi butuh branch Neon sendiri —
+  # dipisah dari branch job `verify` supaya kedua job dapat berjalan
+  # paralel tanpa rebutan nama branch.
+  lighthouse:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+
+      - name: Create Neon branch for Lighthouse build
+        id: neon-branch
+        uses: neondatabase/create-branch-action@v5
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch_name: pr-${{ github.event.number || github.sha }}-lighthouse
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Build production bundle
+        run: npm run build
+        env:
+          DATABASE_URL_UNPOOLED: ${{ steps.neon-branch.outputs.db_url }}
+
+      - name: Run Lighthouse CI against the production build
+        uses: treosh/lighthouse-ci-action@v11
+        with:
+          urls: |
+            http://localhost:3000/
+            http://localhost:3000/transactions
+            http://localhost:3000/wealth
+            http://localhost:3000/settings
+          budgetPath: ./lighthouse-budget.json
+          startServerCommand: npm run start
+          startServerReadyPattern: 'Ready in'
+          startServerReadyTimeout: 30000
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
+      - name: Delete Neon branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch: pr-${{ github.event.number || github.sha }}-lighthouse
+          api_key: ${{ secrets.NEON_API_KEY }}

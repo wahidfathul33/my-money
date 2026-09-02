@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
@@ -8,18 +9,18 @@ import { Select } from '@/components/ui/select';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import type { IconName } from '@/lib/icons';
 import type { CategoryColor } from '@/lib/services/categories';
-import {
-  CATEGORY_FORM_IDLE_STATE,
-  createCategoryAction,
-  updateCategoryAction,
-  type CategoryFormState,
-} from '../actions';
+import { createCategoryAction, updateCategoryAction, type CategoryFormState } from '../actions';
 import type { CategoryRow } from '../queries';
 import { CategoryIcon } from './category-icon';
 import { ColorPicker } from './color-picker';
 import { IconPicker } from './icon-picker';
 
 const NO_PARENT = 'none';
+
+// Defined here, not in '../actions': a `'use server'` file may only export
+// async functions, so the idle state constant can't live there — see the
+// comment above `CategoryFormState` in actions.ts.
+const CATEGORY_FORM_IDLE_STATE: CategoryFormState = { status: 'idle' };
 
 interface CategorySheetProps {
   open: boolean;
@@ -89,6 +90,7 @@ interface CategorySheetFormProps {
 }
 
 function CategorySheetForm({ type, category, parentOptions, onDone }: CategorySheetFormProps) {
+  const router = useRouter();
   const isEdit = category !== undefined;
   const isBuiltIn = isEdit && category.systemKey !== null;
   const action = isEdit ? updateCategoryAction : createCategoryAction;
@@ -104,10 +106,22 @@ function CategorySheetForm({ type, category, parentOptions, onDone }: CategorySh
   // Notifying the PARENT that submission succeeded (so it can close the
   // sheet) is a callback into an external owner, not this component's own
   // state — the pattern `react-hooks/set-state-in-effect` intends to allow
-  // ("subscribe for updates from some external system").
+  // ("subscribe for updates from some external system"). `router.refresh()`
+  // is the same explicit re-fetch archiveCategoryAction/restoreCategoryAction/
+  // deleteCategoryAction/reorderCategoriesAction's own callers already do
+  // (category-list.tsx, delete-category-dialog.tsx) — needed here too:
+  // the action's own `revalidatePath` marks the route's cache stale
+  // server-side, but observed NOT to reliably push a fresh RSC payload to
+  // THIS client on its own when the mutation was submitted through
+  // `useActionState` + a native `<form action>` (confirmed by
+  // e2e/categories.spec.ts hanging with the sheet still open and the new
+  // category never appearing, despite the action itself returning 200).
   useEffect(() => {
-    if (state.status === 'success') onDone();
-  }, [state, onDone]);
+    if (state.status === 'success') {
+      router.refresh();
+      onDone();
+    }
+  }, [state, onDone, router]);
 
   const error = state.status === 'error' ? state.error : null;
 

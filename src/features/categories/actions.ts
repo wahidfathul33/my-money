@@ -47,7 +47,14 @@ export type CategoryFormState =
   | { status: 'success' }
   | { status: 'error'; error: string; fields?: Record<string, string[] | undefined> };
 
-export const CATEGORY_FORM_IDLE_STATE: CategoryFormState = { status: 'idle' };
+// No `CATEGORY_FORM_IDLE_STATE` constant here, deliberately: a `'use server'`
+// file may only export async functions — Next.js rejects any other runtime
+// export (a plain object included) with "A 'use server' file can only
+// export async functions, found object." `CategoryFormState` above is
+// fine, since `export type` is erased at compile time and never reaches
+// the server-actions bundler. The `{ status: 'idle' }` initial value
+// itself is defined where it's actually used —
+// src/features/categories/components/category-sheet.tsx.
 
 /** Domain errors become a message the form can render; anything else is a bug and propagates. */
 function toFormState(err: unknown): CategoryFormState {

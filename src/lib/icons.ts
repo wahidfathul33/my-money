@@ -578,7 +578,13 @@ export function isIconName(value: string): value is IconName {
 }
 
 export interface IconProps extends Omit<LucideProps, 'ref'> {
-  name: IconName;
+  // Plain `string`, not `IconName`: callers very often have a value fresh
+  // out of the database (`categories.icon` etc., a plain TEXT column) that
+  // TypeScript can't statically narrow to the curated set. Falling back to
+  // rendering nothing for an unrecognized value (below) is the runtime
+  // half of that same reality — a value written before this file existed,
+  // or under a future catalog change, shouldn't crash the page it's on.
+  name: string;
 }
 
 /**
@@ -598,7 +604,7 @@ export interface IconProps extends Omit<LucideProps, 'ref'> {
  * content (e.g. a standalone icon-only button).
  */
 export function Icon({ name, ...props }: IconProps) {
-  const Component = ICONS[name];
+  const Component = isIconName(name) ? ICONS[name] : undefined;
   if (!Component) return null;
   return createElement(Component, { 'aria-hidden': !props['aria-label'], ...props });
 }

@@ -457,8 +457,17 @@ a {
 /* Scroll & overscroll (§10)                                              */
 /* ====================================================================== */
 
+/* `max-height` alone doesn't make overflowing content reachable — without
+   `overflow-y`, content past 85dvh just spills silently past the sheet's
+   own (fixed-positioned, so page scroll can't reach it either) box with
+   the browser's default `overflow: visible`. Every sheet built before
+   task 06 categories happened to fit under 85dvh, so this went unnoticed
+   until the category create/edit form's icon picker + color picker pushed
+   past it — surfaced by e2e/categories.spec.ts (submit button reported
+   "outside of the viewport" with no way to scroll to it). */
 .sheet-scroll {
   overscroll-behavior: contain;
+  overflow-y: auto;
   max-height: 85dvh;
 }
 

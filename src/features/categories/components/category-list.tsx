@@ -39,16 +39,22 @@ export function CategoryList({ type, categories }: CategoryListProps) {
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CategoryRow | null>(null);
   const [order, setOrder] = useState(categories);
-  const [, startTransition] = useTransition();
-
-  // Keep local order in sync when the server-provided list changes (e.g.
-  // after router.refresh() following an archive/delete elsewhere).
-  if (
-    order !== categories &&
-    order.map((c) => c.id).join() !== categories.map((c) => c.id).join()
-  ) {
+  // Tracks the last `categories` prop `order` was synced FROM — not the
+  // same thing as `order` itself, which also changes from local reorder
+  // clicks below. Comparing by reference (a fresh array from the Server
+  // Component after every router.refresh(), whatever triggered it) is what
+  // makes this fire on ANY server-side change, not just an add/remove: an
+  // earlier version of this compared id LISTS instead, which silently
+  // missed rename/archive/icon/color edits — none of those change which
+  // ids are present, so a `join()`-based check never saw them and the row
+  // kept rendering stale data until an unrelated add/remove happened to
+  // resync it.
+  const [syncedFrom, setSyncedFrom] = useState(categories);
+  if (categories !== syncedFrom) {
+    setSyncedFrom(categories);
     setOrder(categories);
   }
+  const [, startTransition] = useTransition();
 
   function move(index: number, direction: -1 | 1) {
     const target = index + direction;

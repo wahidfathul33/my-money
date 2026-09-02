@@ -472,3 +472,30 @@ a {
 .safe-top {
   padding-top: var(--safe-t);
 }
+
+/* ====================================================================== */
+/* Shell navigasi (§11.2, task 02) — tinggi & spasi nav dipusatkan di sini */
+/* supaya bottom nav dan padding konten yang menghindarinya tidak pernah  */
+/* berbeda angka.                                                         */
+/* ====================================================================== */
+
+.bottom-nav {
+  padding-bottom: var(--safe-b);
+  height: calc(var(--nav-height) + var(--safe-b));
+}
+
+/* Konten di bawah bottom nav mobile — item terakhir daftar tidak tertutup
+   (tasks/02/spec.md kriteria penerimaan). Tidak berlaku ≥768px, tempat nav
+   berubah jadi rail/sidebar di sisi kiri. */
+.page-content-bottom-nav-padding {
+  padding-bottom: calc(var(--nav-height) + var(--safe-b) + 1rem);
+}
+@media (min-width: 768px) {
+  .page-content-bottom-nav-padding {
+    padding-bottom: 1.5rem;
+  }
+}
+
+.sticky-header {
+  padding-top: var(--safe-t);
+}

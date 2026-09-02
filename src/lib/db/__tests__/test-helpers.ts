@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { dbWrite } from '@/lib/db/write';
 import { users } from '@/lib/db/schema/users';
 import { wallets } from '@/lib/db/schema/wallets';
+import { categories } from '@/lib/db/schema/categories';
 import { ledgerEntries } from '@/lib/db/schema/transactions';
 
 export async function createTestUser(overrides: Partial<typeof users.$inferInsert> = {}) {
@@ -33,6 +34,21 @@ export async function createTestWallet(
     userId,
     name: 'Test Wallet',
     type: 'cash',
+    ...overrides,
+  });
+  return id;
+}
+
+export async function createTestCategory(
+  userId: string,
+  overrides: Partial<typeof categories.$inferInsert> = {},
+) {
+  const id = uuidv7();
+  await dbWrite.insert(categories).values({
+    id,
+    userId,
+    name: 'Test Category',
+    type: 'expense',
     ...overrides,
   });
   return id;

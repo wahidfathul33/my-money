@@ -69,8 +69,16 @@ export function Button({
       aria-busy={loading || undefined}
       {...props}
     >
-      {loading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-      {children}
+      {/* Radix Slot requires exactly one element child to clone props onto —
+          an array (even with a falsy `loading && ...` sibling) breaks it. */}
+      {asChild ? (
+        children
+      ) : (
+        <>
+          {loading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+          {children}
+        </>
+      )}
     </Comp>
   );
 }

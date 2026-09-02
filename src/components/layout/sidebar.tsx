@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { EmptyState } from '@/components/ui/empty-state';
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/sheet';
+import { AddTransactionSheet } from '@/features/transactions/components/add-transaction-sheet';
+import type { AddTransactionSheetData } from '@/features/transactions/sheet-data';
 import { cn } from '@/lib/utils';
 import { isRouteActive, SIDEBAR_ITEMS } from './nav-items';
 
@@ -16,19 +16,14 @@ import { isRouteActive, SIDEBAR_ITEMS } from './nav-items';
  * Dialog center TIDAK memakai `material-glass` (lihat CONTENT_VARIANT_CLASS
  * di sheet.tsx), jadi tidak ikut dihitung dalam anggaran 2 backdrop-filter.
  */
-function AddEntryDialog({ trigger }: { trigger: ReactNode }) {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent variant="center" title="Tambah transaksi">
-        <EmptyState
-          icon={Plus}
-          title="Catat transaksi"
-          description="Form pencatatan datang di task berikutnya. Dialog ini hanya membuktikan padanan desktop dari FAB."
-        />
-      </DialogContent>
-    </Dialog>
-  );
+function AddEntryDialog({
+  trigger,
+  addTransactionSheetData,
+}: {
+  trigger: ReactNode;
+  addTransactionSheetData: AddTransactionSheetData;
+}) {
+  return <AddTransactionSheet {...addTransactionSheetData} variant="center" trigger={trigger} />;
 }
 
 /**
@@ -46,7 +41,11 @@ function AddEntryDialog({ trigger }: { trigger: ReactNode }) {
  * `title`/`aria-label` native untuk tooltip hover — bukan komponen Tooltip
  * — kecuali pada slot Keluarga yang memang non-interaktif (`span`).
  */
-export function Sidebar() {
+interface SidebarProps {
+  addTransactionSheetData: AddTransactionSheetData;
+}
+
+export function Sidebar({ addTransactionSheetData }: SidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -57,6 +56,7 @@ export function Sidebar() {
       {/* Rail — 768–1023px */}
       <div className="flex flex-col items-center gap-2 py-4 lg:hidden">
         <AddEntryDialog
+          addTransactionSheetData={addTransactionSheetData}
           trigger={
             <button
               type="button"
@@ -132,7 +132,10 @@ export function Sidebar() {
             </li>
           ))}
         </ul>
-        <AddEntryDialog trigger={<Button className="w-full">+ Tambah</Button>} />
+        <AddEntryDialog
+          addTransactionSheetData={addTransactionSheetData}
+          trigger={<Button className="w-full">+ Tambah</Button>}
+        />
       </div>
     </nav>
   );

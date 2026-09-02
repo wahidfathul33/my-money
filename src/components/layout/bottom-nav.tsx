@@ -3,8 +3,9 @@
 import { MoreHorizontal, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { EmptyState } from '@/components/ui/empty-state';
 import { Sheet, SheetClose, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { AddTransactionSheet } from '@/features/transactions/components/add-transaction-sheet';
+import type { AddTransactionSheetData } from '@/features/transactions/sheet-data';
 import { cn } from '@/lib/utils';
 import { beranda, isRouteActive, kekayaan, MORE_SHEET_ITEMS, transaksi } from './nav-items';
 import type { NavItem } from './nav-items';
@@ -38,7 +39,11 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
-export function BottomNav() {
+interface BottomNavProps {
+  addTransactionSheetData: AddTransactionSheetData;
+}
+
+export function BottomNav({ addTransactionSheetData }: BottomNavProps) {
   const pathname = usePathname();
   const moreActive = MORE_SHEET_ITEMS.some((item) => isRouteActive(pathname, item.href));
 
@@ -50,10 +55,11 @@ export function BottomNav() {
       <NavLink item={beranda} active={isRouteActive(pathname, beranda.href)} />
       <NavLink item={transaksi} active={isRouteActive(pathname, transaksi.href)} />
 
-      {/* FAB — tidak mengubah URL (docs/02-IA "Aturan"). Isinya placeholder
-          kosong di task ini; form sungguhan datang di task 07. */}
-      <Sheet>
-        <SheetTrigger asChild>
+      {/* FAB — tidak mengubah URL (docs/02-IA "Aturan"). */}
+      <AddTransactionSheet
+        {...addTransactionSheetData}
+        variant="bottom"
+        trigger={
           <button
             type="button"
             aria-label="Tambah transaksi"
@@ -61,15 +67,8 @@ export function BottomNav() {
           >
             <Plus className="size-6" aria-hidden="true" />
           </button>
-        </SheetTrigger>
-        <SheetContent variant="bottom" title="Tambah transaksi">
-          <EmptyState
-            icon={Plus}
-            title="Catat transaksi"
-            description="Form pencatatan datang di task berikutnya. Sheet ini hanya membuktikan FAB membuka lapisan UI tanpa berpindah halaman."
-          />
-        </SheetContent>
-      </Sheet>
+        }
+      />
 
       <NavLink item={kekayaan} active={isRouteActive(pathname, kekayaan.href)} />
 

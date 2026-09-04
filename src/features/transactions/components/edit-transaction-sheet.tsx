@@ -20,12 +20,23 @@ import type { RecordableTransactionType } from '../queries';
 import type { AddTransactionSheetData } from '../sheet-data';
 import { TransactionEditor } from './transaction-editor';
 
+/** The fields a successful edit changed — passed back to `onSaved` so a caller holding its OWN local copy of this transaction (src/features/transactions/components/transaction-list.tsx's `items` state, seeded from server props and not automatically refreshed by `router.refresh()`) can update it in place instead of showing stale values until the next full reload. */
+export interface EditedTransactionFields {
+  id: string;
+  type: RecordableTransactionType;
+  amount: string;
+  categoryId: string;
+  walletId: string;
+  transactionDate: Date;
+  note: string | null;
+}
+
 interface EditTransactionSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   transaction: TransactionClientData | null;
   sheetData: AddTransactionSheetData;
-  onSaved: () => void;
+  onSaved: (saved: EditedTransactionFields) => void;
 }
 
 export function EditTransactionSheet({
@@ -42,9 +53,9 @@ export function EditTransactionSheet({
           <EditTransactionForm
             transaction={transaction}
             sheetData={sheetData}
-            onDone={() => {
+            onDone={(saved) => {
               onOpenChange(false);
-              onSaved();
+              onSaved(saved);
             }}
           />
         )}
@@ -56,7 +67,7 @@ export function EditTransactionSheet({
 interface EditTransactionFormProps {
   transaction: TransactionClientData;
   sheetData: AddTransactionSheetData;
-  onDone: () => void;
+  onDone: (saved: EditedTransactionFields) => void;
 }
 
 function EditTransactionForm({ transaction, sheetData, onDone }: EditTransactionFormProps) {
@@ -85,14 +96,16 @@ function EditTransactionForm({ transaction, sheetData, onDone }: EditTransaction
     setError(null);
 
     startTransition(async () => {
+      const serializedAmount = serializeMoney(amount);
+      const trimmedNote = note.trim() === '' ? null : note;
       const result = await updateTransactionAction({
         transactionId: transaction.id,
         type,
-        amount: serializeMoney(amount),
+        amount: serializedAmount,
         categoryId,
         walletId,
         transactionDate: date,
-        note,
+        note: trimmedNote,
       });
 
       if (result.error) {
@@ -101,7 +114,15 @@ function EditTransactionForm({ transaction, sheetData, onDone }: EditTransaction
       }
 
       router.refresh();
-      onDone();
+      onDone({
+        id: transaction.id,
+        type,
+        amount: serializedAmount,
+        categoryId,
+        walletId,
+        transactionDate: date,
+        note: trimmedNote,
+      });
     });
   }
 

@@ -20,14 +20,18 @@ import {
  * as everywhere else (docs/12-security-and-auth.md §3, threat H2).
  *
  * Response shape mirrors `GET /api/transactions` (src/app/api/transactions/route.ts):
- * `{ items, nextCursor }` — no `dayTotals` here, this page doesn't offer
- * one (out of scope: task 19 owns household net-worth/aggregate reporting).
+ * `{ items, nextCursor }` — no `dayTotals` here, this page doesn't
+ * day-group (out of scope: task 19 owns household net-worth/aggregate
+ * reporting). `memberId` is docs/06-api-contracts.md §6's own name for the
+ * "Chip filter Anggota" param — kept exact rather than the shorter
+ * `member` this route started with, so a client following the documented
+ * contract literally still works.
  */
 
 const querySchema = z.object({
   cursor: z.string().trim().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
-  member: z.uuid().optional(),
+  memberId: z.uuid().optional(),
 });
 
 function errorResponse(code: string, message: string, status: number) {
@@ -65,7 +69,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     await requireHouseholdAccess(userId, householdId);
   } catch (err) {
     if (err instanceof NotFoundError) {
-      return errorResponse('NOT_FOUND', err.message, 404);
+      // `NOT_A_MEMBER`, not `NOT_FOUND` — docs/06-api-contracts.md §9's own
+      // distinction (different code for internal logs, deliberately
+      // IDENTICAL message to NOT_FOUND) so a caller can never tell "this
+      // household doesn't exist" apart from "it exists but you're not in
+      // it" — docs/12-security-and-auth.md §3, threat H2.
+      return errorResponse('NOT_A_MEMBER', err.message, 404);
     }
     throw err;
   }
@@ -75,13 +84,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   if (!parsed.success) {
     return errorResponse('VALIDATION', 'Parameter tidak valid', 400);
   }
-  const { cursor, limit, member } = parsed.data;
+  const { cursor, limit, memberId } = parsed.data;
 
   try {
     const { items, nextCursor } = await listHouseholdTransactionsPage(householdId, {
       cursor,
       limit,
-      memberUserId: member,
+      memberUserId: memberId,
     });
 
     return NextResponse.json({ items: items.map(toItemDto), nextCursor });

@@ -48,7 +48,8 @@ export function HouseholdTransactionList({
     setError(null);
     try {
       const params = new URLSearchParams({ cursor: nextCursor, limit: '30' });
-      if (memberUserId) params.set('member', memberUserId);
+      // `memberId` — docs/06-api-contracts.md §6's documented param name for this route.
+      if (memberUserId) params.set('memberId', memberUserId);
       const res = await fetch(`/api/households/${householdId}/transactions?${params.toString()}`);
       if (!res.ok) throw new Error(`request failed: ${res.status}`);
       const data = (await res.json()) as {

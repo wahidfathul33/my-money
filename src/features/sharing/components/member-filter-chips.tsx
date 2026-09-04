@@ -2,7 +2,9 @@
 
 /**
  * "Chip filter Anggota" (todo.md) — narrows the household expenses list to
- * one member's own transactions via the `?member=` URL param, mirroring
+ * one member's own transactions via the `?memberId=` URL param (matching
+ * docs/06-api-contracts.md §6's documented param name for
+ * `GET /api/households/[id]/transactions`), mirroring
  * src/features/transactions/components/filter-bar.tsx's chip-into-URL
  * pattern (`router.replace`, never `push`, so toggling a filter doesn't
  * pollute back-button history).
@@ -27,8 +29,8 @@ export function MemberFilterChips({ members, selectedUserId }: MemberFilterChips
 
   function select(userId: string | null) {
     const params = new URLSearchParams(searchParams.toString());
-    if (userId) params.set('member', userId);
-    else params.delete('member');
+    if (userId) params.set('memberId', userId);
+    else params.delete('memberId');
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }

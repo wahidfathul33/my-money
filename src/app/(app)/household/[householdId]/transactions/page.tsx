@@ -28,7 +28,11 @@ import { HouseholdTransactionList } from '@/features/sharing/components/househol
  */
 interface HouseholdTransactionsPageProps {
   params: Promise<{ householdId: string }>;
-  searchParams: Promise<{ member?: string }>;
+  // `memberId` — docs/06-api-contracts.md §6's documented param name for
+  // this same filter on GET /api/households/[id]/transactions; kept
+  // identical here so the URL a user can bookmark/share matches what the
+  // "load more" continuation (same param, client-side) already sends.
+  searchParams: Promise<{ memberId?: string }>;
 }
 
 export default async function HouseholdTransactionsPage({
@@ -36,12 +40,12 @@ export default async function HouseholdTransactionsPage({
   searchParams,
 }: HouseholdTransactionsPageProps) {
   const { householdId } = await params;
-  const { member } = await searchParams;
+  const { memberId } = await searchParams;
   await requireUser();
 
   const [members, { items, nextCursor }, hasAny] = await Promise.all([
     listActiveMembers(householdId),
-    listHouseholdTransactionsPage(householdId, { memberUserId: member }),
+    listHouseholdTransactionsPage(householdId, { memberUserId: memberId }),
     hasAnyHouseholdTransaction(householdId),
   ]);
 
@@ -51,7 +55,7 @@ export default async function HouseholdTransactionsPage({
     <>
       <PageHeader title="Pengeluaran Keluarga" />
       <div className="flex flex-col gap-3 pb-8">
-        <MemberFilterChips members={memberOptions} selectedUserId={member} />
+        <MemberFilterChips members={memberOptions} selectedUserId={memberId} />
 
         {items.length === 0 ? (
           !hasAny ? (
@@ -80,7 +84,7 @@ export default async function HouseholdTransactionsPage({
               householdId={householdId}
               initialItems={items.map(toHouseholdTransactionClientItem)}
               initialNextCursor={nextCursor}
-              memberUserId={member}
+              memberUserId={memberId}
             />
           </div>
         )}

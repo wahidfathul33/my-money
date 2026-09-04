@@ -86,10 +86,14 @@ export function WalletDetailActions({ wallet, hasEntries, isDefault, isArchived 
       {/* tasks/12-sharing-and-privacy — docs/03 §5.1. Independent of
           share_wealth being on anywhere: setting this ahead of time is
           harmless, and it's the ONLY way to keep a wallet out of BOTH
-          household wealth and the transfer-target picker (docs §5.2). */}
+          household wealth and the transfer-target picker (docs §5.2).
+          "Sembunyikan dari keluarga" — docs/08-copywriting.md §3.2's
+          binding glossary: `exclude_from_household` → "Sembunyikan dari
+          keluarga" in UI text, never "kecualikan" (that's the internal/
+          spec term only). */}
       <div className="border-border flex items-center justify-between gap-3 border-t pt-3">
         <div className="flex flex-col">
-          <span className="text-text text-sm font-medium">Kecualikan dari keluarga</span>
+          <span className="text-text text-sm font-medium">Sembunyikan dari keluarga</span>
           <span className="text-text-muted text-xs">
             Tidak ikut kekayaan keluarga, dan tidak muncul di pemilih tujuan transfer.
           </span>

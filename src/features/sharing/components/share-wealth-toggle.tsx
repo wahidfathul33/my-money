@@ -4,9 +4,11 @@
  * `household_members.share_wealth` — mechanism #2, docs/03-domain-model.md
  * §5.1's single per-membership switch. The asymmetry spec.md is explicit
  * about: turning ON requires a confirmation dialog stating exactly what
- * will and won't become visible (docs/10-ux-states.md §5.1's exact copy);
- * turning OFF applies immediately, no dialog — "penarikan akses tidak
- * boleh punya friksi".
+ * will and won't become visible (docs/10-ux-states.md §5.1's copy, with one
+ * word changed — "kecualikan" → "sembunyikan" — to match
+ * docs/08-copywriting.md §3.2's binding glossary, which supersedes other
+ * docs' illustrative copy); turning OFF applies immediately, no dialog —
+ * "penarikan akses tidak boleh punya friksi".
  */
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -97,7 +99,7 @@ export function ShareWealthToggle({ householdId, householdName, shareWealth }: S
               <ul className="text-text-muted list-disc pl-5 text-sm">
                 <li>Transaksi Anda</li>
                 <li>Isi rekening per dompet</li>
-                <li>Apa pun yang Anda kecualikan</li>
+                <li>Apa pun yang Anda sembunyikan</li>
               </ul>
             </div>
             <p className="text-text-muted text-sm">Anda dapat mematikannya kapan saja, dan efeknya seketika.</p>

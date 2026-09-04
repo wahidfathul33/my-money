@@ -8,6 +8,12 @@
  * satu item" needs NO confirmation ("Menyempitkan cakupan, tidak
  * melebarkannya") — applied immediately, exactly like turning `share_wealth`
  * OFF (src/features/sharing/components/share-wealth-toggle.tsx).
+ *
+ * UI copy says "Sembunyikan", never "Kecualikan" — docs/08-copywriting.md
+ * §3.2's binding glossary: `exclude_from_household` → "Sembunyikan dari
+ * keluarga". "Kecualikan"/"exclude" stays as the internal/code name only
+ * (this file's own name included — docs/08 §3.2 draws that line
+ * explicitly: spec terms and UI terms are allowed to differ).
  */
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -47,7 +53,7 @@ export function ExclusionToggle({ entityType, entityId, label, excluded }: Exclu
 
   return (
     <div className="flex flex-col gap-1">
-      <Switch label={`Kecualikan ${label} dari kekayaan keluarga`} checked={value} onCheckedChange={handleChange} />
+      <Switch label={`Sembunyikan ${label} dari keluarga`} checked={value} onCheckedChange={handleChange} />
       {error && (
         <p role="alert" className="text-negative text-xs">
           {error}

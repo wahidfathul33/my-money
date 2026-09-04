@@ -124,6 +124,28 @@ describe('defek kontras yang sudah diketahui (butuh revisi docs/07 §4)', () => 
 });
 
 /**
+ * Task 14 (budgets): BudgetBar merender persentase berwarna untuk status
+ * "warning" (`.text-warning-readable`, globals.css) — perbaikan yang sama
+ * polanya dengan `.text-brand-readable` / `.text-positive-readable` di atas.
+ */
+describe('warna turunan (BudgetBar) lolos AA', () => {
+  const lightWarningReadable = 'oklch(50% 0.15 75)';
+
+  it('.text-warning-readable (mode terang) lolos di atas bg/surface/surface-raised — BudgetBar status warning', () => {
+    for (const bg of ['bg', 'surface', 'surface-raised']) {
+      expect(wcagContrast(lightWarningReadable, tokens.light[bg]!)).toBeGreaterThanOrEqual(
+        TEXT_THRESHOLD,
+      );
+    }
+  });
+
+  it('.text-warning-readable (mode gelap) = --color-warning, sudah lolos (dikunci di atas)', () => {
+    expect(contrast('dark', 'warning', 'bg')).toBeGreaterThanOrEqual(TEXT_THRESHOLD);
+    expect(contrast('dark', 'warning', 'surface')).toBeGreaterThanOrEqual(TEXT_THRESHOLD);
+  });
+});
+
+/**
  * Warna turunan yang memperbaiki defek di atas (globals.css). Mengunci
  * nilai literal `oklch()`-nya di sini juga — kalau seseorang mengubah
  * angkanya di globals.css tanpa cek ulang, test ini yang akan gagal

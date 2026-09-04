@@ -18,6 +18,8 @@ import { and, asc, eq } from 'drizzle-orm';
 import { dbRead } from '@/lib/db/read';
 import { wallets } from '@/lib/db/schema';
 import { ownedBy } from '@/lib/db/scoped';
+import { listHouseholdOptions } from '@/features/sharing/queries';
+import type { HouseholdOption } from '@/features/sharing/components/household-toggle';
 import {
   getQuickCategories,
   listCategories,
@@ -39,6 +41,10 @@ export interface AddTransactionSheetData {
   defaultWalletId: string | null;
   quickCategories: { expense: CategoryRow[]; income: CategoryRow[] };
   fullCategories: { expense: CategoryWithChildren[]; income: CategoryWithChildren[] };
+  /** The caller's active household memberships — tasks/12-sharing-and-privacy's
+   * 🏠 toggle. `[]` for an account with no household, which is what keeps
+   * the toggle from rendering at all (src/features/transactions/components/transaction-editor.tsx). */
+  households: HouseholdOption[];
 }
 
 async function listWalletOptions(userId: string): Promise<WalletOption[]> {
@@ -56,7 +62,7 @@ async function listWalletOptions(userId: string): Promise<WalletOption[]> {
 }
 
 export async function getAddTransactionSheetData(userId: string): Promise<AddTransactionSheetData> {
-  const [walletOptions, defaultWalletId, quickExpense, quickIncome, fullExpense, fullIncome] =
+  const [walletOptions, defaultWalletId, quickExpense, quickIncome, fullExpense, fullIncome, households] =
     await Promise.all([
       listWalletOptions(userId),
       resolveDefaultWalletId(userId),
@@ -64,6 +70,7 @@ export async function getAddTransactionSheetData(userId: string): Promise<AddTra
       getQuickCategories(userId, 'income'),
       listCategories(userId, 'expense'),
       listCategories(userId, 'income'),
+      listHouseholdOptions(userId),
     ]);
 
   return {
@@ -71,5 +78,6 @@ export async function getAddTransactionSheetData(userId: string): Promise<AddTra
     defaultWalletId,
     quickCategories: { expense: quickExpense, income: quickIncome },
     fullCategories: { expense: fullExpense, income: fullIncome },
+    households,
   };
 }

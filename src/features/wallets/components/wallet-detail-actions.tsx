@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { Archive, ArchiveRestore, Pencil, Star, Wallet as WalletIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ExclusionToggle } from '@/features/sharing/components/exclusion-toggle';
 import { archiveWalletAction, restoreWalletAction, setDefaultWalletAction } from '../actions';
 import { WalletFormSheet } from './wallet-form-sheet';
 import { BalanceAdjustmentSheet } from './balance-adjustment-sheet';
@@ -81,6 +82,25 @@ export function WalletDetailActions({ wallet, hasEntries, isDefault, isArchived 
           {error}
         </p>
       )}
+
+      {/* tasks/12-sharing-and-privacy — docs/03 §5.1. Independent of
+          share_wealth being on anywhere: setting this ahead of time is
+          harmless, and it's the ONLY way to keep a wallet out of BOTH
+          household wealth and the transfer-target picker (docs §5.2). */}
+      <div className="border-border flex items-center justify-between gap-3 border-t pt-3">
+        <div className="flex flex-col">
+          <span className="text-text text-sm font-medium">Kecualikan dari keluarga</span>
+          <span className="text-text-muted text-xs">
+            Tidak ikut kekayaan keluarga, dan tidak muncul di pemilih tujuan transfer.
+          </span>
+        </div>
+        <ExclusionToggle
+          entityType="wallet"
+          entityId={wallet.id}
+          label={wallet.name}
+          excluded={wallet.excludeFromHousehold}
+        />
+      </div>
 
       <WalletFormSheet open={editOpen} onOpenChange={setEditOpen} wallet={wallet} />
       <BalanceAdjustmentSheet open={adjustOpen} onOpenChange={setAdjustOpen} wallet={wallet} />

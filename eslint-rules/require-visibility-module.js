@@ -19,10 +19,17 @@
  *      household-tagged rows (not a cross-user read) — see e.g.
  *      src/lib/services/memberships.ts's `revokeSharingFor`.
  *
- *   2. An `eq(...)` comparing `shareWealth` — docs §4.2's join condition.
- *      Every other reference to `shareWealth` in this codebase is a WRITE
- *      via `.set({ shareWealth: ... })` (src/lib/services/memberships.ts,
- *      invitations.ts), never a read-side equality check.
+ *   2. A `shareWealth` equality check nested inside a `.innerJoin(...)` /
+ *      `.leftJoin(...)` call — docs §4.2's exact join condition (`JOIN
+ *      household_members hm ON ... AND hm.share_wealth = true`). Narrowed to
+ *      specifically the JOIN shape (not e.g. `eq(householdMembers.shareWealth,
+ *      true)` alone) because that ALSO appears legitimately outside the
+ *      visibility module: src/lib/services/sharing.ts's
+ *      `stopSharingEverything` filters the CALLER's own memberships
+ *      currently sharing (`and(eq(householdMembers.userId, userId),
+ *      eq(householdMembers.shareWealth, true))`, no join, not a cross-user
+ *      read) — a bare-equality check would have flagged that false
+ *      positive; the join-nesting requirement doesn't.
  *
  * Scoped OFF for `src/lib/visibility/**` itself via `eslint.config.mjs`
  * (both shapes appear there legitimately, exactly once).
@@ -32,9 +39,25 @@
 const USER_ID_RE = /\buserId\b/;
 const HOUSEHOLD_ID_RE = /\bhouseholdId\b/;
 const SHARE_WEALTH_RE = /\bshareWealth\b/;
+const JOIN_METHOD_RE = /^(innerJoin|leftJoin|rightJoin|fullJoin)$/;
 
 function isCombinatorCall(node, name) {
   return node.type === 'CallExpression' && node.callee.type === 'Identifier' && node.callee.name === name;
+}
+
+/** True when `node` sits anywhere inside a `.innerJoin(...)`-shaped call's argument list, at any nesting depth (e.g. wrapped in `and(...)`). */
+function isWithinJoinCall(node) {
+  for (let current = node.parent; current; current = current.parent) {
+    if (
+      current.type === 'CallExpression' &&
+      current.callee.type === 'MemberExpression' &&
+      current.callee.property.type === 'Identifier' &&
+      JOIN_METHOD_RE.test(current.callee.property.name)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export const requireVisibilityModule = {
@@ -49,7 +72,7 @@ export const requireVisibilityModule = {
       noInlineOr:
         'This or(...) combines a userId check with a householdId check — that is the transaction-visibility predicate from docs/12-security-and-auth.md §4.1. Import visibleTransactionsWhere/isTransactionVisible from src/lib/visibility/transactions.ts instead of re-deriving it here.',
       noInlineShareWealth:
-        'Comparing shareWealth directly is the household-wealth-item predicate from docs/12-security-and-auth.md §4.2. Import householdWealthJoin/notExcludedFromHousehold from src/lib/visibility/household-items.ts instead of re-deriving it here.',
+        'A shareWealth check inside a join is the household-wealth-item predicate from docs/12-security-and-auth.md §4.2. Import householdWealthJoin/notExcludedFromHousehold from src/lib/visibility/household-items.ts instead of re-deriving it here.',
     },
   },
   create(context) {
@@ -66,7 +89,7 @@ export const requireVisibilityModule = {
 
         if (isCombinatorCall(node, 'eq') && node.arguments.length > 0) {
           const target = sourceCode.getText(node.arguments[0]);
-          if (SHARE_WEALTH_RE.test(target)) {
+          if (SHARE_WEALTH_RE.test(target) && isWithinJoinCall(node)) {
             context.report({ node, messageId: 'noInlineShareWealth' });
           }
         }

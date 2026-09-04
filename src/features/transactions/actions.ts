@@ -69,6 +69,7 @@ export async function createTransactionAction(input: unknown): Promise<Transacti
       transactionDate: parsed.data.transactionDate,
       note: parsed.data.note,
       idempotencyKey: parsed.data.idempotencyKey,
+      householdId: parsed.data.householdId,
     });
     transactionId = row.id;
   } catch (err) {
@@ -95,6 +96,7 @@ export async function updateTransactionAction(input: unknown): Promise<Transacti
       walletId: parsed.data.walletId,
       transactionDate: parsed.data.transactionDate,
       note: parsed.data.note,
+      householdId: parsed.data.householdId,
     });
   } catch (err) {
     return toActionError(err);

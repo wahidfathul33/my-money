@@ -67,6 +67,8 @@ export interface TransactionHistoryItem {
    * household member's name, for when only one side of the transfer is a
    * wallet visible to this query (`transferFrom`/`transferTo` has a gap). */
   counterpartyName: string | null;
+  /** tasks/12-sharing-and-privacy — the 🏠 tag, `null` when untagged. */
+  householdId: string | null;
 }
 
 export interface TransactionHistoryFilters {
@@ -218,6 +220,7 @@ interface RawTransactionRow {
   categoryIcon: string | null;
   categoryColor: string | null;
   counterpartyName: string | null;
+  householdId: string | null;
 }
 
 /**
@@ -265,6 +268,7 @@ function assembleItem(row: RawTransactionRow, entries: LedgerEntryInfo[]): Trans
       transferFrom,
       transferTo,
       counterpartyName: row.counterpartyName,
+      householdId: row.householdId,
     };
   }
 
@@ -279,6 +283,7 @@ function assembleItem(row: RawTransactionRow, entries: LedgerEntryInfo[]): Trans
     transferFrom: null,
     transferTo: null,
     counterpartyName: null,
+    householdId: row.householdId,
   };
 }
 
@@ -326,6 +331,7 @@ export async function listTransactionsPage(
       categoryIcon: categories.icon,
       categoryColor: categories.color,
       counterpartyName: counterpartyUsers.name,
+      householdId: transactions.householdId,
     })
     .from(transactions)
     .leftJoin(categories, eq(categories.id, transactions.categoryId))

@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { TransferForm } from '@/features/transfers/components/transfer-form';
+import { HouseholdToggle, type HouseholdOption } from '@/features/sharing/components/household-toggle';
 import { formatExpression } from '../amount-math';
 import type { RecordableTransactionType } from '../queries';
 import type { CategoryRow, CategoryWithChildren } from '../queries';
@@ -52,6 +53,17 @@ export interface TransactionEditorProps {
   /** The transfer's DESTINATION wallet — only meaningful (and only rendered) when `type === 'transfer'`. */
   toWalletId?: string;
   onToWalletChange?: (id: string) => void;
+  /**
+   * The caller's active household memberships — tasks/12-sharing-and-privacy
+   * spec.md's 🏠 toggle. Defaults to `[]` so every EXISTING caller (and
+   * every existing test) keeps compiling and rendering exactly as before:
+   * an empty list renders nothing here at all, same as an account with no
+   * household (todo.md "akun tanpa household melihat baris meta persis
+   * seperti sebelumnya").
+   */
+  households?: HouseholdOption[];
+  householdId?: string | null;
+  onHouseholdChange?: (id: string | null) => void;
 }
 
 export function TransactionEditor({
@@ -77,6 +89,9 @@ export function TransactionEditor({
   allowTransfer = false,
   toWalletId = '',
   onToWalletChange,
+  households = [],
+  householdId = null,
+  onHouseholdChange,
 }: TransactionEditorProps) {
   // Lazy initializer — visible from the start when editing a transaction
   // that already has a note, without either caller (create/edit) having to
@@ -153,10 +168,23 @@ export function TransactionEditor({
           <WalletPicker wallets={wallets} value={walletId} onChange={onWalletChange} />
         )}
         <DatePicker value={date} onChange={onDateChange} />
-        {/* Household toggle (🏠) lands in task 12 — this row's height is
-            fixed (h-11) regardless of what's in it, and Simpan lives in the
-            keypad grid below, not this row, so adding the toggle later
-            can't shift Simpan's position (tasks/07 spec.md "Catatan"). */}
+        {/* Household toggle (🏠) — tasks/12-sharing-and-privacy. Only
+            mounted for a household member (`households` non-empty) on a
+            recordable type — a transfer has no wired-up household-tagging
+            path (src/lib/services/transfers.ts is untouched by this task;
+            member-transfers are task 13's own territory), so showing an
+            apparently-live toggle there that silently did nothing on Simpan
+            would be worse than not offering one. This row's height stays
+            h-11 regardless of what's in it, and Simpan lives in the keypad
+            grid below, not this row, so this can never shift Simpan's
+            position (tasks/07 spec.md "Catatan"). */}
+        {type !== 'transfer' && households.length > 0 && (
+          <HouseholdToggle
+            households={households}
+            value={householdId}
+            onChange={(id) => onHouseholdChange?.(id)}
+          />
+        )}
         <button
           type="button"
           aria-label="Catatan"

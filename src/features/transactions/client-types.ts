@@ -23,6 +23,9 @@ export interface TransactionClientData {
   category: TransactionCategoryInfo | null;
   wallet: TransactionWalletInfo | null;
   transfer: { fromWallet: TransferWalletInfo; toWallet: TransferWalletInfo } | null;
+  /** tasks/12-sharing-and-privacy — the 🏠 tag, `null` when untagged. Feeds
+   * the edit sheet's household toggle default (src/features/transactions/components/edit-transaction-sheet.tsx). */
+  householdId: string | null;
 }
 
 export function toTransactionClientData(row: TransactionListItem): TransactionClientData {
@@ -35,6 +38,12 @@ export function toTransactionClientData(row: TransactionListItem): TransactionCl
     category: row.category,
     wallet: row.wallet,
     transfer: row.transfer,
+    // getRecentTransactions/TransactionListItem (this file's other half)
+    // predates household tagging and isn't read by any page today (only
+    // src/features/transactions/history-queries.ts's pipeline is live) — see
+    // this task's final report. Hardcoded rather than plumbed through that
+    // dead path.
+    householdId: null,
   };
 }
 

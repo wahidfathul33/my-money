@@ -227,6 +227,7 @@ export function TransactionList({
         note: saved.note,
         category: resolveCategoryInfo(saved.categoryId),
         wallet: resolveWalletInfo(saved.walletId),
+        householdId: saved.householdId,
       };
       const withoutOld = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
       const insertIdx = withoutOld.findIndex(

@@ -135,10 +135,23 @@ describe('local/require-visibility-module', () => {
     expect(messages[0]?.message).toMatch(/visibleTransactionsWhere/);
   });
 
-  it('flags eq(...) comparing shareWealth', () => {
-    const messages = lint(`eq(householdMembers.shareWealth, true)`, rule, requireVisibilityModule);
+  it('flags a shareWealth check nested inside .innerJoin(...)', () => {
+    const messages = lint(
+      `dbRead.select().from(wallets).innerJoin(householdMembers, and(eq(householdMembers.userId, wallets.userId), eq(householdMembers.shareWealth, true)))`,
+      rule,
+      requireVisibilityModule,
+    );
     expect(messages).toHaveLength(1);
     expect(messages[0]?.message).toMatch(/householdWealthJoin/);
+  });
+
+  it('does NOT flag a bare shareWealth equality check outside a join — e.g. filtering the caller\'s OWN currently-sharing memberships to turn off (src/lib/services/sharing.ts stopSharingEverything)', () => {
+    const messages = lint(
+      `dbWrite.update(householdMembers).set({ shareWealth: false }).where(and(eq(householdMembers.userId, userId), eq(householdMembers.status, 'active'), eq(householdMembers.shareWealth, true)))`,
+      rule,
+      requireVisibilityModule,
+    );
+    expect(messages).toHaveLength(0);
   });
 
   it('does not flag or(...) that has nothing to do with household visibility', () => {

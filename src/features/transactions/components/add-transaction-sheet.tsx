@@ -30,6 +30,7 @@ import { Dialog, DialogContent, Sheet, SheetContent, SheetTrigger } from '@/comp
 import { useToast } from '@/components/ui/toast';
 import { serializeMoney } from '@/lib/finance/money';
 import { createSelfTransferAction, voidTransferAction } from '@/features/transfers/actions';
+import { getLastHouseholdChoice, setLastHouseholdChoice } from '@/features/sharing/last-household-choice';
 import { evaluateExpression } from '../amount-math';
 import { createTransactionAction, voidTransactionAction } from '../actions';
 import type { AddTransactionSheetData } from '../sheet-data';
@@ -111,6 +112,7 @@ function AddTransactionSheetForm({
   defaultWalletId,
   quickCategories,
   fullCategories,
+  households,
   onHasInputChange,
   onDone,
 }: AddTransactionSheetFormProps) {
@@ -120,6 +122,11 @@ function AddTransactionSheetForm({
   const [expression, setExpression] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [walletId, setWalletId] = useState<string>(defaultWalletId ?? wallets[0]?.id ?? '');
+  // The 🏠 toggle — tasks/12-sharing-and-privacy. Defaults to "not tagged";
+  // `handleCategoryChange` below applies the remembered per-category choice
+  // (spec.md "Pilihan household terakhir diingat per kategori") the moment
+  // a category is picked.
+  const [householdId, setHouseholdId] = useState<string | null>(null);
   // Transfer's destination wallet — defaults to the first ACTIVE wallet
   // that isn't already the source, so a user with 2+ wallets can hit Simpan
   // on the Transfer tab without touching either picker first.
@@ -152,6 +159,26 @@ function AddTransactionSheetForm({
     // chip valid for Pengeluaran is never valid for Pemasukan. Irrelevant
     // for Transfer (category is always NULL there), but harmless to clear.
     setCategoryId(null);
+  }
+
+  /**
+   * tasks/12-sharing-and-privacy spec.md: "Pilihan household terakhir
+   * diingat per kategori" — the moment a category is picked, prefill the
+   * 🏠 toggle from whatever household was last used for THAT category
+   * (src/features/sharing/last-household-choice.ts), falling back to "not
+   * tagged" the first time, or if the remembered household isn't one of
+   * the caller's active memberships anymore (they may have left it since).
+   */
+  function handleCategoryChange(id: string) {
+    setCategoryId(id);
+    const remembered = getLastHouseholdChoice(id);
+    const stillActive = remembered !== null && households.some((h) => h.id === remembered);
+    setHouseholdId(stillActive ? remembered : null);
+  }
+
+  function handleHouseholdChange(id: string | null) {
+    setHouseholdId(id);
+    if (categoryId) setLastHouseholdChoice(categoryId, id);
   }
 
   // Keeps the destination picker from silently matching the source when the
@@ -189,6 +216,7 @@ function AddTransactionSheetForm({
               transactionDate: date,
               note,
               idempotencyKey: idempotencyKeyRef.current,
+              householdId,
             });
 
       if (result.error || !result.transactionId) {
@@ -225,7 +253,7 @@ function AddTransactionSheetForm({
       expression={expression}
       onExpressionChange={setExpression}
       categoryId={categoryId}
-      onCategoryChange={setCategoryId}
+      onCategoryChange={handleCategoryChange}
       walletId={walletId}
       onWalletChange={handleFromWalletChange}
       date={date}
@@ -242,6 +270,9 @@ function AddTransactionSheetForm({
       allowTransfer
       toWalletId={toWalletId}
       onToWalletChange={setToWalletId}
+      households={households}
+      householdId={householdId}
+      onHouseholdChange={handleHouseholdChange}
     />
   );
 }

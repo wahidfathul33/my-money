@@ -6,8 +6,9 @@ import { usePathname } from 'next/navigation';
 import { Sheet, SheetClose, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { AddTransactionSheet } from '@/features/transactions/components/add-transaction-sheet';
 import type { AddTransactionSheetData } from '@/features/transactions/sheet-data';
+import type { HouseholdSummary } from '@/features/household/queries';
 import { cn } from '@/lib/utils';
-import { beranda, isRouteActive, kekayaan, MORE_SHEET_ITEMS, transaksi } from './nav-items';
+import { beranda, getMoreSheetItems, isRouteActive, kekayaan, transaksi } from './nav-items';
 import type { NavItem } from './nav-items';
 
 const ITEM_CLASS =
@@ -41,11 +42,13 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 
 interface BottomNavProps {
   addTransactionSheetData: AddTransactionSheetData;
+  households: HouseholdSummary[];
 }
 
-export function BottomNav({ addTransactionSheetData }: BottomNavProps) {
+export function BottomNav({ addTransactionSheetData, households }: BottomNavProps) {
   const pathname = usePathname();
-  const moreActive = MORE_SHEET_ITEMS.some((item) => isRouteActive(pathname, item.href));
+  const moreSheetItems = getMoreSheetItems(households.length > 0);
+  const moreActive = moreSheetItems.some((item) => isRouteActive(pathname, item.href, item.exact));
 
   return (
     <nav
@@ -72,9 +75,10 @@ export function BottomNav({ addTransactionSheetData }: BottomNavProps) {
 
       <NavLink item={kekayaan} active={isRouteActive(pathname, kekayaan.href)} />
 
-      {/* "Lainnya" — sheet, bukan navigasi langsung. Menyediakan tempat
-          untuk Keluarga sejak sekarang (nonaktif sampai task 10) —
-          tasks/02/spec.md "Catatan". */}
+      {/* "Lainnya" — sheet, bukan navigasi langsung. Keluarga selalu punya
+          href sejak task 10: "Keluarga" (→ /household) bila user sudah
+          punya household, atau "Buat keluarga" (→ /household/new) bila
+          belum — tidak pernah lagi entri nonaktif "Segera". */}
       <Sheet>
         <SheetTrigger asChild>
           <button
@@ -88,7 +92,7 @@ export function BottomNav({ addTransactionSheetData }: BottomNavProps) {
         </SheetTrigger>
         <SheetContent variant="bottom" title="Lainnya">
           <ul className="flex flex-col">
-            {MORE_SHEET_ITEMS.map((item) =>
+            {moreSheetItems.map((item) =>
               item.href ? (
                 <li key={item.label}>
                   <SheetClose asChild>

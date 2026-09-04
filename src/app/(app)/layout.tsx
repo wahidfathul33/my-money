@@ -6,6 +6,7 @@ import { dbRead } from '@/lib/db/read';
 import { users } from '@/lib/db/schema';
 import { AppShell } from '@/components/layout/app-shell';
 import { getAddTransactionSheetData } from '@/features/transactions/sheet-data';
+import { listUserHouseholds } from '@/features/household/queries';
 
 /**
  * Session guard for every route under `(app)` — docs/12-security-and-auth.md
@@ -37,5 +38,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // (tasks/07-transactions-core/spec.md "Tidak ada tap tambahan").
   const addTransactionSheetData = await getAddTransactionSheetData(session.user.id);
 
-  return <AppShell addTransactionSheetData={addTransactionSheetData}>{children}</AppShell>;
+  // Drives the context switcher + the nav shell's "Keluarga"/"Buat keluarga"
+  // entry (task 10) — fetched once per layout render, same reasoning as
+  // addTransactionSheetData above.
+  const households = await listUserHouseholds(session.user.id);
+
+  return (
+    <AppShell addTransactionSheetData={addTransactionSheetData} households={households}>
+      {children}
+    </AppShell>
+  );
 }

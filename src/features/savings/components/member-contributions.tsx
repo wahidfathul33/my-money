@@ -39,7 +39,13 @@ export function MemberContributions({ members, currentAmount, targetAmount }: Me
   });
 
   return (
-    <div className="bg-surface rounded-card flex flex-col gap-3 p-4">
+    // `aria-label`, not just the visible <h3> — gives this region a stable,
+    // unambiguous accessible name (`getByRole('region', ...)`) distinct
+    // from the contribution-history section below it, which repeats each
+    // member's name and a signed version of their amount ("Kontribusi —
+    // Wahid" / "+Rp5.000.000") that would otherwise substring-match the
+    // same text a plain page-wide query would look for.
+    <section aria-label="Kontribusi per anggota" className="bg-surface rounded-card flex flex-col gap-3 p-4">
       <h3 className="text-text text-sm font-semibold">Kontribusi per anggota</h3>
       <ul className="flex flex-col gap-3">
         {members.map((member) => (
@@ -59,6 +65,6 @@ export function MemberContributions({ members, currentAmount, targetAmount }: Me
           <span className="text-text-muted text-xs">→ {Math.round(progressPct)}%</span>
         </span>
       </div>
-    </div>
+    </section>
   );
 }

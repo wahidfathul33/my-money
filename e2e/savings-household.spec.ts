@@ -118,15 +118,22 @@ test.describe('shared savings goal — two-context flows', () => {
 
         // Total and per-member breakdown are correct from BOTH sessions —
         // spec.md's table: Wahid Rp5jt, Istri Rp3jt, Total Rp8jt -> 40%.
+        // Scoped to the breakdown region specifically (not a page-wide text
+        // search): the contribution-history section below it repeats each
+        // name and a SIGNED version of their amount ("Kontribusi — Wahid
+        // E2E" / "+Rp5.000.000"), which would substring-match the same
+        // plain-text queries and make them ambiguous.
         async function assertBreakdown(page: typeof ownerPage) {
           await page.goto(`/household/${householdId}/savings`);
           await page.getByRole('link', { name: /Liburan Keluarga/ }).click();
           await expect(page).toHaveURL(/\/wealth\/savings\/[^/]+$/, DB_TIMEOUT);
-          await expect(page.getByText('Wahid E2E')).toBeVisible(DB_TIMEOUT);
-          await expect(page.getByText('Istri E2E')).toBeVisible();
-          await expect(page.getByText('Rp5.000.000')).toBeVisible();
-          await expect(page.getByText('Rp3.000.000')).toBeVisible();
-          await expect(page.getByText('→ 40%')).toBeVisible();
+          const breakdown = page.getByRole('region', { name: 'Kontribusi per anggota' });
+          await expect(breakdown).toBeVisible(DB_TIMEOUT);
+          await expect(breakdown.getByText('Wahid E2E')).toBeVisible();
+          await expect(breakdown.getByText('Istri E2E')).toBeVisible();
+          await expect(breakdown.getByText('Rp5.000.000')).toBeVisible();
+          await expect(breakdown.getByText('Rp3.000.000')).toBeVisible();
+          await expect(breakdown.getByText('→ 40%')).toBeVisible();
         }
         await assertBreakdown(ownerPage);
         await assertBreakdown(memberPage);

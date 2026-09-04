@@ -29,11 +29,11 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/components/ui/toast';
 import { serializeMoney } from '@/lib/finance/money';
+import { createSelfTransferAction, voidTransferAction } from '@/features/transfers/actions';
 import { evaluateExpression } from '../amount-math';
 import { createTransactionAction, voidTransactionAction } from '../actions';
-import type { RecordableTransactionType } from '../queries';
 import type { AddTransactionSheetData } from '../sheet-data';
-import { TransactionEditor } from './transaction-editor';
+import { TransactionEditor, type EditorTabType } from './transaction-editor';
 
 interface AddTransactionSheetProps extends AddTransactionSheetData {
   trigger: ReactNode;
@@ -116,10 +116,16 @@ function AddTransactionSheetForm({
 }: AddTransactionSheetFormProps) {
   const router = useRouter();
   const toast = useToast();
-  const [type, setType] = useState<RecordableTransactionType>('expense');
+  const [type, setType] = useState<EditorTabType>('expense');
   const [expression, setExpression] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [walletId, setWalletId] = useState<string>(defaultWalletId ?? wallets[0]?.id ?? '');
+  // Transfer's destination wallet — defaults to the first ACTIVE wallet
+  // that isn't already the source, so a user with 2+ wallets can hit Simpan
+  // on the Transfer tab without touching either picker first.
+  const [toWalletId, setToWalletId] = useState<string>(
+    () => wallets.find((w) => w.id !== (defaultWalletId ?? wallets[0]?.id))?.id ?? '',
+  );
   const [date, setDate] = useState<Date>(() => new Date());
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -134,29 +140,56 @@ function AddTransactionSheetForm({
   }, [expression, onHasInputChange]);
 
   const amount = evaluateExpression(expression);
-  const saveDisabled = amount <= 0n || categoryId === null || walletId === '' || isPending;
+  const saveDisabled =
+    amount <= 0n ||
+    walletId === '' ||
+    isPending ||
+    (type === 'transfer' ? toWalletId === '' || toWalletId === walletId : categoryId === null);
 
-  function handleTypeChange(next: RecordableTransactionType) {
+  function handleTypeChange(next: EditorTabType) {
     setType(next);
     // Categories are type-specific — docs/03 §8.4 "category.type cocok" — a
-    // chip valid for Pengeluaran is never valid for Pemasukan.
+    // chip valid for Pengeluaran is never valid for Pemasukan. Irrelevant
+    // for Transfer (category is always NULL there), but harmless to clear.
     setCategoryId(null);
   }
 
+  // Keeps the destination picker from silently matching the source when the
+  // source changes underneath it — spec.md "Validasi menolak: dompet asal =
+  // tujuan" is enforced server-side too, but the UI shouldn't let the two
+  // pickers drift into an invalid pair in the first place.
+  function handleFromWalletChange(id: string) {
+    setWalletId(id);
+    if (id === toWalletId) {
+      setToWalletId(wallets.find((w) => w.id !== id)?.id ?? '');
+    }
+  }
+
   function handleSave() {
-    if (saveDisabled || categoryId === null) return;
+    if (saveDisabled) return;
+    if (type !== 'transfer' && categoryId === null) return;
     setError(null);
 
     startTransition(async () => {
-      const result = await createTransactionAction({
-        type,
-        amount: serializeMoney(amount),
-        categoryId,
-        walletId,
-        transactionDate: date,
-        note,
-        idempotencyKey: idempotencyKeyRef.current,
-      });
+      const result =
+        type === 'transfer'
+          ? await createSelfTransferAction({
+              fromWalletId: walletId,
+              toWalletId,
+              amount: serializeMoney(amount),
+              transactionDate: date,
+              note,
+              idempotencyKey: idempotencyKeyRef.current,
+            })
+          : await createTransactionAction({
+              type,
+              amount: serializeMoney(amount),
+              categoryId: categoryId!,
+              walletId,
+              transactionDate: date,
+              note,
+              idempotencyKey: idempotencyKeyRef.current,
+            });
 
       if (result.error || !result.transactionId) {
         setError(result.error ?? 'Gagal menyimpan. Data Anda tidak berubah — coba lagi.');
@@ -164,6 +197,7 @@ function AddTransactionSheetForm({
       }
 
       const newTransactionId = result.transactionId;
+      const isTransfer = type === 'transfer';
       onHasInputChange(false);
       onDone();
       router.refresh();
@@ -174,7 +208,8 @@ function AddTransactionSheetForm({
           label: 'Urungkan',
           onClick: () => {
             startTransition(async () => {
-              await voidTransactionAction(newTransactionId);
+              if (isTransfer) await voidTransferAction(newTransactionId);
+              else await voidTransactionAction(newTransactionId);
               router.refresh();
             });
           },
@@ -192,7 +227,7 @@ function AddTransactionSheetForm({
       categoryId={categoryId}
       onCategoryChange={setCategoryId}
       walletId={walletId}
-      onWalletChange={setWalletId}
+      onWalletChange={handleFromWalletChange}
       date={date}
       onDateChange={setDate}
       note={note}
@@ -204,6 +239,9 @@ function AddTransactionSheetForm({
       saveDisabled={saveDisabled}
       saving={isPending}
       onSave={handleSave}
+      allowTransfer
+      toWalletId={toWalletId}
+      onToWalletChange={setToWalletId}
     />
   );
 }

@@ -6,16 +6,23 @@
  * across fine, unlike `bigint`).
  */
 import { deserializeMoney, serializeMoney, type Money } from '@/lib/finance/money';
-import type { RecordableTransactionType, TransactionCategoryInfo, TransactionListItem, TransactionWalletInfo } from './queries';
+import type {
+  TransactionCategoryInfo,
+  TransactionItemType,
+  TransactionListItem,
+  TransactionWalletInfo,
+} from './queries';
+import type { TransferWalletInfo } from '@/features/transfers/queries';
 
 export interface TransactionClientData {
   id: string;
-  type: RecordableTransactionType;
+  type: TransactionItemType;
   amount: string;
   transactionDate: Date;
   note: string | null;
   category: TransactionCategoryInfo | null;
   wallet: TransactionWalletInfo | null;
+  transfer: { fromWallet: TransferWalletInfo; toWallet: TransferWalletInfo } | null;
 }
 
 export function toTransactionClientData(row: TransactionListItem): TransactionClientData {
@@ -27,6 +34,7 @@ export function toTransactionClientData(row: TransactionListItem): TransactionCl
     note: row.note,
     category: row.category,
     wallet: row.wallet,
+    transfer: row.transfer,
   };
 }
 
@@ -34,8 +42,15 @@ export function transactionAmount(row: TransactionClientData): Money {
   return deserializeMoney(row.amount);
 }
 
-/** Signed for display — docs/03 §8.1 (`income` → `+`, `expense` → `−`). Never stored signed. */
+/**
+ * Signed for display — docs/03 §8.1 (`income` → `+`, `expense` → `−`).
+ * Never stored signed. A transfer has NO sign (docs/03 §9.4, spec.md
+ * "tanpa awalan + atau −") — callers that need a transfer's amount for
+ * display should use `transactionAmount` directly with `tone="neutral"`
+ * (src/components/finance/money-text.tsx), never this function.
+ */
 export function signedTransactionAmount(row: TransactionClientData): Money {
   const amount = transactionAmount(row);
+  if (row.type === 'transfer') return amount;
   return row.type === 'income' ? amount : -amount;
 }

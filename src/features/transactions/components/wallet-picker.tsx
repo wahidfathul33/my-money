@@ -17,9 +17,16 @@ interface WalletPickerProps {
   wallets: WalletOption[];
   value: string;
   onChange: (walletId: string) => void;
+  /**
+   * Distinguishes the trigger's accessible name when two pickers appear on
+   * the same screen (the transfer tab's "Dari"/"Ke" pair —
+   * src/features/transfers/components/transfer-form.tsx). Omitted by every
+   * other caller, which keeps their native icon+text accessible name as-is.
+   */
+  triggerLabel?: string;
 }
 
-export function WalletPicker({ wallets, value, onChange }: WalletPickerProps) {
+export function WalletPicker({ wallets, value, onChange, triggerLabel }: WalletPickerProps) {
   const [open, setOpen] = useState(false);
   const selected = wallets.find((w) => w.id === value);
 
@@ -33,6 +40,7 @@ export function WalletPicker({ wallets, value, onChange }: WalletPickerProps) {
       <button
         type="button"
         onClick={() => setOpen(true)}
+        aria-label={triggerLabel ? `${triggerLabel}: ${selected?.name ?? 'Pilih dompet'}` : undefined}
         className="pressable-tint rounded-inner text-text flex h-11 items-center gap-1.5 px-2 text-sm font-medium"
       >
         <Icon name={selected?.icon ?? 'wallet'} className="text-text-muted size-4" />

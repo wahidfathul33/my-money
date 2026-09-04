@@ -13,10 +13,23 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/toast';
 import type { TransactionClientData } from '../client-types';
 import { unvoidTransactionAction, voidTransactionAction } from '../actions';
+import { unvoidTransferAction, voidTransferAction } from '@/features/transfers/actions';
 import type { AddTransactionSheetData } from '../sheet-data';
 import { EditTransactionSheet } from './edit-transaction-sheet';
 import { TransactionDetailSheet } from './transaction-detail-sheet';
 import { TransactionRow } from './transaction-row';
+
+// A transfer voids/unvoids through its own service (src/lib/services/transfers.ts
+// — `voidTransaction`/`unvoidTransaction` explicitly refuse `type: 'transfer'`
+// rows, see that module's doc comment), so every void/undo pair here
+// dispatches on `transaction.type` rather than always calling the
+// income/expense action.
+function voidAction(type: TransactionClientData['type']) {
+  return type === 'transfer' ? voidTransferAction : voidTransactionAction;
+}
+function unvoidAction(type: TransactionClientData['type']) {
+  return type === 'transfer' ? unvoidTransferAction : unvoidTransactionAction;
+}
 
 interface TransactionListProps {
   transactions: TransactionClientData[];
@@ -38,18 +51,18 @@ export function TransactionList({ transactions, sheetData }: TransactionListProp
 
   function quickDelete(transaction: TransactionClientData) {
     startTransition(async () => {
-      const result = await voidTransactionAction(transaction.id);
+      const result = await voidAction(transaction.type)(transaction.id);
       if (result.error) return;
 
       router.refresh();
       toast.show({
-        title: 'Transaksi dihapus',
+        title: transaction.type === 'transfer' ? 'Transfer dihapus' : 'Transaksi dihapus',
         variant: 'success',
         action: {
           label: 'Urungkan',
           onClick: () => {
             startTransition(async () => {
-              await unvoidTransactionAction(transaction.id);
+              await unvoidAction(transaction.type)(transaction.id);
               router.refresh();
             });
           },

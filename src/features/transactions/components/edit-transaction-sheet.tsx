@@ -28,6 +28,13 @@ interface EditTransactionSheetProps {
   onSaved: () => void;
 }
 
+/** A transfer's shape (2 wallets, no category) doesn't fit this form — editing one is out of tasks/08-transfers-self's scope (only void is). */
+type EditableTransaction = TransactionClientData & { type: RecordableTransactionType };
+
+function isEditable(transaction: TransactionClientData): transaction is EditableTransaction {
+  return transaction.type !== 'transfer';
+}
+
 export function EditTransactionSheet({
   open,
   onOpenChange,
@@ -38,7 +45,7 @@ export function EditTransactionSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent title="Edit transaksi">
-        {open && transaction && (
+        {open && transaction && isEditable(transaction) && (
           <EditTransactionForm
             transaction={transaction}
             sheetData={sheetData}
@@ -54,7 +61,7 @@ export function EditTransactionSheet({
 }
 
 interface EditTransactionFormProps {
-  transaction: TransactionClientData;
+  transaction: EditableTransaction;
   sheetData: AddTransactionSheetData;
   onDone: () => void;
 }
@@ -78,6 +85,16 @@ function EditTransactionForm({ transaction, sheetData, onDone }: EditTransaction
   function handleTypeChange(next: RecordableTransactionType) {
     setType(next);
     setCategoryId(null);
+  }
+
+  // `TransactionEditor`'s tab value space includes 'transfer' (for the Add
+  // sheet); this form passes `allowTransfer={false}` below so that tab never
+  // renders, but the callback's declared type is still the wider union —
+  // narrow it back here rather than widening `handleTypeChange` itself,
+  // since every other line in this component only ever deals with
+  // income/expense (editing a transfer is out of scope, see `isEditable` above).
+  function handleEditorTypeChange(next: RecordableTransactionType | 'transfer') {
+    if (next !== 'transfer') handleTypeChange(next);
   }
 
   function handleSave() {
@@ -108,7 +125,7 @@ function EditTransactionForm({ transaction, sheetData, onDone }: EditTransaction
   return (
     <TransactionEditor
       type={type}
-      onTypeChange={handleTypeChange}
+      onTypeChange={handleEditorTypeChange}
       expression={expression}
       onExpressionChange={setExpression}
       categoryId={categoryId}

@@ -9,9 +9,10 @@
  * into a `revealed` boolean via React state only once the gesture ends.
  */
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { ArrowLeftRight } from 'lucide-react';
 import { MoneyText } from '@/components/finance/money-text';
 import { CategoryIcon } from '@/features/categories/components/category-icon';
-import { signedTransactionAmount, type TransactionClientData } from '../client-types';
+import { signedTransactionAmount, transactionAmount, type TransactionClientData } from '../client-types';
 
 const REVEAL_WIDTH = 88; // px — width of the Hapus button behind the row
 const DRAG_OPEN_THRESHOLD = REVEAL_WIDTH / 2;
@@ -88,20 +89,35 @@ export function TransactionRow({ transaction, onOpenDetail, onQuickDelete }: Tra
         style={{ transform: revealed ? `translateX(-${REVEAL_WIDTH}px)` : undefined }}
         className="bg-surface relative flex touch-pan-y items-center gap-3 px-2 py-3 transition-transform"
       >
-        {transaction.category ? (
+        {/* Transfer gets its own neutral treatment throughout this row — no
+            category, no +/− sign, `--color-neutral-flow` via
+            `tone="neutral"` (docs/07 §4 "Transfer bukan untung maupun rugi",
+            tasks/08-transfers-self/spec.md). */}
+        {transaction.type === 'transfer' ? (
+          <span className="bg-surface-raised text-text-muted flex size-10 shrink-0 items-center justify-center rounded-full">
+            <ArrowLeftRight className="size-4" aria-hidden="true" />
+          </span>
+        ) : transaction.category ? (
           <CategoryIcon icon={transaction.category.icon} color={transaction.category.color} />
         ) : (
           <span className="bg-surface-raised size-10 shrink-0 rounded-full" />
         )}
         <div className="min-w-0 flex-1">
           <p className="text-text truncate text-sm font-medium">
-            {transaction.category?.name ?? 'Transaksi'}
+            {transaction.type === 'transfer'
+              ? `${transaction.transfer!.fromWallet.name} → ${transaction.transfer!.toWallet.name}`
+              : (transaction.category?.name ?? 'Transaksi')}
           </p>
           <p className="text-text-muted truncate text-xs">
-            {transaction.wallet?.name ?? '—'} · {TIME_FORMAT.format(transaction.transactionDate)}
+            {transaction.type === 'transfer' ? 'Transfer' : (transaction.wallet?.name ?? '—')} ·{' '}
+            {TIME_FORMAT.format(transaction.transactionDate)}
           </p>
         </div>
-        <MoneyText amount={signedTransactionAmount(transaction)} showSign size="sm" />
+        {transaction.type === 'transfer' ? (
+          <MoneyText amount={transactionAmount(transaction)} tone="neutral" size="sm" />
+        ) : (
+          <MoneyText amount={signedTransactionAmount(transaction)} showSign size="sm" />
+        )}
       </div>
     </div>
   );

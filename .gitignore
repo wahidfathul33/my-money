@@ -23,6 +23,10 @@ blob-report/
 # vercel
 .vercel
 
+# git worktrees used for parallel-agent isolation — each is its own repo
+# checkout, never content that belongs in this one
+.claude/worktrees/
+
 # typescript
 *.tsbuildinfo
 

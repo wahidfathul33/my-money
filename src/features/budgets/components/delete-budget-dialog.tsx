@@ -48,10 +48,10 @@ export function DeleteBudgetDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent variant="center" title={`Hapus budget ${categoryLabel}?`}>
+      <DialogContent variant="center" title={`Hapus anggaran ${categoryLabel}?`}>
         <div className="flex flex-col gap-4">
           <p className="text-text-muted text-sm">
-            Budget periode ini akan dihapus. Riwayat transaksi Anda tidak terpengaruh.
+            Anggaran periode ini akan dihapus. Riwayat transaksi Anda tidak terpengaruh.
           </p>
 
           {error && (

@@ -52,7 +52,7 @@ export function BudgetsPageClient({ period, budgets, budgetableCategories }: Bud
 
           <Button onClick={() => setCreateOpen(true)} className="self-start">
             <Plus className="size-4" aria-hidden="true" />
-            Tambah budget
+            Buat Anggaran
           </Button>
 
           <div className="flex flex-col gap-3">
@@ -76,7 +76,7 @@ export function BudgetsPageClient({ period, budgets, budgetableCategories }: Bud
       {budgets.length === 0 && (
         <EmptyState
           icon={PiggyBank}
-          title="Belum ada budget"
+          title="Belum ada anggaran"
           description="Tetapkan anggaran bulanan, lalu kami ingatkan saat mendekati batas."
           action={<Button onClick={() => setCreateOpen(true)}>Buat Anggaran</Button>}
         />

@@ -60,7 +60,7 @@ export function HouseholdBudgetsPageClient({
 
           <Button onClick={() => setCreateOpen(true)} className="self-start">
             <Plus className="size-4" aria-hidden="true" />
-            Tambah budget
+            Buat Anggaran
           </Button>
 
           <div className="flex flex-col gap-3">
@@ -89,7 +89,7 @@ export function HouseholdBudgetsPageClient({
       {budgets.length === 0 && (
         <EmptyState
           icon={PiggyBank}
-          title="Belum ada budget keluarga"
+          title="Belum ada anggaran keluarga"
           description="Tetapkan anggaran bulanan bersama, lalu semua anggota dapat memantau pengeluaran keluarga."
           action={<Button onClick={() => setCreateOpen(true)}>Buat Anggaran</Button>}
         />

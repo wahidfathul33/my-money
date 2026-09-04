@@ -53,7 +53,7 @@ export function BudgetBar({ icon, color, label, amount, spent, status, percent, 
     <Container
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      aria-label={onClick ? `Ubah budget ${label}` : undefined}
+      aria-label={onClick ? `Ubah anggaran ${label}` : undefined}
       className={cn(
         'rounded-card border-border bg-surface flex flex-col gap-3 border p-4 text-left',
         onClick && 'pressable-tint pressable',

@@ -105,7 +105,7 @@ export function BudgetSheet(props: BudgetSheetProps) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent variant="bottom" title={isEdit ? 'Ubah budget' : 'Tambah budget'}>
+      <SheetContent variant="bottom" title={isEdit ? 'Ubah anggaran' : 'Tambah anggaran'}>
         <form action={formAction} className="flex flex-col gap-4">
           <input type="hidden" name="scope" value={props.scope} />
           <input type="hidden" name="period" value={period} />
@@ -156,7 +156,7 @@ export function BudgetSheet(props: BudgetSheetProps) {
 
           {noBudgetableCategories ? (
             <p className="text-text-muted text-sm">
-              Semua kategori pengeluaran sudah punya budget periode ini.
+              Semua kategori pengeluaran sudah punya anggaran periode ini.
             </p>
           ) : (
             <>
@@ -172,7 +172,7 @@ export function BudgetSheet(props: BudgetSheetProps) {
               <div className="flex items-center justify-between gap-3">
                 <div className="flex flex-col">
                   <span className="text-text text-sm font-medium">Ulangi setiap bulan</span>
-                  <span className="text-text-muted text-xs">Budget baru dibuat otomatis tiap tanggal 1</span>
+                  <span className="text-text-muted text-xs">Anggaran baru dibuat otomatis tiap tanggal 1</span>
                 </div>
                 <Switch label="Ulangi setiap bulan" checked={isRecurring} onCheckedChange={setIsRecurring} />
               </div>
@@ -186,13 +186,13 @@ export function BudgetSheet(props: BudgetSheetProps) {
           )}
 
           <SubmitButton
-            label={isEdit ? 'Simpan perubahan' : 'Tambah budget'}
+            label={isEdit ? 'Simpan perubahan' : 'Tambah anggaran'}
             disabled={noBudgetableCategories}
           />
 
           {budget && (
             <Button type="button" variant="ghost" className="text-negative" onClick={() => setDeleteOpen(true)}>
-              Hapus budget
+              Hapus anggaran
             </Button>
           )}
         </form>

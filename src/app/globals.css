@@ -340,6 +340,21 @@ a {
   background: color-mix(in oklch, var(--color-negative) 80%, black);
 }
 
+/* Teks `--color-warning` di atas bg/surface (mis. persentase BudgetBar
+   berstatus "warning") gagal AA di mode terang (2.47-2.66:1 — hue kuning
+   ber-luminans WCAG tinggi pada L yang sama, jauh lebih rendah kontrasnya
+   daripada brand/positive di L serupa) tapi lolos nyaman di mode gelap
+   (6.65-7.75:1). Sama polanya dengan .text-brand-readable /
+   .text-positive-readable di atas — turunkan L saja, token mentahnya tetap. */
+.text-warning-readable {
+  color: oklch(50% 0.15 75);
+}
+@media (prefers-color-scheme: dark) {
+  .text-warning-readable {
+    color: var(--color-warning);
+  }
+}
+
 /* ====================================================================== */
 /* Sheet & dialog — masuk/keluar tanpa JS (§8.1)                          */
 /* ====================================================================== */

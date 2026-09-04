@@ -9,10 +9,11 @@
  * `requireHouseholdAccess` — the page sits behind
  * src/app/(app)/household/[householdId]/layout.tsx's guard already; the API
  * route re-verifies itself, since nothing guards routes under `/api/**`).
- * This module doesn't re-derive that check because it's scoped to exactly
- * the ONE household the caller already proved access to — a narrower
- * question than "everything I can see across every household", which is
- * src/lib/visibility/transactions.ts's job for a DIFFERENT query shape.
+ * The household-tag filter itself still goes through
+ * src/lib/visibility/transactions.ts's `householdTaggedTransactionsWhere` —
+ * a DIFFERENT, narrower shape than that module's general
+ * `visibleTransactionsWhere` (see that function's own doc comment for why
+ * reusing the general one here would be a bug, not just redundant).
  *
  * Never selects any wallet or balance column — spec.md "Halaman itu TIDAK
  * menampilkan saldo dompet siapa pun." There's structurally nothing to leak
@@ -24,6 +25,7 @@ import { dbRead } from '@/lib/db/read';
 import { categories, transactions, users } from '@/lib/db/schema';
 import type { Money } from '@/lib/finance/money';
 import { decodeCursor, encodeCursor } from '@/features/transactions/cursor';
+import { householdTaggedTransactionsWhere } from '@/lib/visibility/transactions';
 
 export interface HouseholdTransactionCategoryInfo {
   id: string;
@@ -68,7 +70,7 @@ export async function listHouseholdTransactionsPage(
   const limit = Math.min(Math.max(options.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT);
 
   const conditions = [
-    eq(transactions.householdId, householdId),
+    householdTaggedTransactionsWhere(householdId),
     isNull(transactions.voidedAt),
     inArray(transactions.type, ['income', 'expense']),
   ];
@@ -148,7 +150,7 @@ export async function hasAnyHouseholdTransaction(householdId: string): Promise<b
     .from(transactions)
     .where(
       and(
-        eq(transactions.householdId, householdId),
+        householdTaggedTransactionsWhere(householdId),
         isNull(transactions.voidedAt),
         inArray(transactions.type, ['income', 'expense']),
       ),

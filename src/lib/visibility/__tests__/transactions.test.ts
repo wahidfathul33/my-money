@@ -11,7 +11,7 @@
  * every branch of the predicate logic itself.
  */
 import { describe, expect, it } from 'vitest';
-import { isTransactionVisible, visibleTransactionsWhere } from '../transactions';
+import { householdTaggedTransactionsWhere, isTransactionVisible, visibleTransactionsWhere } from '../transactions';
 import { renderSql } from './render-sql';
 
 const ME = '00000000-0000-7000-8000-000000000001';
@@ -66,5 +66,14 @@ describe('visibleTransactionsWhere', () => {
   it('never mentions voided_at — lifecycle filtering is the caller\'s job', () => {
     const { sql } = renderSql(visibleTransactionsWhere(ME, [HOUSEHOLD_A]));
     expect(sql).not.toMatch(/voided_at/);
+  });
+});
+
+describe('householdTaggedTransactionsWhere', () => {
+  it('filters by household_id alone — no user_id clause at all', () => {
+    const { sql, params } = renderSql(householdTaggedTransactionsWhere(HOUSEHOLD_A));
+    expect(sql).toBe('"transactions"."household_id" = $1');
+    expect(params).toEqual([HOUSEHOLD_A]);
+    expect(sql).not.toMatch(/user_id/);
   });
 });

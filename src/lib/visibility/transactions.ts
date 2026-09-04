@@ -96,3 +96,22 @@ export async function getActiveHouseholdIds(userId: string): Promise<string[]> {
     .where(and(eq(householdMembers.userId, userId), eq(householdMembers.status, 'active')));
   return rows.map((row) => row.householdId);
 }
+
+/**
+ * All transactions tagged to ONE specific household — the household
+ * expenses page's shape (src/features/sharing/household-transactions-queries.ts),
+ * "everyone's transactions tagged to household X". Deliberately NOT the
+ * same thing as `visibleTransactionsWhere(viewerId, [householdId])`: that
+ * predicate's first clause (`t.user_id = $me`) would incorrectly pull in
+ * the viewer's own UNTAGGED personal transactions too — this function has
+ * no "me" at all, only the household.
+ *
+ * The caller MUST have already verified the viewer is an ACTIVE member of
+ * `householdId` before using this (`requireHouseholdAccess`,
+ * src/lib/services/households.ts) — unlike `visibleTransactionsWhere`,
+ * this function has no viewer identity to check membership against, so it
+ * is not, by itself, a complete access-control decision.
+ */
+export function householdTaggedTransactionsWhere(householdId: string): SQL {
+  return eq(transactions.householdId, householdId);
+}

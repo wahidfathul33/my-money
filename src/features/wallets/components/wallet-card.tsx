@@ -61,7 +61,20 @@ export function WalletCard({ wallet, dragHandleProps, className }: WalletCardPro
           <span className="text-text truncate text-body font-medium">{wallet.name}</span>
           <span className="text-text-muted text-sm">{meta.label}</span>
         </span>
-        <MoneyText amount={walletBalance(wallet)} tone="plain" size="md" className="shrink-0" />
+        <MoneyText
+          amount={walletBalance(wallet)}
+          tone="plain"
+          // Credit cards are DB-constrained to balance <= 0 (schema.ts's
+          // `wallets_credit_card_balance_check`) and shown as an absolute
+          // liability amount under "Liabilitas" — the sign is redundant
+          // there. Every other wallet type has no such constraint; a
+          // negative balance (overdrawn relative to what's recorded) is a
+          // meaningful, must-be-visible state — hiding its sign would
+          // silently show a user money they don't have.
+          showSign={wallet.type !== 'credit_card'}
+          size="md"
+          className="shrink-0"
+        />
       </Link>
     </div>
   );

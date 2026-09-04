@@ -73,7 +73,10 @@ export function WalletsPageClient({
           <div className="flex gap-3">
             <div className="bg-surface-raised rounded-card flex-1 p-4">
               <p className="text-text-muted text-sm">Total Kas</p>
-              <MoneyText amount={deserializeMoney(totalCash)} tone="plain" size="lg" />
+              {/* showSign: excludes credit cards (see totalCash's own doc
+                  comment in queries.ts), so unlike Total Liabilitas below
+                  this can genuinely go negative — that must stay visible. */}
+              <MoneyText amount={deserializeMoney(totalCash)} tone="plain" size="lg" showSign />
             </div>
             {hasLiabilities && (
               <div className="bg-surface-raised rounded-card flex-1 p-4">
@@ -108,7 +111,16 @@ export function WalletsPageClient({
         <section key={group.type} className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between">
             <h2 className="text-text text-heading font-semibold">{group.label}</h2>
-            <MoneyText amount={deserializeMoney(group.total)} tone="plain" size="sm" />
+            {/* credit_card's raw sum is always <= 0 by DB constraint, so its
+                magnitude alone already reads correctly as a liability total
+                (same convention as Total Liabilitas above) — every other
+                group has no such constraint and needs its sign visible. */}
+            <MoneyText
+              amount={deserializeMoney(group.total)}
+              tone="plain"
+              size="sm"
+              showSign={group.type !== 'credit_card'}
+            />
           </div>
           <div className="bg-surface rounded-card overflow-hidden">
             <WalletGroupList wallets={group.wallets} />

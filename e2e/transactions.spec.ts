@@ -72,7 +72,10 @@ test.describe('Catat transaksi', () => {
     const elapsedMs = Date.now() - start;
     expect(elapsedMs).toBeLessThan(5000);
 
-    await expect(page.getByText('Tersimpan')).toBeVisible(DB_TIMEOUT);
+    // exact:true — Radix Toast also renders a visually-hidden live-region
+    // announcer ("Notification TersimpanUrungkan") alongside the visible
+    // title; a substring match ambiguously resolves to both.
+    await expect(page.getByText('Tersimpan', { exact: true })).toBeVisible(DB_TIMEOUT);
     const undoButton = page.getByRole('button', { name: 'Urungkan' });
     await expect(undoButton).toBeVisible();
 

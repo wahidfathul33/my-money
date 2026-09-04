@@ -73,7 +73,11 @@ export function BalanceAdjustmentSheet({ open, onOpenChange, wallet }: BalanceAd
 
           <div className="flex items-center justify-between">
             <span className="text-text-muted text-sm">Saldo tercatat</span>
-            <MoneyText amount={currentBalance} tone="plain" />
+            <MoneyText
+              amount={currentBalance}
+              tone="plain"
+              showSign={wallet.type !== 'credit_card'}
+            />
           </div>
 
           <Input

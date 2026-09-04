@@ -51,7 +51,16 @@ export default async function WalletDetailPage({ params }: WalletDetailPageProps
           <span className={cn('flex size-14 items-center justify-center rounded-full', colorClass)}>
             <Icon className="size-7" aria-hidden="true" />
           </span>
-          <MoneyText amount={wallet.balance} tone="plain" size="display" />
+          {/* showSign except for credit cards — see wallet-card.tsx's doc
+              comment for why (DB-constrained <= 0, shown as a liability
+              magnitude; every other type can legitimately go negative and
+              that must stay visible). */}
+          <MoneyText
+            amount={wallet.balance}
+            tone="plain"
+            size="display"
+            showSign={wallet.type !== 'credit_card'}
+          />
           {isDefault && (
             <span className="rounded-chip bg-brand-subtle text-brand-readable px-3 py-1 text-xs font-medium">
               Dompet utama

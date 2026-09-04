@@ -39,10 +39,11 @@ test.describe('Dompet', () => {
 
     await walletLink.click();
     await expect(page).toHaveURL(/\/wallets\/[^/]+$/, DB_TIMEOUT);
-    // exact: true — the ledger history below also shows "+Rp500.000" for
-    // the opening_balance entry, a substring match on "Rp500.000" alone
-    // resolves to both and trips Playwright's strict mode.
-    await expect(page.getByText('Rp500.000', { exact: true })).toBeVisible(DB_TIMEOUT);
+    // The hero balance (non-credit-card wallets show an explicit sign — see
+    // wallet-card.tsx's doc comment) and the opening_balance ledger entry
+    // below both render "+Rp500.000" identically — .first() targets the
+    // hero specifically, which appears first in the DOM.
+    await expect(page.getByText('+Rp500.000').first()).toBeVisible(DB_TIMEOUT);
 
     await page.getByRole('button', { name: 'Sesuaikan saldo' }).click();
     const adjustSheet = page.getByRole('dialog', { name: 'Sesuaikan saldo' });
@@ -52,7 +53,7 @@ test.describe('Dompet', () => {
     await adjustSheet.getByRole('button', { name: 'Simpan penyesuaian' }).click();
     await expect(adjustSheet).not.toBeVisible(DB_TIMEOUT);
 
-    await expect(page.getByText('Rp450.000', { exact: true })).toBeVisible(DB_TIMEOUT);
+    await expect(page.getByText('+Rp450.000', { exact: true })).toBeVisible(DB_TIMEOUT);
 
     await page.getByRole('button', { name: 'Arsipkan' }).click();
     await expect(page.getByRole('button', { name: 'Pulihkan' })).toBeVisible(DB_TIMEOUT);

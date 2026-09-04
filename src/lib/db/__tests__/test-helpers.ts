@@ -14,6 +14,7 @@ import { wallets } from '@/lib/db/schema/wallets';
 import { categories } from '@/lib/db/schema/categories';
 import { ledgerEntries } from '@/lib/db/schema/transactions';
 import { households, householdMembers } from '@/lib/db/schema/households';
+import { savingsContributions, savingsGoals } from '@/lib/db/schema/savings';
 
 export async function createTestUser(overrides: Partial<typeof users.$inferInsert> = {}) {
   const id = uuidv7();
@@ -107,6 +108,20 @@ export async function deleteTestHousehold(householdId: string) {
 }
 
 /**
+ * Removes a savings goal and every contribution/withdrawal row against it —
+ * task 15. `savings_contributions.savings_goal_id` is `ON DELETE RESTRICT`
+ * (src/lib/db/schema/savings.ts), so the goal can't go first. Needed
+ * separately from `deleteTestUser` for a SHARED goal a test creates under
+ * one user while a DIFFERENT user contributes to it (the contributor's
+ * `deleteTestUser` only clears contributions THEY made — see below — not
+ * the goal itself, which the creator owns).
+ */
+export async function deleteTestSavingsGoal(goalId: string) {
+  await dbWrite.delete(savingsContributions).where(eq(savingsContributions.savingsGoalId, goalId));
+  await dbWrite.delete(savingsGoals).where(eq(savingsGoals.id, goalId));
+}
+
+/**
  * Removes a test user and everything that structurally must be cleaned up
  * before it can go (ledger_entries.wallet_id is ON DELETE RESTRICT, so those
  * have to go first; wallets cascade from users but would hit that RESTRICT
@@ -114,6 +129,17 @@ export async function deleteTestHousehold(householdId: string) {
  * `household_members` rows for OTHER users in a household this user created
  * cascade from `households` being deleted here, so no separate cleanup is
  * needed for those.
+ *
+ * Savings (task 15) needs the same "must go before ledger_entries" treatment
+ * as households needed before users, in BOTH directions: a contribution's
+ * `ledger_entry_id` is `ON DELETE RESTRICT` (so any contribution THIS user
+ * made — even to a goal owned by someone else, e.g. a shared goal — must be
+ * deleted before this user's ledger_entries), and a goal's contributions are
+ * likewise `ON DELETE RESTRICT` on `savings_goal_id` (so a goal THIS user
+ * OWNS must have every contributor's rows cleared — not just this user's own
+ * — before the goal itself can go via cascade from `users`). Cross-user
+ * shared-goal tests must still push every contributing user's id, same as
+ * households, so every side's cleanup actually runs.
  */
 export async function deleteTestUser(userId: string) {
   const createdHouseholds = await dbWrite
@@ -123,6 +149,18 @@ export async function deleteTestUser(userId: string) {
   for (const household of createdHouseholds) {
     await deleteTestHousehold(household.id);
   }
+
+  const ownedGoals = await dbWrite
+    .select({ id: savingsGoals.id })
+    .from(savingsGoals)
+    .where(eq(savingsGoals.userId, userId));
+  for (const goal of ownedGoals) {
+    await deleteTestSavingsGoal(goal.id);
+  }
+  // This user's OWN contributions to a goal owned by someone else (shared
+  // goal) — not covered by the loop above, which only clears goals this
+  // user CREATED.
+  await dbWrite.delete(savingsContributions).where(eq(savingsContributions.userId, userId));
 
   await dbWrite.delete(householdMembers).where(eq(householdMembers.userId, userId));
   await dbWrite.delete(ledgerEntries).where(eq(ledgerEntries.userId, userId));

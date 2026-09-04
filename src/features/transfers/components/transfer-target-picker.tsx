@@ -17,6 +17,7 @@ import { ChevronRight, User } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Icon } from '@/lib/icons';
 import { MemberAvatar } from '@/features/household/components/member-avatar';
+import { WALLET_TYPE_META } from '@/features/wallets/wallet-type-meta';
 import type { TransferTargetPerson } from '../target-queries';
 
 export interface MemberTransferSelection {
@@ -117,10 +118,22 @@ export function TransferTargetPicker({ people, value, onChange }: TransferTarget
                     type="button"
                     onClick={() => selectWallet(wallet.id)}
                     aria-pressed={wallet.id === value?.toWalletId}
-                    className="pressable-tint rounded-inner text-text flex h-12 w-full items-center gap-3 px-2 text-left text-sm"
+                    // Explicit label (not the default concatenated-text
+                    // computation) — for a wallet whose type label happens
+                    // to equal its name (e.g. a "Tunai" cash wallet), the
+                    // default would announce "Tunai Tunai".
+                    aria-label={`${wallet.name}, ${WALLET_TYPE_META[wallet.type].label}`}
+                    className="pressable-tint rounded-inner text-text flex h-14 w-full items-center gap-3 px-2 text-left"
                   >
-                    <Icon name={wallet.icon} className="size-5" aria-hidden="true" />
-                    {wallet.name}
+                    <Icon name={wallet.icon} className="size-5 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      {/* spec.md "Pemilih rekening menampilkan nama + jenis
+                          saja" — name AND type, nothing else (no balance,
+                          ever — TransferTargetDto structurally can't carry
+                          one). */}
+                      <p className="truncate text-sm font-medium">{wallet.name}</p>
+                      <p className="text-text-muted truncate text-xs">{WALLET_TYPE_META[wallet.type].label}</p>
+                    </span>
                   </button>
                 </li>
               ))}

@@ -6,6 +6,7 @@
  */
 import { z } from 'zod';
 import { HOUSEHOLD_WEALTH_ENTITY_TYPES } from '@/lib/services/sharing';
+import { BULK_TAG_MAX } from '@/lib/services/transactions';
 
 export const setShareWealthSchema = z.object({
   householdId: z.uuid('ID keluarga tidak valid'),
@@ -22,8 +23,6 @@ export const setTransactionHouseholdSchema = z.object({
   transactionId: z.uuid('Transaksi tidak valid'),
   householdId: z.uuid('ID keluarga tidak valid').nullable(),
 });
-
-const BULK_TAG_MAX = 200;
 
 export const bulkTagTransactionsSchema = z.object({
   transactionIds: z

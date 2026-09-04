@@ -29,6 +29,7 @@ import {
 } from '@/lib/db/__tests__/test-helpers';
 import { getMonthlyTotals, getTransaction } from '@/features/transactions/queries';
 import {
+  BULK_TAG_MAX,
   bulkTagTransactions,
   createTransaction,
   setTransactionHousehold,
@@ -849,7 +850,7 @@ describe('transactions service', () => {
         const household = await createTestHousehold(owner);
         householdIds.push(household);
         await createTestHouseholdMember(household, owner, { role: 'owner' });
-        const tooMany = Array.from({ length: 201 }, () => uuidv7());
+        const tooMany = Array.from({ length: BULK_TAG_MAX + 1 }, () => uuidv7());
 
         await expect(bulkTagTransactions(owner, tooMany, household)).rejects.toThrow(ValidationError);
       });

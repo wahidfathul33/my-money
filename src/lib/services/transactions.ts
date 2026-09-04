@@ -342,7 +342,8 @@ export async function updateTransaction(
   });
 }
 
-const BULK_TAG_MAX = 200;
+/** Exported so src/features/sharing/schema.ts's Zod cap can't silently drift from the authoritative service-layer cap. */
+export const BULK_TAG_MAX = 200;
 
 /**
  * Toggles just the household tag on an existing, non-voided income/expense

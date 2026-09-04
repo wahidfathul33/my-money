@@ -88,7 +88,17 @@ export async function listGoals(userId: string): Promise<SavingsGoalListItem[]> 
             WHERE user_id = ${userId} AND status = 'active'
           )
         )`,
-        sql`${savingsGoals.householdId} IS NULL OR ${households.isArchived} = false`,
+        // Parenthesized explicitly — `and()` (drizzle-orm) only wraps the
+        // WHOLE conjunction in one outer pair of parens, never each
+        // individual condition. An unparenthesized `x OR y` combined with
+        // `and()` alongside other conditions parses per SQL's normal
+        // AND-binds-tighter-than-OR precedence, silently splitting the
+        // WHERE clause into `(cond1 AND x) OR (y AND cond3)` instead of the
+        // intended `cond1 AND (x OR y) AND cond3` — exactly the bug this
+        // parenthesization fixes (caught by
+        // src/features/savings/__tests__/queries.integration.test.ts's
+        // archived-exclusion tests).
+        sql`(${savingsGoals.householdId} IS NULL OR ${households.isArchived} = false)`,
         sql`${savingsGoals.status} <> 'archived'`,
       ),
     )

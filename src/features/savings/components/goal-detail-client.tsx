@@ -213,12 +213,15 @@ export function GoalDetailClient({
 
       {/* One-time celebration when a contribution crosses the target — "sheet
           sederhana, tanpa konfeti" (todo.md). Fires from ContributeSheet's
-          onCompleted, never from merely viewing an already-completed goal. */}
+          onCompleted, never from merely viewing an already-completed goal.
+          The title bar IS the heading (no `hideTitle` + duplicate visible
+          heading below it — matches every other Dialog in this codebase,
+          e.g. ArchiveHouseholdDialog) so there's exactly one element with
+          this text, not two. */}
       <Dialog open={celebrationOpen} onOpenChange={setCelebrationOpen}>
-        <DialogContent variant="center" title="Target tercapai!" hideTitle>
+        <DialogContent variant="center" title="Target tercapai!">
           <div className="flex flex-col items-center gap-3 py-2 text-center">
             <PartyPopper className="text-brand size-10" aria-hidden="true" />
-            <p className="text-text text-heading font-semibold">Target tercapai!</p>
             <p className="text-text-muted text-sm">
               {goal.name} sudah mencapai Rp{(targetAmount / 100n).toLocaleString('id-ID')}.
             </p>

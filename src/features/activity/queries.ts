@@ -13,10 +13,11 @@
  * is the filter that actually means "written by someone else", and it is
  * NEVER omitted below.
  */
-import { and, count, desc, eq, isNull, ne } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { dbRead } from '@/lib/db/read';
 import { households, ledgerEntries, transactions, users, wallets } from '@/lib/db/schema';
+import { ownedBy } from '@/lib/db/scoped';
 import type { Money } from '@/lib/finance/money';
 
 const sender = alias(users, 'activity_sender');
@@ -129,4 +130,29 @@ export async function countUnacknowledged(userId: string): Promise<number> {
       ),
     );
   return row?.count ?? 0;
+}
+
+export interface OwnWalletOption {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+}
+
+/**
+ * The caller's own active wallets, name/icon/color only — feeds the
+ * "Pindahkan" sheet on an Activity card. Deliberately its own tiny query
+ * rather than importing `listActiveWallets`
+ * (src/features/wallets/queries.ts): that one returns the FULL row
+ * including `balance` (a `bigint`, which can't cross the Server → Client
+ * Component boundary — see src/features/wallets/client-types.ts), and this
+ * sheet never needs it anyway (same reasoning as
+ * src/features/transactions/sheet-data.ts's `WalletOption`).
+ */
+export async function listOwnWalletOptions(userId: string): Promise<OwnWalletOption[]> {
+  return dbRead
+    .select({ id: wallets.id, name: wallets.name, icon: wallets.icon, color: wallets.color })
+    .from(wallets)
+    .where(and(ownedBy(wallets, userId), eq(wallets.isArchived, false)))
+    .orderBy(asc(wallets.type), asc(wallets.sortOrder));
 }

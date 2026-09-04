@@ -14,6 +14,9 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { TransferForm } from '@/features/transfers/components/transfer-form';
+import { MemberTransferForm } from '@/features/transfers/components/member-transfer-form';
+import type { MemberTransferSelection } from '@/features/transfers/components/transfer-target-picker';
+import type { TransferTargetPerson } from '@/features/transfers/target-queries';
 import { formatExpression } from '../amount-math';
 import type { RecordableTransactionType } from '../queries';
 import type { CategoryRow, CategoryWithChildren } from '../queries';
@@ -22,6 +25,9 @@ import { AmountKeypad } from './amount-keypad';
 import { CategoryPicker } from './category-picker';
 import { DatePicker } from './date-picker';
 import { WalletPicker } from './wallet-picker';
+
+/** tasks/13-transfers-member — which half of the "Transfer" tab is active. Meaningless (and unrendered) unless `type === 'transfer' && hasHousehold`. */
+export type TransferMode = 'own' | 'member';
 
 /** The tab bar's own value space — a superset of `RecordableTransactionType` used for actually recording a transaction (transfers get their own service, src/lib/services/transfers.ts). */
 export type EditorTabType = RecordableTransactionType | 'transfer';
@@ -49,9 +55,19 @@ export interface TransactionEditorProps {
   onSave: () => void;
   /** Shows the "Transfer" tab and, when active, the Dari→Ke picker instead of the category row. Defaults to `false` — the edit sheet (transfers aren't editable, tasks/08-transfers-self/spec.md) never opts in. */
   allowTransfer?: boolean;
-  /** The transfer's DESTINATION wallet — only meaningful (and only rendered) when `type === 'transfer'`. */
+  /** The transfer's DESTINATION wallet — only meaningful (and only rendered) when `type === 'transfer'` and `transferMode === 'own'`. */
   toWalletId?: string;
   onToWalletChange?: (id: string) => void;
+  /** tasks/13-transfers-member — gates the inner "Dompet saya" | "Ke
+   * anggota keluarga" segment inside the Transfer tab (docs/09 §2: "Bila
+   * user punya household, muncul segmented kecil"). Defaults to `false`,
+   * same opt-in-per-caller convention as `allowTransfer`. */
+  hasHousehold?: boolean;
+  memberTransferPeople?: TransferTargetPerson[];
+  transferMode?: TransferMode;
+  onTransferModeChange?: (mode: TransferMode) => void;
+  memberSelection?: MemberTransferSelection | null;
+  onMemberSelectionChange?: (selection: MemberTransferSelection) => void;
 }
 
 export function TransactionEditor({
@@ -77,6 +93,12 @@ export function TransactionEditor({
   allowTransfer = false,
   toWalletId = '',
   onToWalletChange,
+  hasHousehold = false,
+  memberTransferPeople = [],
+  transferMode = 'own',
+  onTransferModeChange,
+  memberSelection = null,
+  onMemberSelectionChange,
 }: TransactionEditorProps) {
   // Lazy initializer — visible from the start when editing a transaction
   // that already has a note, without either caller (create/edit) having to
@@ -127,15 +149,45 @@ export function TransactionEditor({
           entirely (tasks/08-transfers-self/spec.md "Ganti baris kategori
           dengan pemilih asal → tujuan"; todo.md "Sembunyikan kategori
           sepenuhnya di mode transfer") — a transfer's `category_id` is
-          always NULL (`tx_category_rule`), so there is no category to pick. */}
+          always NULL (`tx_category_rule`), so there is no category to pick.
+          tasks/13-transfers-member: when the user has a household, an INNER
+          segmented control ("Dompet saya" | "Ke anggota keluarga") picks
+          between this same self-transfer picker and MemberTransferForm —
+          docs/09 §2: "Bila user punya household, muncul segmented kecil". */}
       {type === 'transfer' ? (
-        <TransferForm
-          wallets={wallets}
-          fromWalletId={walletId}
-          onFromWalletChange={onWalletChange}
-          toWalletId={toWalletId}
-          onToWalletChange={onToWalletChange ?? (() => {})}
-        />
+        <div className="flex flex-col gap-2">
+          {hasHousehold && (
+            <Tabs value={transferMode} onValueChange={(v) => onTransferModeChange?.(v as TransferMode)}>
+              <TabsList variant="segmented" className="w-full">
+                <TabsTrigger variant="segmented" value="own">
+                  Dompet saya
+                </TabsTrigger>
+                <TabsTrigger variant="segmented" value="member">
+                  Ke anggota keluarga
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
+
+          {hasHousehold && transferMode === 'member' ? (
+            <MemberTransferForm
+              wallets={wallets}
+              fromWalletId={walletId}
+              onFromWalletChange={onWalletChange}
+              people={memberTransferPeople}
+              selection={memberSelection}
+              onSelectionChange={(selection) => onMemberSelectionChange?.(selection)}
+            />
+          ) : (
+            <TransferForm
+              wallets={wallets}
+              fromWalletId={walletId}
+              onFromWalletChange={onWalletChange}
+              toWalletId={toWalletId}
+              onToWalletChange={onToWalletChange ?? (() => {})}
+            />
+          )}
+        </div>
       ) : (
         <CategoryPicker
           quick={quickCategories[type]}

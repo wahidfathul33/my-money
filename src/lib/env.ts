@@ -12,8 +12,13 @@
  * `GOOGLE_CLIENT_SECRET` (an actually-configured Google Cloud OAuth client)
  * and SMTP (a real Gmail account) for the magic-link email provider instead
  * of Resend — see tasks/04-authentication/spec.md task instructions.
- * `RESEND_API_KEY` is kept as an optional variable, reserved for household
- * invitation email in task 10.
+ * `RESEND_API_KEY` is kept as an optional, unused variable — task 11
+ * (household invitation email) reuses the same SMTP/nodemailer transport as
+ * magic-link instead of adopting Resend, per its task instructions. `APP_URL`
+ * and `CRON_SECRET`, previously optional placeholders "reserved for later
+ * tasks", are now required as of task 11 — the first task that actually
+ * needs them (building `/invite/[token]` links, and gating
+ * `/api/cron/expire-invitations`).
  *
  * Never import this from a Client Component — it reads secrets from
  * `process.env` and throws with the raw `process.env` shape on failure. All
@@ -45,11 +50,18 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   EMAIL_FROM: z.string().email('EMAIL_FROM must be a valid email address'),
 
-  // Reserved for later tasks; optional here so this module doesn't block
-  // this task's build/tests when they're unset.
-  CRON_SECRET: z.string().min(32).optional(),
+  // Bearer secret required by every /api/cron/** route (docs/12 §8) — task
+  // 11 is the first to actually gate a route on it (expire-invitations).
+  CRON_SECRET: z.string().min(32, 'CRON_SECRET must be at least 32 characters'),
+  // Reserved — task 11 sends invitation email over the same SMTP/nodemailer
+  // transport task 04 wired up for magic links (see src/lib/email/invitation.ts),
+  // not Resend. Kept optional/unused so a future task adopting Resend
+  // doesn't need a schema change.
   RESEND_API_KEY: z.string().optional(),
-  APP_URL: z.string().url().optional(),
+  // docs/11-tech-architecture.md §8: "untuk membangun tautan undangan" —
+  // required as of task 11, which is the first to build a link
+  // (`${APP_URL}/invite/${token}`) instead of letting Auth.js infer one.
+  APP_URL: z.string().url('APP_URL must be a valid absolute URL'),
   GOLD_PRICE_PROVIDER: z.enum(['manual', 'external']).optional(),
   GOLD_PRICE_API_URL: z.string().url().optional(),
   GOLD_PRICE_API_KEY: z.string().optional(),

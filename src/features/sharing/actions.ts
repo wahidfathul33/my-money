@@ -11,6 +11,29 @@
  * Plain (non-form) actions throughout — every caller here is a button/toggle
  * in a Client Component, not a native `<form>`, same shape as
  * src/features/wallets/actions.ts's "Plain actions" section.
+ *
+ * docs/06-api-contracts.md §5's "Berbagi" catalog lists three actions —
+ * `setShareWealthAction`, `setExcludeFromHouseholdAction`, and a read-only
+ * `getSharingSummaryAction` — and stresses "hanya tiga, dan tidak ada satu
+ * pun yang memberi akses kepada orang tertentu" (ADR-024's no-per-person-
+ * grant principle). Reconciled here as follows:
+ *   - `getSharingSummaryAction` isn't a Server Action in this codebase —
+ *     it's `getSharingSummary` (../queries.ts), called directly from the
+ *     Server Component `/settings/sharing` page, matching docs/06 §1's own
+ *     "baca data awal halaman → Server Component" rule and every other
+ *     feature's established split (e.g. src/features/household/queries.ts's
+ *     `getHouseholdWithRole`, never wrapped as an action either).
+ *   - `stopSharingEverythingAction` (below) is a fourth action beyond that
+ *     count, added because spec.md requires it as ONE user action with ONE
+ *     confirmation ("Berhenti berbagi semuanya"). It still only ever
+ *     touches the CALLER's own `share_wealth` rows — no new grant surface,
+ *     just a bulk convenience over the same `setShareWealth` mechanism.
+ *   - `setTransactionHouseholdAction` and `bulkTagTransactionsAction`
+ *     belong to docs/06 §5's separate "Transaksi" catalog (which already
+ *     lists `setTransactionHouseholdAction`), not "Berbagi" — kept here
+ *     rather than in transactions/actions.ts because they're pure
+ *     thin wrappers over src/lib/services/transactions.ts's tagging
+ *     functions with no transaction-editing concerns of their own.
  */
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth/require-user';

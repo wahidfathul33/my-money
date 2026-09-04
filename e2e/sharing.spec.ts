@@ -185,6 +185,11 @@ test.describe('sharing & privacy — two-context flows', () => {
         await addSheet.getByRole('button', { name: 'Simpan' }).click();
         await expect(addSheet).not.toBeVisible(DB_TIMEOUT);
         await expect(ownerPage.getByText('Tersimpan', { exact: true })).toBeVisible(DB_TIMEOUT);
+        // The "Tersimpan" toast floats above the bottom nav/FAB (same fixed-
+        // viewport region) and only auto-dismisses after 5s
+        // (src/components/ui/toast.tsx) — waiting it out first avoids the
+        // FAB tap below racing a toast still animating out.
+        await expect(ownerPage.getByText('Tersimpan', { exact: true })).not.toBeVisible({ timeout: 8000 });
 
         // Owner records a SECOND, UNTAGGED expense — the 🏠 toggle stays off.
         await ownerPage.getByRole('button', { name: 'Tambah transaksi' }).click();
@@ -246,6 +251,10 @@ test.describe('sharing & privacy — two-context flows', () => {
           await addSheet.getByRole('button', { name: 'Makan & Minum' }).click();
           await addSheet.getByRole('button', { name: 'Simpan' }).click();
           await expect(addSheet).not.toBeVisible(DB_TIMEOUT);
+          // See the identical wait in the tagging test above — avoids the
+          // next iteration's FAB tap racing the "Tersimpan" toast's exit animation.
+          await expect(page.getByText('Tersimpan', { exact: true })).toBeVisible(DB_TIMEOUT);
+          await expect(page.getByText('Tersimpan', { exact: true })).not.toBeVisible({ timeout: 8000 });
         }
 
         await page.goto('/transactions');

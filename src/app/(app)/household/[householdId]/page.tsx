@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { PageHeader } from '@/components/layout/page-header';
 import { requireUser } from '@/lib/auth/require-user';
 import { getHouseholdWithRole } from '@/features/household/queries';
+import { hasAnyHouseholdTransaction } from '@/features/sharing/household-transactions-queries';
 import { SetupSteps, type SetupStep } from '@/features/household/components/setup-steps';
 
 const SOLO_MEMBER_COUNT = 1;
@@ -26,14 +27,19 @@ export default async function HouseholdSummaryPage({
   // this page ever renders.
   if (!result) notFound();
 
-  const { household, memberCount } = result;
+  const { household, memberCount, shareWealth } = result;
+  const anyTagged = await hasAnyHouseholdTransaction(householdId);
 
   // "Buat keluarga" itself is rendered inside <SetupSteps> as an always-done
   // line, separate from this list — see that component's doc comment.
-  // "Undang anggota" activates as of task 11: done once at least one OTHER
+  // "Undang anggota" activated in task 11: done once at least one OTHER
   // active member has joined (memberCount counts the owner too, hence > 1).
-  // "Tandai pengeluaran" & "Bagikan" stay locked until task 12 —
-  // docs/10-ux-states.md §2.1 / todo.md.
+  // "Tandai pengeluaran" & "Bagikan" activate in task 12 — docs/10-ux-states.md
+  // §2.1 / todo.md. "Tandai" is done once ANY member has tagged a
+  // transaction (not just this viewer) — it's a household-wide milestone,
+  // not a personal one. "Bagikan" is done specifically when THIS viewer's
+  // OWN `share_wealth` is on, since that's an inherently per-member choice
+  // (docs/03 §5.1) — a household where only Wahid shares isn't "done" for Istri.
   const steps: SetupStep[] = [
     {
       key: 'invite',
@@ -47,13 +53,17 @@ export default async function HouseholdSummaryPage({
       key: 'tag',
       title: 'Tandai pengeluaran keluarga',
       description: 'Aktifkan 🏠 saat mencatat, atau tandai transaksi yang sudah ada.',
-      done: false,
+      done: anyTagged,
+      href: `/household/${householdId}/transactions`,
+      cta: 'Lihat pengeluaran keluarga',
     },
     {
       key: 'share',
       title: 'Bagikan yang ingin dihitung',
       description: 'Pilih dompet atau aset yang masuk kekayaan keluarga.',
-      done: false,
+      done: shareWealth,
+      href: '/settings/sharing',
+      cta: 'Kelola berbagi',
     },
   ];
 

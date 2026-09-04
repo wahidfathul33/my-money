@@ -7,10 +7,10 @@
  * (src/features/household/components/household-nav.tsx).
  *
  * Ringkasan and Pengaturan got real routes in task 10; Anggota's landed in
- * task 11. The rest are still reserved, `href`-less slots that light up as
- * their owning task lands — the same "reserve now, activate later" pattern
- * task 02 used for Keluarga itself, now applied one level down: Pengeluaran
- * (task 12), Anggaran (14), Tabungan (15), Kekayaan (19).
+ * task 11; Pengeluaran lands in task 12. The rest are still reserved,
+ * `href`-less slots that light up as their owning task lands — the same
+ * "reserve now, activate later" pattern task 02 used for Keluarga itself,
+ * now applied one level down: Anggaran (14), Tabungan (15), Kekayaan (19).
  */
 import type { LucideIcon } from 'lucide-react';
 import { Gem, Home, PiggyBank, Receipt, Settings, Target, Users } from 'lucide-react';
@@ -29,7 +29,7 @@ export interface HouseholdMenuItem {
 export function getHouseholdMenuItems(householdId: string): HouseholdMenuItem[] {
   return [
     { label: 'Ringkasan', icon: Home, href: `/household/${householdId}`, exact: true },
-    { label: 'Pengeluaran', icon: Receipt },
+    { label: 'Pengeluaran', icon: Receipt, href: `/household/${householdId}/transactions` },
     { label: 'Anggaran', icon: PiggyBank },
     { label: 'Tabungan', icon: Target },
     { label: 'Anggota', icon: Users, href: `/household/${householdId}/members` },

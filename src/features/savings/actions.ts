@@ -18,14 +18,7 @@
  */
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth/require-user';
-import {
-  archiveGoal,
-  contribute,
-  createGoal,
-  updateGoal,
-  withdraw,
-  type SavingsContributionRow,
-} from '@/lib/services/savings';
+import { archiveGoal, contribute, createGoal, updateGoal, withdraw } from '@/lib/services/savings';
 import { deserializeMoney, fromRupiah } from '@/lib/finance/money';
 import { AppError, ValidationError } from '@/lib/api/errors';
 import {
@@ -41,9 +34,20 @@ export interface ActionState {
   goalId?: string;
 }
 
+/**
+ * Deliberately carries only `contributionId` (a string), never the full
+ * `SavingsContributionRow` — its `amount` is a raw `bigint`, and ADR-003's
+ * "batas serialisasi harus mengonversi ke string" applies to a Server
+ * Action's RETURN value crossing back to the client exactly as much as it
+ * applies to a request body (src/lib/finance/money.ts's file header); every
+ * other action in this codebase already avoids this (e.g.
+ * src/features/transfers/actions.ts's `TransferActionResult` returns
+ * `transactionId`, never an amount). Neither contribute-sheet.tsx nor
+ * withdraw-sheet.tsx need more than the id.
+ */
 export interface ContributionActionResult {
   error: string | null;
-  contribution?: SavingsContributionRow;
+  contributionId?: string;
 }
 
 /** Turns a thrown domain error into a message safe to show the user, per
@@ -188,7 +192,7 @@ export async function contributeAction(input: ContributeActionInput): Promise<Co
       idempotencyKey: parsed.data.idempotencyKey,
     });
     revalidateSavings(parsed.data.goalId, input.goalHouseholdId);
-    return { error: null, contribution };
+    return { error: null, contributionId: contribution.id };
   } catch (err) {
     return toContributionActionError(err);
   }
@@ -221,7 +225,7 @@ export async function withdrawAction(input: WithdrawActionInput): Promise<Contri
       idempotencyKey: parsed.data.idempotencyKey,
     });
     revalidateSavings(parsed.data.goalId, input.goalHouseholdId);
-    return { error: null, contribution: withdrawal };
+    return { error: null, contributionId: withdrawal.id };
   } catch (err) {
     return toContributionActionError(err);
   }

@@ -8,6 +8,11 @@ import { expect, test } from './fixtures/authenticated';
  * the wealth hub's "Tabungan" total rises by that SAME amount — cash down,
  * savings up, by the identical figure.
  *
+ * UI copy here follows docs/08-copywriting.md's glossary exactly: a
+ * savings goal is a "target" (§3 row "Savings goal | Target tabungan"),
+ * never "goal" in user-facing text — "Buat target", "Tambah dana", "Tarik
+ * dana", matching that doc's §5.4/§5.5 button/empty-state tables.
+ *
  * Authenticated via e2e/fixtures/authenticated.ts (auto-seeds a real,
  * onboarded session with a starter "Tunai" wallet at balance 0).
  */
@@ -16,7 +21,7 @@ const DB_TIMEOUT = { timeout: 20000 };
 test.describe('Savings goals', () => {
   test.describe.configure({ retries: 2 });
 
-  test('buat goal -> kontribusi Rp3jt -> saldo dompet turun -> total tabungan naik sama besar -> target tercapai', async ({
+  test('buat target -> tambah dana Rp3jt -> saldo dompet turun -> total tabungan naik sama besar -> target tercapai', async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -35,12 +40,12 @@ test.describe('Savings goals', () => {
     // contribution below both funds AND completes it, covering the
     // auto-`completed` acceptance criterion in the same flow.
     await page.goto('/wealth/savings');
-    await page.getByRole('button', { name: 'Goal baru' }).click();
-    const createSheet = page.getByRole('dialog', { name: 'Goal tabungan baru' });
+    await page.getByRole('button', { name: 'Buat target' }).click();
+    const createSheet = page.getByRole('dialog', { name: 'Target tabungan baru' });
     await expect(createSheet).toBeVisible();
-    await createSheet.getByLabel('Nama goal').fill('Dana Darurat');
+    await createSheet.getByLabel('Nama target').fill('Dana Darurat');
     await createSheet.getByLabel('Target (Rp)').fill('3000000');
-    await createSheet.getByRole('button', { name: 'Buat goal' }).click();
+    await createSheet.getByRole('button', { name: 'Buat target' }).click();
     await expect(createSheet).not.toBeVisible(DB_TIMEOUT);
 
     const goalLink = page.getByRole('link', { name: /Dana Darurat/ });
@@ -50,8 +55,8 @@ test.describe('Savings goals', () => {
 
     // Contribute Rp3.000.000 from BCA specifically (the sheet defaults to
     // the account default wallet, "Tunai" — switch it).
-    await page.getByRole('button', { name: 'Kontribusi' }).click();
-    const contributeSheet = page.getByRole('dialog', { name: /^Kontribusi ke/ });
+    await page.getByRole('button', { name: 'Tambah dana' }).click();
+    const contributeSheet = page.getByRole('dialog', { name: /^Tambah dana ke/ });
     await expect(contributeSheet).toBeVisible();
 
     await contributeSheet.getByRole('button', { name: /^Dompet sumber:/ }).click();
@@ -87,15 +92,15 @@ test.describe('Savings goals', () => {
     await expect(page.getByRole('link', { name: /Tabungan/ })).toContainText('Rp3.000.000', DB_TIMEOUT);
   });
 
-  test('goal tanpa tanggal target tidak menampilkan saran bulanan atau tanggal terlewat', async ({ page }) => {
+  test('target tanpa tanggal tidak menampilkan saran bulanan atau tanggal terlewat', async ({ page }) => {
     test.setTimeout(60_000);
     await page.goto('/wealth/savings');
 
-    await page.getByRole('button', { name: 'Goal baru' }).click();
-    const createSheet = page.getByRole('dialog', { name: 'Goal tabungan baru' });
-    await createSheet.getByLabel('Nama goal').fill('Tanpa Tanggal');
+    await page.getByRole('button', { name: 'Buat target' }).click();
+    const createSheet = page.getByRole('dialog', { name: 'Target tabungan baru' });
+    await createSheet.getByLabel('Nama target').fill('Tanpa Tanggal');
     await createSheet.getByLabel('Target (Rp)').fill('1000000');
-    await createSheet.getByRole('button', { name: 'Buat goal' }).click();
+    await createSheet.getByRole('button', { name: 'Buat target' }).click();
     await expect(createSheet).not.toBeVisible(DB_TIMEOUT);
 
     await page.getByRole('link', { name: /Tanpa Tanggal/ }).click();
@@ -107,21 +112,23 @@ test.describe('Savings goals', () => {
     test.setTimeout(90_000);
 
     await page.goto('/wealth/savings');
-    await page.getByRole('button', { name: 'Goal baru' }).click();
-    const createSheet = page.getByRole('dialog', { name: 'Goal tabungan baru' });
-    await createSheet.getByLabel('Nama goal').fill('Goal Tarik');
+    await page.getByRole('button', { name: 'Buat target' }).click();
+    const createSheet = page.getByRole('dialog', { name: 'Target tabungan baru' });
+    await createSheet.getByLabel('Nama target').fill('Target Tarik');
     await createSheet.getByLabel('Target (Rp)').fill('5000000');
-    await createSheet.getByRole('button', { name: 'Buat goal' }).click();
+    await createSheet.getByRole('button', { name: 'Buat target' }).click();
     await expect(createSheet).not.toBeVisible(DB_TIMEOUT);
 
-    await page.getByRole('link', { name: /Goal Tarik/ }).click();
+    await page.getByRole('link', { name: /Target Tarik/ }).click();
     await expect(page).toHaveURL(/\/wealth\/savings\/[^/]+$/, DB_TIMEOUT);
 
     // Never contributed anything -> the withdraw sheet says so up front and
     // never even shows the keypad.
-    await page.getByRole('button', { name: 'Tarik' }).click();
-    const withdrawSheet = page.getByRole('dialog', { name: /^Tarik dari/ });
+    await page.getByRole('button', { name: 'Tarik dana' }).click();
+    const withdrawSheet = page.getByRole('dialog', { name: /^Tarik dana dari/ });
     await expect(withdrawSheet).toBeVisible();
-    await expect(withdrawSheet.getByText('Anda belum memiliki kontribusi pada goal ini untuk ditarik.')).toBeVisible();
+    await expect(
+      withdrawSheet.getByText('Anda belum memiliki kontribusi pada target ini untuk ditarik.'),
+    ).toBeVisible();
   });
 });

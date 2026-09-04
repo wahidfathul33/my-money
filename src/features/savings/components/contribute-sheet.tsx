@@ -47,7 +47,12 @@ export function ContributeSheet(props: ContributeSheetProps) {
   const { open, onOpenChange } = props;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent variant="bottom" title={`Kontribusi ke ${props.goalName}`}>
+      {/* "Tambah dana" — docs/09-screen-specs.md §5's detail-page button
+          this sheet opens from ("Tambah Dana / Tarik Dana"); "Kontribusi"
+          (docs/08-copywriting.md's glossary noun for the concept) still
+          names the ACTION in src/lib/services/savings.ts and this
+          component's own doc comment. */}
+      <SheetContent variant="bottom" title={`Tambah dana ke ${props.goalName}`}>
         {open && <ContributeSheetForm {...props} />}
       </SheetContent>
     </Sheet>

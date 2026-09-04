@@ -102,25 +102,33 @@ export function GoalDetailClient({
           label={`Progress ${goal.name}: ${Math.round(progress.progressPct)} persen`}
         />
 
+        {/* "Rp8.000.000 dari Rp20.000.000" — docs/08-copywriting.md §8's
+            exact connector word ("dari"), not a slash. */}
         <div className="flex items-baseline gap-2">
           <MoneyText amount={currentAmount} tone="plain" size="lg" />
-          <span className="text-text-muted text-sm">/ {`Rp${(targetAmount / 100n).toLocaleString('id-ID')}`}</span>
+          <span className="text-text-muted text-sm">dari {`Rp${(targetAmount / 100n).toLocaleString('id-ID')}`}</span>
         </div>
 
         {goal.status === 'completed' && (
           <p className="text-positive-readable text-sm font-medium">Target tercapai</p>
         )}
         {progress.isOverdue && <p className="text-negative text-sm font-medium">Target terlewat</p>}
+        {/* "Sisa Rp12.000.000 · 8 bulan lagi" — docs/08 §8's exact combined
+            format (remaining amount AND months-left on one line), not two
+            separate lines. */}
         {!progress.isOverdue && goal.status === 'active' && progress.remainingAmount > 0n && (
           <p className="text-text-muted text-sm">
-            Sisa <MoneyText amount={progress.remainingAmount} tone="plain" size="sm" /> lagi
+            Sisa <MoneyText amount={progress.remainingAmount} tone="plain" size="sm" />
+            {progress.monthsRemaining !== null && progress.monthsRemaining > 0 && (
+              <> · {progress.monthsRemaining} bulan lagi</>
+            )}
           </p>
         )}
         {goal.status === 'active' && !progress.isOverdue && progress.suggestedMonthly !== null && (
           <p className="text-text-muted text-xs">
-            Saran per bulan: Rp{(progress.suggestedMonthly / 100n).toLocaleString('id-ID')}
+            Saran: Rp{(progress.suggestedMonthly / 100n).toLocaleString('id-ID')}/bulan
             {isShared && perMemberSuggestion !== null && (
-              <> (Rp{(perMemberSuggestion / 100n).toLocaleString('id-ID')} / anggota)</>
+              <> (Rp{(perMemberSuggestion / 100n).toLocaleString('id-ID')}/bulan per anggota)</>
             )}
           </p>
         )}
@@ -129,10 +137,10 @@ export function GoalDetailClient({
       {goal.status !== 'archived' && (
         <div className="flex gap-2">
           <Button className="flex-1" onClick={() => setContributeOpen(true)}>
-            Kontribusi
+            Tambah dana
           </Button>
           <Button variant="secondary" className="flex-1" onClick={() => setWithdrawOpen(true)}>
-            Tarik
+            Tarik dana
           </Button>
         </div>
       )}
@@ -141,7 +149,7 @@ export function GoalDetailClient({
         {goal.status !== 'archived' && (
           <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
             <Pencil className="size-4" aria-hidden="true" />
-            Ubah
+            Edit
           </Button>
         )}
         {goal.status !== 'archived' && (
@@ -191,7 +199,7 @@ export function GoalDetailClient({
         <DialogContent variant="center" title={`Arsipkan ${goal.name}?`}>
           <div className="flex flex-col gap-4">
             <p className="text-text-muted text-sm">
-              Goal ini disembunyikan dari daftar aktif. Kontribusi yang sudah ada tidak dihapus — dana
+              Target ini disembunyikan dari daftar aktif. Kontribusi yang sudah ada tidak dihapus — dana
               tetap aset Anda sampai ditarik.
             </p>
             {archiveError && (

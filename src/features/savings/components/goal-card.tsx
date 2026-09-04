@@ -53,9 +53,18 @@ export function GoalCard({ goal, href, showHouseholdBadge = true }: GoalCardProp
         </span>
         <span className="text-text-muted text-sm">
           <MoneyText amount={currentAmount} tone="plain" size="sm" />
-          {' / '}
+          {' dari '}
           <MoneyText amount={targetAmount} tone="plain" size="sm" />
         </span>
+        {/* "Sisa Rp12.000.000 · 8 bulan lagi" — docs/08-copywriting.md §8. */}
+        {goal.status === 'active' && !progress.isOverdue && progress.remainingAmount > 0n && (
+          <span className="text-text-muted text-xs">
+            Sisa <MoneyText amount={progress.remainingAmount} tone="plain" size="sm" />
+            {progress.monthsRemaining !== null && progress.monthsRemaining > 0 && (
+              <> · {progress.monthsRemaining} bulan lagi</>
+            )}
+          </span>
+        )}
         {progress.isOverdue && <span className="text-negative text-xs font-medium">Target terlewat</span>}
         {goal.status === 'completed' && <span className="text-positive-readable text-xs font-medium">Tercapai</span>}
       </span>

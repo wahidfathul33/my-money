@@ -14,6 +14,10 @@ import { test, expect } from './fixtures/base';
  * from either session, and a member's withdraw sheet only ever offers up to
  * THEIR OWN net-funded amount — never the goal's total.
  *
+ * UI copy follows docs/08-copywriting.md's glossary: a savings goal is a
+ * "target" in user-facing text, never "goal" — "Buat target", "Tambah
+ * dana", "Tarik dana".
+ *
  * The household membership is seeded directly (status='active') rather than
  * through the invitation flow — same reasoning as
  * household-membership.spec.ts's second test: this suite isn't exercising
@@ -76,11 +80,11 @@ test.describe('shared savings goal — two-context flows', () => {
 
         // Owner creates the shared goal from the household's savings page.
         await ownerPage.goto(`/household/${householdId}/savings`);
-        await ownerPage.getByRole('button', { name: 'Goal baru' }).click();
-        const createSheet = ownerPage.getByRole('dialog', { name: 'Goal tabungan baru' });
-        await createSheet.getByLabel('Nama goal').fill('Liburan Keluarga');
+        await ownerPage.getByRole('button', { name: 'Buat target' }).click();
+        const createSheet = ownerPage.getByRole('dialog', { name: 'Target tabungan baru' });
+        await createSheet.getByLabel('Nama target').fill('Liburan Keluarga');
         await createSheet.getByLabel('Target (Rp)').fill('20000000');
-        await createSheet.getByRole('button', { name: 'Buat goal' }).click();
+        await createSheet.getByRole('button', { name: 'Buat target' }).click();
         await expect(createSheet).not.toBeVisible(DB_TIMEOUT);
 
         // Member sees the SAME shared goal on their own household savings page.
@@ -90,8 +94,8 @@ test.describe('shared savings goal — two-context flows', () => {
         async function contribute(page: typeof ownerPage, walletName: string, digits: string[]) {
           await page.getByRole('link', { name: /Liburan Keluarga/ }).click();
           await expect(page).toHaveURL(/\/wealth\/savings\/[^/]+$/, DB_TIMEOUT);
-          await page.getByRole('button', { name: 'Kontribusi' }).click();
-          const sheet = page.getByRole('dialog', { name: /^Kontribusi ke/ });
+          await page.getByRole('button', { name: 'Tambah dana' }).click();
+          const sheet = page.getByRole('dialog', { name: /^Tambah dana ke/ });
           await expect(sheet).toBeVisible();
           await sheet.getByRole('button', { name: /^Dompet sumber:/ }).click();
           await page.getByRole('dialog', { name: 'Pilih dompet' }).getByRole('button', { name: walletName }).click();
@@ -140,8 +144,8 @@ test.describe('shared savings goal — two-context flows', () => {
 
         // Isolation: the member's own withdraw sheet offers only THEIR OWN
         // Rp3.000.000 — never the goal's Rp8.000.000 total.
-        await memberPage.getByRole('button', { name: 'Tarik' }).click();
-        const withdrawSheet = memberPage.getByRole('dialog', { name: /^Tarik dari/ });
+        await memberPage.getByRole('button', { name: 'Tarik dana' }).click();
+        const withdrawSheet = memberPage.getByRole('dialog', { name: /^Tarik dana dari/ });
         await expect(withdrawSheet).toBeVisible();
         await expect(withdrawSheet.getByText('Rp3.000.000')).toBeVisible();
         await expect(withdrawSheet.getByText('Rp8.000.000')).toHaveCount(0);

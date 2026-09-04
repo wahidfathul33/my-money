@@ -90,17 +90,17 @@ export function GoalFormSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         variant="bottom"
-        title={isEdit ? 'Ubah goal' : 'Goal tabungan baru'}
+        title={isEdit ? 'Ubah target' : 'Target tabungan baru'}
         description={
           isEdit
             ? undefined
-            : 'Kontribusi ke goal ini selalu memindahkan uang dari dompet Anda — bukan sekadar catatan.'
+            : 'Kontribusi ke target ini selalu memindahkan uang dari dompet Anda — bukan sekadar catatan.'
         }
       >
         <form action={formAction} className="flex flex-col gap-4">
           {isEdit && <input type="hidden" name="goalId" value={goal!.id} />}
 
-          <Input label="Nama goal" name="name" defaultValue={goal?.name} required maxLength={80} />
+          <Input label="Nama target" name="name" defaultValue={goal?.name} required maxLength={80} />
 
           <Input
             label="Target (Rp)"
@@ -124,7 +124,7 @@ export function GoalFormSheet({
             <>
               <input type="hidden" name="householdId" value={lockedHouseholdId} />
               <p className="text-text-muted text-sm">
-                Goal bersama — seluruh anggota aktif dapat melihat dan berkontribusi, masing-masing dari
+                Target bersama — seluruh anggota aktif dapat melihat dan berkontribusi, masing-masing dari
                 dompet mereka sendiri.
               </p>
             </>
@@ -141,7 +141,7 @@ export function GoalFormSheet({
               />
               {householdId !== PERSONAL_VALUE && (
                 <p className="text-text-muted text-sm">
-                  Goal bersama — seluruh anggota aktif dapat melihat dan berkontribusi, masing-masing dari
+                  Target bersama — seluruh anggota aktif dapat melihat dan berkontribusi, masing-masing dari
                   dompet mereka sendiri.
                 </p>
               )}
@@ -154,7 +154,7 @@ export function GoalFormSheet({
             </p>
           )}
 
-          <SubmitButton label={isEdit ? 'Simpan perubahan' : 'Buat goal'} />
+          <SubmitButton label={isEdit ? 'Simpan perubahan' : 'Buat target'} />
         </form>
       </SheetContent>
     </Sheet>

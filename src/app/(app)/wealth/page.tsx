@@ -28,7 +28,7 @@ export default async function WealthPage() {
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="text-text text-body font-medium">Tabungan</span>
             <span className="text-text-muted text-sm">
-              {hasSavings ? `${goals.length} goal aktif` : 'Belum ada goal'}
+              {hasSavings ? `${goals.length} target aktif` : 'Belum ada target'}
             </span>
           </span>
           <MoneyText amount={totalSaved} tone="plain" size="md" />

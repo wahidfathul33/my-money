@@ -36,7 +36,7 @@ export function SavingsListClient({ goals, totalSaved, households }: SavingsList
 
           <Button onClick={() => setCreateOpen(true)} className="self-start">
             <Plus className="size-4" aria-hidden="true" />
-            Goal baru
+            Buat target
           </Button>
 
           <div className="flex flex-col gap-2">
@@ -47,15 +47,16 @@ export function SavingsListClient({ goals, totalSaved, households }: SavingsList
         </>
       )}
 
+      {/* Copy per docs/08-copywriting.md §5.5's empty-state table (Tabungan row). */}
       {isEmpty && (
         <EmptyState
           icon={Target}
-          title="Belum ada goal tabungan"
-          description="Buat goal untuk mulai menyisihkan dana — setiap kontribusi benar-benar memindahkan uang dari dompet Anda."
+          title="Belum ada target"
+          description="Buat target untuk mulai menyisihkan uang."
           action={
             <Button onClick={() => setCreateOpen(true)}>
               <Plus className="size-4" aria-hidden="true" />
-              Goal baru
+              Buat target
             </Button>
           }
         />

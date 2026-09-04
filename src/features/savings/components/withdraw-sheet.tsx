@@ -37,7 +37,7 @@ export function WithdrawSheet(props: WithdrawSheetProps) {
   const { open, onOpenChange } = props;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent variant="bottom" title={`Tarik dari ${props.goalName}`}>
+      <SheetContent variant="bottom" title={`Tarik dana dari ${props.goalName}`}>
         {open && <WithdrawSheetForm {...props} />}
       </SheetContent>
     </Sheet>
@@ -92,12 +92,12 @@ function WithdrawSheetForm({
     <div className="flex flex-col gap-4">
       {availableAmount <= 0n ? (
         <p className="text-text-muted text-center text-sm">
-          Anda belum memiliki kontribusi pada goal ini untuk ditarik.
+          Anda belum memiliki kontribusi pada target ini untuk ditarik.
         </p>
       ) : (
         <>
           <p className="text-text-muted text-center text-sm">
-            Kontribusi Anda pada goal ini: <MoneyText amount={availableAmount} tone="plain" size="sm" />
+            Kontribusi Anda pada target ini: <MoneyText amount={availableAmount} tone="plain" size="sm" />
           </p>
 
           <WalletPicker wallets={wallets} value={walletId} onChange={setWalletId} triggerLabel="Dompet tujuan" />
@@ -107,7 +107,7 @@ function WithdrawSheetForm({
           </p>
 
           {amount > availableAmount && (
-            <p className="text-negative text-center text-sm">Melebihi kontribusi Anda pada goal ini</p>
+            <p className="text-negative text-center text-sm">Melebihi kontribusi Anda pada target ini</p>
           )}
           {error && (
             <p role="alert" className="text-negative text-center text-sm">

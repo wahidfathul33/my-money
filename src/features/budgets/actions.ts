@@ -131,7 +131,7 @@ export async function upsertBudgetAction(_prevState: ActionState, formData: Form
 export async function deleteBudgetAction(budgetId: string, householdId?: string): Promise<ActionState> {
   const user = await requireUser();
   const parsed = deleteBudgetSchema.safeParse({ budgetId });
-  if (!parsed.success) return { error: 'ID budget tidak valid' };
+  if (!parsed.success) return { error: 'ID anggaran tidak valid' };
 
   try {
     await deleteBudget(user.id, parsed.data.budgetId);

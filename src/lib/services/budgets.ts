@@ -83,7 +83,7 @@ export async function upsertPersonalBudget(
       throw new ValidationError({ categoryId: ['Kategori tidak ditemukan'] });
     }
     if (category.type !== 'expense') {
-      throw new ValidationError({ categoryId: ['Budget hanya untuk kategori pengeluaran'] });
+      throw new ValidationError({ categoryId: ['Anggaran hanya untuk kategori pengeluaran'] });
     }
 
     const { from, to } = periodDateRange(input.period);
@@ -184,12 +184,12 @@ export async function deleteBudget(userId: string, budgetId: string): Promise<vo
   await dbWrite.transaction(async (tx) => {
     const [row] = await tx.select().from(budgets).where(eq(budgets.id, budgetId)).limit(1);
     if (!row) {
-      throw new NotFoundError('Budget tidak ditemukan');
+      throw new NotFoundError('Anggaran tidak ditemukan');
     }
 
     if (row.userId !== null) {
       if (row.userId !== userId) {
-        throw new NotFoundError('Budget tidak ditemukan');
+        throw new NotFoundError('Anggaran tidak ditemukan');
       }
     } else {
       // Household scope — any active member may delete, same as create/edit.

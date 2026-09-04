@@ -44,7 +44,7 @@ export const upsertHouseholdBudgetSchema = z.object({
 });
 
 export const deleteBudgetSchema = z.object({
-  budgetId: z.uuid('ID budget tidak valid'),
+  budgetId: z.uuid('ID anggaran tidak valid'),
 });
 
 export type UpsertPersonalBudgetFormInput = z.infer<typeof upsertPersonalBudgetSchema>;

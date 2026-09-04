@@ -13,32 +13,10 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { archiveHousehold, createHousehold, updateHousehold } from '@/lib/services/households';
 import { requireUser } from '@/lib/auth/require-user';
-import { AppError, ValidationError } from '@/lib/api/errors';
 import { createHouseholdSchema, householdIdSchema, updateHouseholdSchema } from './schema';
+import { OK, toActionError, type ActionState } from './action-state';
 
-export interface ActionState {
-  error: string | null;
-}
-
-const OK: ActionState = { error: null };
-
-/**
- * Turns a thrown domain error into a message safe to show the user, per
- * docs/08-copywriting.md §5.7. `NotFoundError`/`ForbiddenError` messages are
- * already user-facing copy written at the throw site
- * (src/lib/auth/require-household.ts) and never name the household or a
- * member (docs/12 §5 H9) — anything else that isn't an `AppError` at all is
- * a genuine bug and re-thrown to the error boundary.
- */
-function toActionError(err: unknown): ActionState {
-  if (err instanceof ValidationError) {
-    return { error: Object.values(err.fields)[0]?.[0] ?? 'Validasi gagal' };
-  }
-  if (err instanceof AppError) {
-    return { error: err.message };
-  }
-  throw err;
-}
+export type { ActionState };
 
 /**
  * Creates the household and redirects straight into it — tasks/10 spec.md

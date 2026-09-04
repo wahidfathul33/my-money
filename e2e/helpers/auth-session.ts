@@ -21,12 +21,32 @@ import { seedNewUser } from '../../src/lib/db/seed';
 export const SESSION_COOKIE_NAME = '__Secure-authjs.session-token';
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
-export async function seedSessionUser(opts: { onboarded: boolean }) {
+export async function seedSessionUser(opts: {
+  onboarded: boolean;
+  /** Defaults to a fresh unique `@example.invalid` address. Override for
+   * tests that need a KNOWN email — e.g. tasks/11-household-membership's
+   * two-context invite/accept flow, where the accepting user's email must
+   * exactly match a `household_invitations.email` row for
+   * `acceptInvitation` to match it at all. */
+  email?: string;
+  /** `undefined` (default) leaves the column NULL — matching every other
+   * caller's existing behavior. Pass `new Date()` for tests that need a
+   * VERIFIED email (invitation acceptance requires one; docs/12 §5 H3). */
+  emailVerified?: Date;
+  /** Defaults to the generic `'E2E User'` every other caller already
+   * relies on. Override when a test needs to tell two seeded users apart
+   * in the rendered UI (e.g. an owner-action button labeled by name) —
+   * two default-named users in the same household would be ambiguous to
+   * assert against. */
+  name?: string;
+}) {
   const userId = uuidv7();
+  const email = opts.email ?? `e2e-${userId}@example.invalid`;
   await dbWrite.insert(users).values({
     id: userId,
-    email: `e2e-${userId}@example.invalid`,
-    name: 'E2E User',
+    email,
+    name: opts.name ?? 'E2E User',
+    emailVerified: opts.emailVerified,
   });
   await dbWrite.transaction(async (tx) => {
     await seedNewUser(tx, userId);
@@ -42,7 +62,7 @@ export async function seedSessionUser(opts: { onboarded: boolean }) {
     expires: new Date(Date.now() + THIRTY_DAYS_MS),
   });
 
-  return { userId, sessionToken };
+  return { userId, sessionToken, email };
 }
 
 /**

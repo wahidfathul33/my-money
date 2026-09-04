@@ -48,3 +48,58 @@ export class ValidationError extends AppError {
     this.fields = fields;
   }
 }
+
+/**
+ * tasks/11-household-membership — `ALREADY_MEMBER`. Thrown by
+ * `createInvitation` (src/lib/services/invitations.ts) when the invited
+ * email already belongs to an active member: "Mengundang email yang sudah
+ * menjadi anggota aktif ditolak."
+ */
+export class AlreadyMemberError extends AppError {
+  constructor(message = 'Email ini sudah menjadi anggota aktif keluarga') {
+    super(message);
+  }
+}
+
+/**
+ * tasks/11-household-membership — `INVITATION_INVALID`. The ONE error class
+ * covering every invitation-acceptance failure — never-existed, expired,
+ * already accepted/revoked, and verified-email mismatch all throw this SAME
+ * class with this SAME message. docs/12-security-and-auth.md §5 is explicit
+ * that a more specific message "mengonfirmasi bahwa sebuah token pernah
+ * sah" to whoever is probing it — see acceptInvitation's doc comment in
+ * src/lib/services/invitations.ts for the full enumeration of paths that
+ * throw this.
+ */
+export class InvitationInvalidError extends AppError {
+  constructor(message = 'Undangan ini tidak valid atau sudah tidak berlaku') {
+    super(message);
+  }
+}
+
+/**
+ * tasks/11-household-membership — `LAST_OWNER`. Thrown by `leaveHousehold`
+ * (src/lib/services/memberships.ts) when the caller is the household's sole
+ * `owner` — `hm_single_owner_idx` (src/lib/db/schema/households.ts) permits
+ * at most one active owner, so letting them leave unconditionally would
+ * leave the household with zero. `transferOwnership` first is the only way
+ * out.
+ */
+export class LastOwnerError extends AppError {
+  constructor(message = 'Alihkan kepemilikan ke anggota lain sebelum keluar dari keluarga') {
+    super(message);
+  }
+}
+
+/**
+ * tasks/11-household-membership. `removeMember` rejects an owner targeting
+ * their own membership — the "keluarkan anggota" flow assumes the target is
+ * someone else; a self-removal that also happened to be the sole owner
+ * would violate the same invariant `LastOwnerError` protects, and even for
+ * a non-owner it's simply the wrong flow ("Keluar dari keluarga" is).
+ */
+export class CannotRemoveSelfError extends AppError {
+  constructor(message = 'Gunakan "Keluar dari keluarga" untuk mengeluarkan diri sendiri') {
+    super(message);
+  }
+}

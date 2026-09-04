@@ -9,9 +9,9 @@
  * spec.md's "Catatan": "setiap halaman yang ditambahkan sesudahnya otomatis
  * terlindungi — bukan perlu diamankan satu per satu."
  */
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 import { dbRead } from '@/lib/db/read';
-import { households, householdMembers } from '@/lib/db/schema';
+import { households, householdInvitations, householdMembers, transactions, users } from '@/lib/db/schema';
 
 export type HouseholdRole = (typeof householdMembers.$inferSelect)['role'];
 
@@ -94,4 +94,99 @@ export async function getHouseholdWithRole(
     .limit(1);
 
   return row ?? null;
+}
+
+export interface HouseholdMemberRow {
+  id: string;
+  userId: string;
+  role: HouseholdRole;
+  name: string | null;
+  email: string;
+  image: string | null;
+  joinedAt: Date | null;
+}
+
+/**
+ * Active members for `/household/[id]/members` (tasks/11-household-membership
+ * spec.md: "bagian Aktif & Menunggu"). Display only — the caller must
+ * already sit behind `requireHouseholdAccess`/the layout guard; this never
+ * returns financial data of any kind (no wallet balance, no transaction),
+ * per that same spec's "Halaman ini tidak menampilkan angka finansial apa
+ * pun."
+ */
+export async function listActiveMembers(householdId: string): Promise<HouseholdMemberRow[]> {
+  return dbRead
+    .select({
+      id: householdMembers.id,
+      userId: householdMembers.userId,
+      role: householdMembers.role,
+      name: users.name,
+      email: users.email,
+      image: users.image,
+      joinedAt: householdMembers.joinedAt,
+    })
+    .from(householdMembers)
+    .innerJoin(users, eq(users.id, householdMembers.userId))
+    .where(and(eq(householdMembers.householdId, householdId), eq(householdMembers.status, 'active')))
+    .orderBy(asc(householdMembers.joinedAt));
+}
+
+export type InvitationStatus = (typeof householdInvitations.$inferSelect)['status'];
+
+export interface PendingInvitationRow {
+  id: string;
+  email: string;
+  status: InvitationStatus;
+  expiresAt: Date;
+  createdAt: Date;
+  invitedByName: string | null;
+  invitedByEmail: string;
+}
+
+/** Only ever-`pending` invitations — accepted ones become a `household_members`
+ * row (shown by `listActiveMembers` instead) and revoked/expired ones have
+ * nothing actionable left for the Members page to show. */
+export async function listPendingInvitations(householdId: string): Promise<PendingInvitationRow[]> {
+  const inviter = users;
+  return dbRead
+    .select({
+      id: householdInvitations.id,
+      email: householdInvitations.email,
+      status: householdInvitations.status,
+      expiresAt: householdInvitations.expiresAt,
+      createdAt: householdInvitations.createdAt,
+      invitedByName: inviter.name,
+      invitedByEmail: inviter.email,
+    })
+    .from(householdInvitations)
+    .innerJoin(inviter, eq(inviter.id, householdInvitations.invitedBy))
+    .where(
+      and(eq(householdInvitations.householdId, householdId), eq(householdInvitations.status, 'pending')),
+    )
+    .orderBy(asc(householdInvitations.createdAt));
+}
+
+/**
+ * How many of `userId`'s OWN transactions carry this household's tag —
+ * shown by the leave/remove dialogs (docs/10-ux-states.md §5.3: "42
+ * transaksi Anda ditandai ke keluarga ini") so the tag-fate choice is made
+ * with a concrete number, not an abstract "some transactions". Counts
+ * non-voided rows only — a voided transaction's tag has no bearing on any
+ * report anymore.
+ */
+export async function countHouseholdTaggedTransactions(
+  userId: string,
+  householdId: string,
+): Promise<number> {
+  const [row] = await dbRead
+    .select({ count: count() })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.userId, userId),
+        eq(transactions.householdId, householdId),
+        isNull(transactions.voidedAt),
+      ),
+    );
+  return row?.count ?? 0;
 }

@@ -78,9 +78,11 @@ test.describe('Transfer antar dompet sendiri', () => {
     await expect(bcaCard).toContainText('Rp400.000', DB_TIMEOUT);
     await expect(tunaiCard).toContainText('Rp100.000', DB_TIMEOUT);
 
-    // History shows it neutrally: "BCA → Tunai", no +/− prefix.
+    // History shows it neutrally: "BCA → Tunai", no +/− prefix. The row's
+    // meta line combines the flow with the time ("BCA → Tunai · 18.08",
+    // same pattern as a regular row's "Dompet · time") — not exact:true.
     await page.goto('/transactions');
-    const transferRow = page.getByText('BCA → Tunai', { exact: true });
+    const transferRow = page.getByText(/BCA → Tunai/);
     await expect(transferRow).toBeVisible(DB_TIMEOUT);
     const rowAmount = page.getByText('Rp100.000', { exact: true });
     await expect(rowAmount).toBeVisible();

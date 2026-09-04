@@ -31,7 +31,10 @@ test.describe('Riwayat transaksi', () => {
 
     await page.goto('/transactions');
     await expect(page.getByTestId('transaction-list')).toBeVisible(DB_TIMEOUT);
-    await expect(page.getByText('Filter target 0')).toBeVisible();
+    // The row's note isn't rendered in the list row (docs/09 §3's
+    // wireframe: category/wallet/time only) — the seeded row's testid is
+    // enough, since this user starts fresh with exactly one transaction.
+    await expect(page.getByTestId('transaction-row')).toBeVisible();
 
     // FilterBar's chips are `<Chip variant="filter">`, which render
     // `role="checkbox"` (src/components/ui/chip.tsx) — NOT `role="button"`,
@@ -46,7 +49,10 @@ test.describe('Riwayat transaksi', () => {
     await page.reload();
     await expect(page).toHaveURL(/type=expense/);
     await expect(page.getByRole('checkbox', { name: 'Pengeluaran', exact: true })).toBeVisible(DB_TIMEOUT);
-    await expect(page.getByText('Filter target 0')).toBeVisible();
+    // The row's note isn't rendered in the list row (docs/09 §3's
+    // wireframe: category/wallet/time only) — the seeded row's testid is
+    // enough, since this user starts fresh with exactly one transaction.
+    await expect(page.getByTestId('transaction-row')).toBeVisible();
 
     // router.replace, not push, for the filter change itself — navigating
     // away and back lands on the PRE-filter history entry, not a stack of
@@ -90,7 +96,10 @@ test.describe('Riwayat transaksi', () => {
     await seedExpenseTransactions(authedUserId, walletId, categoryId, 1, { note: 'Swipe target' });
 
     await page.goto('/transactions');
-    const row = page.getByTestId('transaction-row').filter({ hasText: 'Swipe target 0' });
+    // The row's note ("Swipe target 0") isn't rendered in the list row —
+    // only category/wallet/time (docs/09 §3's own wireframe) — but the
+    // seeded user starts fresh, so this is the only row either way.
+    const row = page.getByTestId('transaction-row');
     await expect(row).toBeVisible(DB_TIMEOUT);
 
     const box = await row.boundingBox();
@@ -106,13 +115,13 @@ test.describe('Riwayat transaksi', () => {
     await hapusButton.click();
 
     await expect(page.getByText('Transaksi dihapus', { exact: true })).toBeVisible(DB_TIMEOUT);
-    await expect(page.getByTestId('transaction-row').filter({ hasText: 'Swipe target 0' })).toHaveCount(0);
+    await expect(page.getByTestId('transaction-row')).toHaveCount(0);
 
     const undoButton = page.getByRole('button', { name: 'Urungkan' });
     await expect(undoButton).toBeVisible();
     await undoButton.click();
 
-    await expect(page.getByTestId('transaction-row').filter({ hasText: 'Swipe target 0' })).toBeVisible(DB_TIMEOUT);
+    await expect(page.getByTestId('transaction-row')).toBeVisible(DB_TIMEOUT);
   });
 
   test('transfer antar dompet tampil netral: "A → B", tanpa tanda, tanpa swipe-hapus', async ({
@@ -141,11 +150,13 @@ test.describe('Riwayat transaksi', () => {
     await page.mouse.up();
     await expect(row.getByRole('button', { name: /Hapus/ })).toHaveCount(0);
 
-    // Tapping opens the read-only detail sheet — no Edit/Hapus offered.
+    // Tapping opens the detail sheet: no Edit (updateTransaction refuses
+    // type: 'transfer'), but Hapus IS offered — void goes through
+    // transfers' own service (src/lib/services/transfers.ts).
     await row.click();
     const sheet = page.getByRole('dialog', { name: 'Detail transaksi' });
     await expect(sheet).toBeVisible();
     await expect(sheet.getByRole('button', { name: 'Edit' })).toHaveCount(0);
-    await expect(sheet.getByRole('button', { name: 'Hapus' })).toHaveCount(0);
+    await expect(sheet.getByRole('button', { name: 'Hapus' })).toBeVisible();
   });
 });

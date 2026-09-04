@@ -244,10 +244,22 @@ test.describe('Navigasi keyboard', () => {
     await expect(page.getByRole('button', { name: 'Tambah transaksi' })).toBeFocused();
 
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('dialog', { name: 'Tambah transaksi' })).toBeVisible();
+    const addSheet = page.getByRole('dialog', { name: 'Tambah transaksi' });
+    await expect(addSheet).toBeVisible();
     await page.keyboard.press('Escape');
+    // Wait for the close animation/unmount to actually finish — a second
+    // dialog opening while this one is still tearing down races.
+    await expect(addSheet).not.toBeVisible();
 
-    await page.getByRole('button', { name: 'Lainnya' }).focus();
+    // Radix Dialog returns focus to its trigger ("Tambah transaksi") on
+    // close, asynchronously — it can steal focus back after our explicit
+    // .focus() below wins the race once, reopening the WRONG dialog on
+    // Enter. Re-focus in a loop until it actually sticks.
+    const lainnyaButton = page.getByRole('button', { name: 'Lainnya' });
+    await expect(async () => {
+      await lainnyaButton.focus();
+      await expect(lainnyaButton).toBeFocused();
+    }).toPass({ timeout: 5000 });
     await page.keyboard.press('Enter');
     const sheet = page.getByRole('dialog', { name: 'Lainnya' });
     await expect(sheet).toBeVisible();

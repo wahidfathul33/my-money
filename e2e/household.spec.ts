@@ -24,7 +24,7 @@ test.describe('Household — buat, switcher, isolasi', () => {
     await page.getByLabel('Nama keluarga').fill('Keluarga Uji');
     await page.getByRole('button', { name: 'Buat Keluarga' }).click();
 
-    await expect(page).toHaveURL(/\/household\/[^/]+$/, DB_TIMEOUT);
+    await expect(page).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
     await expect(page.getByRole('heading', { name: 'Keluarga Uji' })).toBeVisible(DB_TIMEOUT);
 
     // Ringkasan keluarga baru — docs/10-ux-states.md §2.1: setup steps list.
@@ -57,7 +57,7 @@ test.describe('Household — buat, switcher, isolasi', () => {
       .getByRole('dialog', { name: 'Ganti konteks' })
       .getByRole('link', { name: /Keluarga Uji/ })
       .click();
-    await expect(page).toHaveURL(/\/household\/[^/]+$/, DB_TIMEOUT);
+    await expect(page).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
   });
 
   test('owner dapat mengubah nama & zona waktu, lalu mengarsipkan household', async ({ page }) => {
@@ -66,7 +66,7 @@ test.describe('Household — buat, switcher, isolasi', () => {
     await page.goto('/household/new');
     await page.getByLabel('Nama keluarga').fill('Sebelum Ubah');
     await page.getByRole('button', { name: 'Buat Keluarga' }).click();
-    await expect(page).toHaveURL(/\/household\/[^/]+$/, DB_TIMEOUT);
+    await expect(page).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
     const householdUrl = page.url();
 
     await page.getByRole('link', { name: 'Pengaturan' }).click();
@@ -74,7 +74,11 @@ test.describe('Household — buat, switcher, isolasi', () => {
 
     await page.getByLabel('Nama keluarga').fill('Sesudah Ubah');
     await page.getByRole('button', { name: 'Simpan perubahan' }).click();
-    await expect(page.getByText('Tersimpan')).toBeVisible(DB_TIMEOUT);
+    // exact:true — Radix Toast also renders a visually-hidden live-region
+    // announcer ("Notification Tersimpan"), which a substring match on
+    // 'Tersimpan' alone also resolves to (see e2e/transactions.spec.ts's
+    // identical fix).
+    await expect(page.getByText('Tersimpan', { exact: true })).toBeVisible(DB_TIMEOUT);
 
     await page.goto(householdUrl);
     await expect(page.getByRole('heading', { name: 'Sesudah Ubah' })).toBeVisible(DB_TIMEOUT);

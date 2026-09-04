@@ -30,6 +30,15 @@ async function requireHouseholdOrNotFound(userId: string, householdId: string) {
  * under this segment (task 11's Anggota, task 12's Pengeluaran, …) is
  * protected automatically by virtue of rendering inside this layout — no
  * page needs its own membership check.
+ *
+ * The custom not-found UI for this lives at `household/not-found.tsx` —
+ * the PARENT segment, not a `not-found.tsx` sibling in this same folder.
+ * Verified empirically against this Next.js 16.3.4 build: a `notFound()`
+ * thrown from within a layout's own function body (before it returns
+ * anything) bubbles past that same segment's not-found.tsx straight to
+ * the parent's, because the layout never successfully rendered a
+ * `{children}` slot for Next to swap page.js/not-found.js into. A sibling
+ * `[householdId]/not-found.tsx` here was silently unreachable dead code.
  */
 export default async function HouseholdLayout({
   children,

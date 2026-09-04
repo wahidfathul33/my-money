@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -38,6 +39,7 @@ export function HouseholdSettingsForm({
   isOwner,
   memberCount,
 }: HouseholdSettingsFormProps) {
+  const router = useRouter();
   const toast = useToast();
   const [state, formAction, isPending] = useActionState(updateHouseholdAction, initialState);
   const [selectedTimezone, setSelectedTimezone] = useState(timezone);
@@ -46,9 +48,13 @@ export function HouseholdSettingsForm({
   useEffect(() => {
     if (wasPending.current && !isPending && state.error === null) {
       toast.show({ title: 'Tersimpan', variant: 'success' });
+      // revalidatePath alone (actions.ts) doesn't reliably push a fresh
+      // view through useActionState + a native form — same fix as
+      // task 06/07's identical finding.
+      router.refresh();
     }
     wasPending.current = isPending;
-  }, [isPending, state.error, toast]);
+  }, [isPending, state.error, router, toast]);
 
   if (!isOwner) {
     return (

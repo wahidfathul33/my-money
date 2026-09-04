@@ -1,12 +1,21 @@
 'use client';
 
 /**
- * Tap-a-list-item detail sheet — Edit / Hapus, docs/09 §3 "Tap item → sheet
- * detail dengan aksi Edit / Hapus". Hapus has NO confirmation dialog
- * (docs/08 §5.8: reversible actions get toast+"Urungkan", not a dialog —
- * void is reversible via `unvoidTransactionAction`) and applies
- * immediately, matching tasks/07 todo.md "Hapus langsung diterapkan + undo
- * (tanpa dialog)".
+ * Tap-a-row detail sheet for `/transactions` history — docs/09 §3 "Tap item
+ * → sheet detail dengan aksi Edit / Hapus". Supersedes task 07's
+ * `TransactionDetailSheet` (`components/transaction-detail-sheet.tsx`,
+ * removed — this task's own list is the only place it was used, per that
+ * file's own header: "explicitly built as a placeholder for this task to
+ * replace"). Built against `TransactionHistoryClientItem` instead of
+ * `TransactionClientData` so it can render a `transfer` row too: neutral
+ * amount, "A → B" meta line, and only "Hapus" — `updateTransaction`
+ * (src/lib/services/transactions.ts) refuses `type: 'transfer'` rows, so
+ * Edit stays hidden for those, but void/unvoid go through transfers' own
+ * service (src/lib/services/transfers.ts) instead.
+ *
+ * Edit itself stays owned by the parent (`<TransactionList>`), exactly like
+ * task 07's `TransactionDetailSheet` + `TransactionList` split — this
+ * component only calls `onEdit()`.
  */
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -16,7 +25,11 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useToast } from '@/components/ui/toast';
 import { MoneyText } from '@/components/finance/money-text';
 import { CategoryIcon } from '@/features/categories/components/category-icon';
-import { signedTransactionAmount, transactionAmount, type TransactionClientData } from '../client-types';
+import {
+  historyItemAmount,
+  signedHistoryAmount,
+  type TransactionHistoryClientItem,
+} from '../history-client-types';
 import { unvoidTransactionAction, voidTransactionAction } from '../actions';
 import { unvoidTransferAction, voidTransferAction } from '@/features/transfers/actions';
 
@@ -24,30 +37,28 @@ const LONG_DATE_FORMAT = new Intl.DateTimeFormat('id-ID', {
   day: 'numeric',
   month: 'long',
   year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
 });
 
-interface TransactionDetailSheetProps {
+interface TransactionHistoryDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  transaction: TransactionClientData | null;
+  item: TransactionHistoryClientItem | null;
   onEdit: () => void;
 }
 
-export function TransactionDetailSheet({
+export function TransactionHistoryDetailSheet({
   open,
   onOpenChange,
-  transaction,
+  item,
   onEdit,
-}: TransactionDetailSheetProps) {
+}: TransactionHistoryDetailSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent title="Detail transaksi">
-        {open && transaction && (
-          <DetailContent
-            transaction={transaction}
-            onEdit={onEdit}
-            onClose={() => onOpenChange(false)}
-          />
+        {open && item && (
+          <DetailContent item={item} onEdit={onEdit} onClose={() => onOpenChange(false)} />
         )}
       </SheetContent>
     </Sheet>
@@ -55,23 +66,22 @@ export function TransactionDetailSheet({
 }
 
 interface DetailContentProps {
-  transaction: TransactionClientData;
+  item: TransactionHistoryClientItem;
   onEdit: () => void;
   onClose: () => void;
 }
 
-function DetailContent({ transaction, onEdit, onClose }: DetailContentProps) {
+function DetailContent({ item, onEdit, onClose }: DetailContentProps) {
   const router = useRouter();
   const toast = useToast();
   const [isPending, startTransition] = useTransition();
-
-  const isTransfer = transaction.type === 'transfer';
+  const isTransfer = item.type === 'transfer';
 
   function handleDelete() {
     startTransition(async () => {
       const result = isTransfer
-        ? await voidTransferAction(transaction.id)
-        : await voidTransactionAction(transaction.id);
+        ? await voidTransferAction(item.id)
+        : await voidTransactionAction(item.id);
       if (result.error) return;
 
       onClose();
@@ -83,8 +93,8 @@ function DetailContent({ transaction, onEdit, onClose }: DetailContentProps) {
           label: 'Urungkan',
           onClick: () => {
             startTransition(async () => {
-              if (isTransfer) await unvoidTransferAction(transaction.id);
-              else await unvoidTransactionAction(transaction.id);
+              if (isTransfer) await unvoidTransferAction(item.id);
+              else await unvoidTransactionAction(item.id);
               router.refresh();
             });
           },
@@ -98,39 +108,37 @@ function DetailContent({ transaction, onEdit, onClose }: DetailContentProps) {
       <div className="flex items-center gap-3">
         {isTransfer ? (
           <span className="bg-surface-raised text-text-muted flex size-10 shrink-0 items-center justify-center rounded-full">
-            <ArrowLeftRight className="size-4" aria-hidden="true" />
+            <ArrowLeftRight className="size-5" aria-hidden="true" />
           </span>
-        ) : transaction.category ? (
-          <CategoryIcon icon={transaction.category.icon} color={transaction.category.color} />
+        ) : item.category ? (
+          <CategoryIcon icon={item.category.icon} color={item.category.color} />
         ) : (
           <span className="bg-surface-raised size-10 shrink-0 rounded-full" />
         )}
         <div className="min-w-0">
-          <p className="text-text truncate font-medium">
-            {isTransfer
-              ? `${transaction.transfer!.fromWallet.name} → ${transaction.transfer!.toWallet.name}`
-              : (transaction.category?.name ?? 'Transaksi')}
-          </p>
+          <p className="text-text truncate font-medium">{isTransfer ? 'Transfer' : (item.category?.name ?? 'Transaksi')}</p>
           <p className="text-text-muted truncate text-sm">
-            {isTransfer ? 'Transfer' : (transaction.wallet?.name ?? '—')}
+            {isTransfer
+              ? `${item.transferFrom?.name ?? item.counterpartyName ?? '—'} → ${item.transferTo?.name ?? item.counterpartyName ?? '—'}`
+              : (item.wallet?.name ?? '—')}
           </p>
         </div>
       </div>
 
       {isTransfer ? (
-        <MoneyText amount={transactionAmount(transaction)} tone="neutral" size="display" />
+        <MoneyText amount={historyItemAmount(item)} tone="neutral" size="display" />
       ) : (
-        <MoneyText amount={signedTransactionAmount(transaction)} showSign size="display" />
+        <MoneyText amount={signedHistoryAmount(item)} showSign size="display" />
       )}
 
       <div className="flex flex-col gap-1">
-        <p className="text-text-muted text-sm">{LONG_DATE_FORMAT.format(transaction.transactionDate)}</p>
-        {transaction.note && <p className="text-text text-sm">{transaction.note}</p>}
+        <p className="text-text-muted text-sm">{LONG_DATE_FORMAT.format(item.transactionDate)}</p>
+        {item.note && <p className="text-text text-sm">{item.note}</p>}
       </div>
 
       <div className="flex gap-2">
         {/* Editing a transfer is out of scope (tasks/08-transfers-self/spec.md
-            only requires void) — only Hapus is offered. */}
+            only requires void) — only Hapus is offered for those. */}
         {!isTransfer && (
           <Button variant="secondary" className="flex-1" onClick={onEdit} disabled={isPending}>
             <Pencil className="size-4" aria-hidden="true" />

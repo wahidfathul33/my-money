@@ -7,8 +7,12 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { AddTransactionSheet } from '@/features/transactions/components/add-transaction-sheet';
 import type { AddTransactionSheetData } from '@/features/transactions/sheet-data';
+import type { HouseholdSummary } from '@/features/household/queries';
+import { ContextSwitcher } from '@/features/household/components/context-switcher';
+import { getHouseholdMenuItems } from '@/features/household/household-menu-items';
 import { cn } from '@/lib/utils';
-import { isRouteActive, SIDEBAR_ITEMS } from './nav-items';
+import { getSidebarItems, isRouteActive } from './nav-items';
+import type { NavItem } from './nav-items';
 
 /**
  * "+ Tambah" desktop/tablet — Dialog (center), padanan FAB mobile, komponen
@@ -26,12 +30,29 @@ function AddEntryDialog({
   return <AddTransactionSheet {...addTransactionSheetData} variant="center" trigger={trigger} />;
 }
 
+/** `/household/[id]/...` (but not `/household` or `/household/new`, which
+ * are personal-context routes) → the id, if it's one of the caller's own
+ * active households. Anything else → `null`, meaning "personal context". */
+function activeHouseholdFrom(pathname: string, households: HouseholdSummary[]): HouseholdSummary | null {
+  const id = pathname.match(/^\/household\/([^/]+)/)?.[1];
+  if (!id) return null;
+  return households.find((h) => h.id === id) ?? null;
+}
+
 /**
  * Rail (768–1023px) & sidebar (≥1024px) — satu komponen, dua render
  * bergantung breakpoint viewport murni CSS (bukan `matchMedia` di JS):
  * tidak ada risiko hydration mismatch, dan hanya satu varian yang benar-benar
  * ada di accessibility tree pada satu waktu (`display: none` dikeluarkan
  * dari urutan fokus secara otomatis).
+ *
+ * Sejak task 10: saat konteks household aktif (URL `/household/[id]/...`),
+ * daftar item berganti seluruhnya ke menu household — docs/02-IA §4:
+ * "ketika konteks household aktif, daftar item sidebar berganti menjadi
+ * menu household". Context switcher (di atas daftar item) tetap ada di
+ * kedua konteks, dan hanya dirender saat user punya minimal satu household
+ * (tasks/10-household-core/spec.md — switcher tersembunyi sepenuhnya
+ * sampai saat itu).
  *
  * Catatan Tooltip: `components/ui/tooltip.tsx` (task 01) membungkus
  * children-nya sendiri di dalam `<button>` — cocok untuk visual statis
@@ -43,10 +64,15 @@ function AddEntryDialog({
  */
 interface SidebarProps {
   addTransactionSheetData: AddTransactionSheetData;
+  households: HouseholdSummary[];
 }
 
-export function Sidebar({ addTransactionSheetData }: SidebarProps) {
+export function Sidebar({ addTransactionSheetData, households }: SidebarProps) {
   const pathname = usePathname();
+  const activeHousehold = activeHouseholdFrom(pathname, households);
+  const items: NavItem[] = activeHousehold
+    ? getHouseholdMenuItems(activeHousehold.id)
+    : getSidebarItems(households.length > 0);
 
   return (
     <nav
@@ -68,7 +94,7 @@ export function Sidebar({ addTransactionSheetData }: SidebarProps) {
             </button>
           }
         />
-        {SIDEBAR_ITEMS.map((item) => {
+        {items.map((item) => {
           if (!item.href) {
             return (
               <span
@@ -81,7 +107,7 @@ export function Sidebar({ addTransactionSheetData }: SidebarProps) {
               </span>
             );
           }
-          const active = isRouteActive(pathname, item.href);
+          const active = isRouteActive(pathname, item.href, item.exact);
           return (
             <Link
               key={item.label}
@@ -102,17 +128,22 @@ export function Sidebar({ addTransactionSheetData }: SidebarProps) {
 
       {/* Sidebar penuh — ≥1024px */}
       <div className="hidden lg:flex lg:h-full lg:flex-col lg:gap-1 lg:px-3 lg:py-4">
-        <div className="text-title text-text px-3 pb-6 font-semibold">MyMoney</div>
+        <div className="text-title text-text px-3 pb-4 font-semibold">MyMoney</div>
+        {households.length > 0 && (
+          <div className="px-3 pb-4">
+            <ContextSwitcher households={households} variant="desktop" />
+          </div>
+        )}
         <ul className="flex flex-1 flex-col gap-1">
-          {SIDEBAR_ITEMS.map((item) => (
+          {items.map((item) => (
             <li key={item.label}>
               {item.href ? (
                 <Link
                   href={item.href}
-                  aria-current={isRouteActive(pathname, item.href) ? 'page' : undefined}
+                  aria-current={isRouteActive(pathname, item.href, item.exact) ? 'page' : undefined}
                   className={cn(
                     'pressable-tint rounded-inner flex h-11 items-center gap-3 px-3 text-sm font-medium',
-                    isRouteActive(pathname, item.href)
+                    isRouteActive(pathname, item.href, item.exact)
                       ? 'text-brand-readable bg-brand-subtle'
                       : 'text-text',
                   )}

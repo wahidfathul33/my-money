@@ -34,6 +34,16 @@ test.describe('Bottom nav — mobile (<768px)', () => {
     await expect(page.getByRole('button', { name: 'Lainnya' })).toBeVisible();
   });
 
+  test('tidak ada elemen household terlihat sama sekali untuk user tanpa household — mobile (task 10)', async ({
+    page,
+  }) => {
+    // Kriteria penerimaan paling ketat di task 10: switcher tersembunyi
+    // sepenuhnya (bukan hanya kosong), dan header mobile yang menaunginya
+    // pun tidak dirender sama sekali.
+    await expect(page.getByRole('button', { name: /Personal/ })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Ganti konteks' })).toHaveCount(0);
+  });
+
   test('setiap slot berukuran >= 44x44px', async ({ page }) => {
     const nav = page.getByRole('navigation', { name: 'Navigasi utama' });
     const targets = await nav.locator('a, button').all();
@@ -71,15 +81,18 @@ test.describe('Bottom nav — mobile (<768px)', () => {
     expect(page.url()).toMatch(/\/$/);
   });
 
-  test('"Lainnya" membuka sheet berisi Keluarga (nonaktif) + Dompet/Anggaran/Laporan/Pengaturan', async ({
+  test('"Lainnya" membuka sheet berisi Buat keluarga (task 10 — user tanpa household) + Dompet/Anggaran/Laporan/Pengaturan', async ({
     page,
   }) => {
     await page.getByRole('button', { name: 'Lainnya' }).click();
     const sheet = page.getByRole('dialog', { name: 'Lainnya' });
     await expect(sheet).toBeVisible();
 
-    const keluarga = sheet.getByRole('button', { name: /Keluarga/ });
-    await expect(keluarga).toBeDisabled();
+    // Fixture user punya nol household — entri Keluarga menjadi "Buat
+    // keluarga" yang bisa dinavigasi langsung, bukan slot nonaktif
+    // (tasks/10-household-core/spec.md).
+    const buatKeluarga = sheet.getByRole('link', { name: 'Buat keluarga' });
+    await expect(buatKeluarga).toHaveAttribute('href', '/household/new');
 
     await expect(sheet.getByRole('link', { name: 'Dompet' })).toHaveAttribute('href', '/wallets');
     await expect(sheet.getByRole('link', { name: 'Anggaran' })).toHaveAttribute('href', '/budgets');
@@ -179,7 +192,7 @@ test.describe('Sidebar — desktop (>=1024px)', () => {
     await expect(page.getByRole('button', { name: 'Tambah transaksi' })).toBeHidden();
   });
 
-  test('urutan item mempertahankan hierarki mobile + slot Keluarga dicadangkan', async ({
+  test('urutan item mempertahankan hierarki mobile + Buat keluarga (task 10 — user tanpa household)', async ({
     page,
   }) => {
     // getByRole mengecualikan elemen `display: none` (rail yang tersembunyi
@@ -188,6 +201,8 @@ test.describe('Sidebar — desktop (>=1024px)', () => {
     const nav = page.getByRole('navigation', { name: 'Navigasi utama' });
     const labels = await nav.getByRole('link').allTextContents();
     expect(labels.slice(0, 3)).toEqual(['Beranda', 'Transaksi', 'Kekayaan']);
+    // Fixture user punya nol household: entri terakhir adalah "Buat
+    // keluarga" (bukan "Keluarga") — tidak ada lagi slot "Segera".
     expect(labels).toEqual([
       'Beranda',
       'Transaksi',
@@ -195,19 +210,32 @@ test.describe('Sidebar — desktop (>=1024px)', () => {
       'Dompet',
       'Anggaran',
       'Laporan',
+      'Buat keluarga',
       'Pengaturan',
     ]);
   });
 
-  test('Keluarga tidak dapat dinavigasi (task 10)', async ({ page }) => {
+  test('"Buat keluarga" dapat dinavigasi ke /household/new (task 10 — user tanpa household)', async ({
+    page,
+  }) => {
     const nav = page.getByRole('navigation', { name: 'Navigasi utama' });
     // `.last()`: rail (tersembunyi di ≥1024px) dan sidebar penuh keduanya
-    // merender "Keluarga" — sidebar penuh selalu terakhir di DOM (lihat
-    // src/components/layout/sidebar.tsx).
-    await expect(nav.getByText('Keluarga').last()).toBeVisible();
-    await expect(nav.getByText('Segera').last()).toBeVisible();
-    // Bukan link — tidak ada href yang bisa dituju.
-    await expect(nav.getByRole('link', { name: /Keluarga/ })).toHaveCount(0);
+    // merender "Buat keluarga" — sidebar penuh selalu terakhir di DOM
+    // (lihat src/components/layout/sidebar.tsx).
+    const link = nav.getByRole('link', { name: 'Buat keluarga' }).last();
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute('href', '/household/new');
+    await expect(nav.getByText('Segera')).toHaveCount(0);
+  });
+
+  test('context switcher tidak tampil sama sekali untuk user tanpa household (task 10)', async ({
+    page,
+  }) => {
+    // Bagian tersulit dari kriteria penerimaan task 10: "Pengguna tanpa
+    // household tidak melihat elemen household apa pun." — trigger switcher
+    // ("Personal ▾") sama sekali tidak dirender, bukan sekadar disembunyikan
+    // secara visual.
+    await expect(page.getByRole('button', { name: /Personal/ })).toHaveCount(0);
   });
 
   test('"+ Tambah" membuka Dialog (center), bukan Sheet', async ({ page }) => {

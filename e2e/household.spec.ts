@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures/authenticated';
+import { waitForDomToSettle } from './fixtures/base';
 
 /**
  * tasks/10-household-core/spec.md verification: "buat household → switcher
@@ -25,11 +26,14 @@ test.describe('Household — buat, switcher, isolasi', () => {
     await page.getByRole('button', { name: 'Buat Keluarga' }).click();
 
     await expect(page).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
+    await waitForDomToSettle(page); // Server Action redirect — page.goto's wrapper can't see this
     await expect(page.getByRole('heading', { name: 'Keluarga Uji' })).toBeVisible(DB_TIMEOUT);
 
     // Ringkasan keluarga baru — docs/10-ux-states.md §2.1: setup steps list.
     await expect(page.getByText('Keluarga Uji siap digunakan')).toBeVisible();
-    await expect(page.getByText('Undang anggota')).toBeVisible();
+    // exact:true — a plain "Undang anggota" label and the "Undang anggota
+    // →" link (below, its href) both contain this substring.
+    await expect(page.getByText('Undang anggota', { exact: true })).toBeVisible();
     await expect(page.getByText('Tandai pengeluaran keluarga')).toBeVisible();
 
     // The context switcher now exists (task 10's hardest requirement, in
@@ -49,6 +53,7 @@ test.describe('Household — buat, switcher, isolasi', () => {
 
     await sheet.getByRole('link', { name: 'Keuangan Saya' }).click();
     await expect(page).toHaveURL(/\/$/, DB_TIMEOUT);
+    await waitForDomToSettle(page); // <Link> navigation — page.goto's wrapper can't see this
     await expect(page.getByRole('button', { name: 'Personal' })).toBeVisible();
 
     // And back into the household via the switcher again.
@@ -67,10 +72,12 @@ test.describe('Household — buat, switcher, isolasi', () => {
     await page.getByLabel('Nama keluarga').fill('Sebelum Ubah');
     await page.getByRole('button', { name: 'Buat Keluarga' }).click();
     await expect(page).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
+    await waitForDomToSettle(page); // Server Action redirect — page.goto's wrapper can't see this
     const householdUrl = page.url();
 
     await page.getByRole('link', { name: 'Pengaturan' }).click();
     await expect(page).toHaveURL(/\/settings$/, DB_TIMEOUT);
+    await waitForDomToSettle(page); // <Link> navigation — page.goto's wrapper can't see this
 
     await page.getByLabel('Nama keluarga').fill('Sesudah Ubah');
     await page.getByRole('button', { name: 'Simpan perubahan' }).click();

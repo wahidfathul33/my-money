@@ -54,8 +54,13 @@ export default async function HouseholdSummaryPage({
       title: 'Tandai pengeluaran keluarga',
       description: 'Aktifkan 🏠 saat mencatat, atau tandai transaksi yang sudah ada.',
       done: anyTagged,
-      href: `/household/${householdId}/transactions`,
-      cta: 'Lihat pengeluaran keluarga',
+      // docs/10-ux-states.md §2.1's exact mockup: CTA "[Pilih transaksi →]",
+      // pointed at personal history where bulk-tagging actually happens
+      // (src/features/transactions/components/transaction-list.tsx's
+      // "Pilih" select mode) — NOT at the (necessarily still-empty, at
+      // this exact moment) household expenses viewing page.
+      href: '/transactions',
+      cta: 'Pilih transaksi',
     },
     {
       key: 'share',
@@ -63,7 +68,7 @@ export default async function HouseholdSummaryPage({
       description: 'Pilih dompet atau aset yang masuk kekayaan keluarga.',
       done: shareWealth,
       href: '/settings/sharing',
-      cta: 'Kelola berbagi',
+      cta: 'Atur', // docs/10-ux-states.md §2.1's exact mockup: "[Atur →]".
     },
   ];
 

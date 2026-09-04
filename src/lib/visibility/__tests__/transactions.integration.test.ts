@@ -118,6 +118,11 @@ describe('lib/visibility/transactions — integration', () => {
       userIds.push(owner, member);
       const household = await createTestHousehold(owner);
       householdIds.push(household);
+      // `createTestHousehold` only inserts the `households` row (see its own
+      // doc comment) — the OWNER needs their own active membership row too,
+      // since `recordTransaction` below tags AS the owner and `createTransaction`
+      // re-verifies membership for real (this is exactly the check under test).
+      await createTestHouseholdMember(household, owner, { role: 'owner' });
       await createTestHouseholdMember(household, member, { status: 'active' });
 
       const tagged = await recordTransaction(owner, household);
@@ -137,6 +142,7 @@ describe('lib/visibility/transactions — integration', () => {
       userIds.push(owner, stranger);
       const household = await createTestHousehold(owner);
       householdIds.push(household);
+      await createTestHouseholdMember(household, owner, { role: 'owner' });
 
       const tagged = await recordTransaction(owner, household);
 
@@ -156,6 +162,8 @@ describe('lib/visibility/transactions — integration', () => {
       const householdX = await createTestHousehold(ownerX);
       const householdY = await createTestHousehold(ownerY);
       householdIds.push(householdX, householdY);
+      await createTestHouseholdMember(householdX, ownerX, { role: 'owner' });
+      await createTestHouseholdMember(householdY, ownerY, { role: 'owner' });
       await createTestHouseholdMember(householdX, memberOfXOnly, { status: 'active' });
 
       const taggedToX = await recordTransaction(ownerX, householdX);
@@ -177,6 +185,7 @@ describe('lib/visibility/transactions — integration', () => {
       userIds.push(owner, member);
       const household = await createTestHousehold(owner);
       householdIds.push(household);
+      await createTestHouseholdMember(household, owner, { role: 'owner' });
       await createTestHouseholdMember(household, member, { status: 'active' });
 
       const tagged = await recordTransaction(owner, household);

@@ -1,9 +1,17 @@
 /**
  * Transactions reads — `dbRead` only (docs/11-tech-architecture.md §2).
- * Restricted to `type IN ('income', 'expense')` throughout: `transfer` is
- * task 08's (a self-transfer posts TWO ledger entries per transaction, which
- * the single-entry joins below aren't shaped for — task 08/09 should build
- * their own listing rather than stretch this one).
+ * The record-specific queries below (`getQuickCategories`, `getMonthlyTotals`,
+ * category/type validation) stay restricted to `type IN ('income', 'expense')`
+ * — `transfer` never has a category and is never income/expense
+ * (tasks/08-transfers-self/spec.md "Transfer bukan income maupun expense").
+ *
+ * `getRecentTransactions`/`getTransaction` are the exception: they merge in
+ * self-transfers (via `@/features/transfers/queries`'s own two-entries-per-
+ * transaction shaped query) so `/transactions` shows one unified history —
+ * task 08's own acceptance criteria need transfers visible there, alongside
+ * income/expense. Kept as a MERGE of two separately-shaped queries rather
+ * than one query, since a transfer's two-ledger-entries-per-transaction
+ * shape doesn't fit the single-entry LEFT JOIN below.
  */
 import { and, asc, desc, eq, gte, inArray, isNull, lt } from 'drizzle-orm';
 import { dbRead } from '@/lib/db/read';
@@ -16,8 +24,10 @@ import {
   type CategoryRow,
   type CategoryWithChildren,
 } from '@/features/categories/queries';
+import { getTransferDetail, listRecentTransfers, type TransferWalletInfo } from '@/features/transfers/queries';
 
 export type RecordableTransactionType = 'income' | 'expense';
+export type TransactionItemType = RecordableTransactionType | 'transfer';
 
 export interface TransactionCategoryInfo {
   id: string;
@@ -35,13 +45,16 @@ export interface TransactionWalletInfo {
 
 export interface TransactionListItem {
   id: string;
-  type: RecordableTransactionType;
-  /** Always positive — docs/03 §8.1. Apply sign for display via `type`. */
+  type: TransactionItemType;
+  /** Always positive — docs/03 §8.1/§9.2. Apply sign for display via `type` (transfer gets neither). */
   amount: Money;
   transactionDate: Date;
   note: string | null;
   category: TransactionCategoryInfo | null;
+  /** The single wallet for income/expense; `null` for a transfer (see `transfer` below instead). */
   wallet: TransactionWalletInfo | null;
+  /** `null` for income/expense; the from/to pair for a transfer. */
+  transfer: { fromWallet: TransferWalletInfo; toWallet: TransferWalletInfo } | null;
 }
 
 function selectTransactionListShape() {
@@ -94,35 +107,65 @@ function toListItem(row: {
     wallet: row.walletId
       ? { id: row.walletId, name: row.walletName!, icon: row.walletIcon!, color: row.walletColor! }
       : null,
+    transfer: null,
   };
 }
 
+function transferToListItem(transfer: Awaited<ReturnType<typeof listRecentTransfers>>[number]): TransactionListItem {
+  return {
+    id: transfer.id,
+    type: 'transfer',
+    amount: transfer.amount,
+    transactionDate: transfer.transactionDate,
+    note: transfer.note,
+    category: null,
+    wallet: null,
+    transfer: { fromWallet: transfer.fromWallet, toWallet: transfer.toWallet },
+  };
+}
+
+/** Newest-first merge of two already-sorted lists, by `transactionDate` then `id` as a stable tiebreaker. */
+function mergeByDateDesc(a: TransactionListItem[], b: TransactionListItem[], limit: number): TransactionListItem[] {
+  return [...a, ...b]
+    .sort((x, y) => {
+      const byDate = y.transactionDate.getTime() - x.transactionDate.getTime();
+      if (byDate !== 0) return byDate;
+      return x.id < y.id ? 1 : x.id > y.id ? -1 : 0;
+    })
+    .slice(0, limit);
+}
+
 /**
- * The caller's most recent non-void income/expense transactions, newest
+ * The caller's most recent non-void transactions AND self-transfers, newest
  * first — feeds the minimal `/transactions` list this task adds (full
- * grouping/filtering/search is task 09's).
+ * grouping/filtering/search is task 09's). Fetches each shape with its own
+ * query (a transfer's two-ledger-entries-per-transaction join doesn't fit
+ * the single-entry LEFT JOIN below) and merges by date in application code.
  */
 export async function getRecentTransactions(userId: string, limit = 50): Promise<TransactionListItem[]> {
-  const rows = await dbRead
-    .select(selectTransactionListShape())
-    .from(transactions)
-    .leftJoin(categories, eq(categories.id, transactions.categoryId))
-    .leftJoin(
-      ledgerEntries,
-      and(eq(ledgerEntries.transactionId, transactions.id), isNull(ledgerEntries.voidedAt)),
-    )
-    .leftJoin(wallets, eq(wallets.id, ledgerEntries.walletId))
-    .where(
-      and(
-        ownedBy(transactions, userId),
-        isNull(transactions.voidedAt),
-        inArray(transactions.type, ['income', 'expense']),
-      ),
-    )
-    .orderBy(desc(transactions.transactionDate), desc(transactions.id))
-    .limit(limit);
+  const [rows, transfers] = await Promise.all([
+    dbRead
+      .select(selectTransactionListShape())
+      .from(transactions)
+      .leftJoin(categories, eq(categories.id, transactions.categoryId))
+      .leftJoin(
+        ledgerEntries,
+        and(eq(ledgerEntries.transactionId, transactions.id), isNull(ledgerEntries.voidedAt)),
+      )
+      .leftJoin(wallets, eq(wallets.id, ledgerEntries.walletId))
+      .where(
+        and(
+          ownedBy(transactions, userId),
+          isNull(transactions.voidedAt),
+          inArray(transactions.type, ['income', 'expense']),
+        ),
+      )
+      .orderBy(desc(transactions.transactionDate), desc(transactions.id))
+      .limit(limit),
+    listRecentTransfers(userId, limit),
+  ]);
 
-  return rows.map(toListItem);
+  return mergeByDateDesc(rows.map(toListItem), transfers.map(transferToListItem), limit);
 }
 
 /** A single transaction (for the detail sheet / edit form) — `null` if it doesn't exist, isn't the caller's, or is voided. */
@@ -149,7 +192,10 @@ export async function getTransaction(
     )
     .limit(1);
 
-  return row ? toListItem(row) : null;
+  if (row) return toListItem(row);
+
+  const transfer = await getTransferDetail(userId, transactionId);
+  return transfer ? transferToListItem(transfer) : null;
 }
 
 export interface MonthlyTotals {

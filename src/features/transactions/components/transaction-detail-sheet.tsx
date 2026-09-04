@@ -10,14 +10,15 @@
  */
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useToast } from '@/components/ui/toast';
 import { MoneyText } from '@/components/finance/money-text';
 import { CategoryIcon } from '@/features/categories/components/category-icon';
-import { signedTransactionAmount, type TransactionClientData } from '../client-types';
+import { signedTransactionAmount, transactionAmount, type TransactionClientData } from '../client-types';
 import { unvoidTransactionAction, voidTransactionAction } from '../actions';
+import { unvoidTransferAction, voidTransferAction } from '@/features/transfers/actions';
 
 const LONG_DATE_FORMAT = new Intl.DateTimeFormat('id-ID', {
   day: 'numeric',
@@ -64,21 +65,26 @@ function DetailContent({ transaction, onEdit, onClose }: DetailContentProps) {
   const toast = useToast();
   const [isPending, startTransition] = useTransition();
 
+  const isTransfer = transaction.type === 'transfer';
+
   function handleDelete() {
     startTransition(async () => {
-      const result = await voidTransactionAction(transaction.id);
+      const result = isTransfer
+        ? await voidTransferAction(transaction.id)
+        : await voidTransactionAction(transaction.id);
       if (result.error) return;
 
       onClose();
       router.refresh();
       toast.show({
-        title: 'Transaksi dihapus',
+        title: isTransfer ? 'Transfer dihapus' : 'Transaksi dihapus',
         variant: 'success',
         action: {
           label: 'Urungkan',
           onClick: () => {
             startTransition(async () => {
-              await unvoidTransactionAction(transaction.id);
+              if (isTransfer) await unvoidTransferAction(transaction.id);
+              else await unvoidTransactionAction(transaction.id);
               router.refresh();
             });
           },
@@ -90,18 +96,32 @@ function DetailContent({ transaction, onEdit, onClose }: DetailContentProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        {transaction.category ? (
+        {isTransfer ? (
+          <span className="bg-surface-raised text-text-muted flex size-10 shrink-0 items-center justify-center rounded-full">
+            <ArrowLeftRight className="size-4" aria-hidden="true" />
+          </span>
+        ) : transaction.category ? (
           <CategoryIcon icon={transaction.category.icon} color={transaction.category.color} />
         ) : (
           <span className="bg-surface-raised size-10 shrink-0 rounded-full" />
         )}
         <div className="min-w-0">
-          <p className="text-text truncate font-medium">{transaction.category?.name ?? 'Transaksi'}</p>
-          <p className="text-text-muted truncate text-sm">{transaction.wallet?.name ?? '—'}</p>
+          <p className="text-text truncate font-medium">
+            {isTransfer
+              ? `${transaction.transfer!.fromWallet.name} → ${transaction.transfer!.toWallet.name}`
+              : (transaction.category?.name ?? 'Transaksi')}
+          </p>
+          <p className="text-text-muted truncate text-sm">
+            {isTransfer ? 'Transfer' : (transaction.wallet?.name ?? '—')}
+          </p>
         </div>
       </div>
 
-      <MoneyText amount={signedTransactionAmount(transaction)} showSign size="display" />
+      {isTransfer ? (
+        <MoneyText amount={transactionAmount(transaction)} tone="neutral" size="display" />
+      ) : (
+        <MoneyText amount={signedTransactionAmount(transaction)} showSign size="display" />
+      )}
 
       <div className="flex flex-col gap-1">
         <p className="text-text-muted text-sm">{LONG_DATE_FORMAT.format(transaction.transactionDate)}</p>
@@ -109,10 +129,14 @@ function DetailContent({ transaction, onEdit, onClose }: DetailContentProps) {
       </div>
 
       <div className="flex gap-2">
-        <Button variant="secondary" className="flex-1" onClick={onEdit} disabled={isPending}>
-          <Pencil className="size-4" aria-hidden="true" />
-          Edit
-        </Button>
+        {/* Editing a transfer is out of scope (tasks/08-transfers-self/spec.md
+            only requires void) — only Hapus is offered. */}
+        {!isTransfer && (
+          <Button variant="secondary" className="flex-1" onClick={onEdit} disabled={isPending}>
+            <Pencil className="size-4" aria-hidden="true" />
+            Edit
+          </Button>
+        )}
         <Button variant="danger" className="flex-1" loading={isPending} onClick={handleDelete}>
           <Trash2 className="size-4" aria-hidden="true" />
           Hapus

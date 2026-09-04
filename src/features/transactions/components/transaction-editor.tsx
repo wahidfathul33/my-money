@@ -13,6 +13,7 @@ import { FileText } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { TransferForm } from '@/features/transfers/components/transfer-form';
 import { formatExpression } from '../amount-math';
 import type { RecordableTransactionType } from '../queries';
 import type { CategoryRow, CategoryWithChildren } from '../queries';
@@ -22,13 +23,17 @@ import { CategoryPicker } from './category-picker';
 import { DatePicker } from './date-picker';
 import { WalletPicker } from './wallet-picker';
 
+/** The tab bar's own value space — a superset of `RecordableTransactionType` used for actually recording a transaction (transfers get their own service, src/lib/services/transfers.ts). */
+export type EditorTabType = RecordableTransactionType | 'transfer';
+
 export interface TransactionEditorProps {
-  type: RecordableTransactionType;
-  onTypeChange: (type: RecordableTransactionType) => void;
+  type: EditorTabType;
+  onTypeChange: (type: EditorTabType) => void;
   expression: string;
   onExpressionChange: (next: string) => void;
   categoryId: string | null;
   onCategoryChange: (id: string) => void;
+  /** The single wallet for income/expense; the transfer's SOURCE wallet when `type === 'transfer'`. */
   walletId: string;
   onWalletChange: (id: string) => void;
   date: Date;
@@ -42,6 +47,11 @@ export interface TransactionEditorProps {
   saveDisabled: boolean;
   saving: boolean;
   onSave: () => void;
+  /** Shows the "Transfer" tab and, when active, the Dari→Ke picker instead of the category row. Defaults to `false` — the edit sheet (transfers aren't editable, tasks/08-transfers-self/spec.md) never opts in. */
+  allowTransfer?: boolean;
+  /** The transfer's DESTINATION wallet — only meaningful (and only rendered) when `type === 'transfer'`. */
+  toWalletId?: string;
+  onToWalletChange?: (id: string) => void;
 }
 
 export function TransactionEditor({
@@ -64,6 +74,9 @@ export function TransactionEditor({
   saveDisabled,
   saving,
   onSave,
+  allowTransfer = false,
+  toWalletId = '',
+  onToWalletChange,
 }: TransactionEditorProps) {
   // Lazy initializer — visible from the start when editing a transaction
   // that already has a note, without either caller (create/edit) having to
@@ -80,7 +93,7 @@ export function TransactionEditor({
 
   return (
     <div className="flex flex-col gap-4">
-      <Tabs value={type} onValueChange={(v) => onTypeChange(v as RecordableTransactionType)}>
+      <Tabs value={type} onValueChange={(v) => onTypeChange(v as EditorTabType)}>
         <TabsList variant="segmented" className="w-full">
           <TabsTrigger variant="segmented" value="expense">
             Pengeluaran
@@ -88,6 +101,11 @@ export function TransactionEditor({
           <TabsTrigger variant="segmented" value="income">
             Pemasukan
           </TabsTrigger>
+          {allowTransfer && (
+            <TabsTrigger variant="segmented" value="transfer">
+              Transfer
+            </TabsTrigger>
+          )}
         </TabsList>
       </Tabs>
 
@@ -105,15 +123,35 @@ export function TransactionEditor({
         </div>
       </div>
 
-      <CategoryPicker
-        quick={quickCategories[type]}
-        full={fullCategories[type]}
-        value={categoryId}
-        onChange={onCategoryChange}
-      />
+      {/* Transfer replaces the category row with a Dari→Ke wallet picker
+          entirely (tasks/08-transfers-self/spec.md "Ganti baris kategori
+          dengan pemilih asal → tujuan"; todo.md "Sembunyikan kategori
+          sepenuhnya di mode transfer") — a transfer's `category_id` is
+          always NULL (`tx_category_rule`), so there is no category to pick. */}
+      {type === 'transfer' ? (
+        <TransferForm
+          wallets={wallets}
+          fromWalletId={walletId}
+          onFromWalletChange={onWalletChange}
+          toWalletId={toWalletId}
+          onToWalletChange={onToWalletChange ?? (() => {})}
+        />
+      ) : (
+        <CategoryPicker
+          quick={quickCategories[type]}
+          full={fullCategories[type]}
+          value={categoryId}
+          onChange={onCategoryChange}
+        />
+      )}
 
       <div className="flex h-11 items-center gap-2">
-        <WalletPicker wallets={wallets} value={walletId} onChange={onWalletChange} />
+        {/* The plain single-wallet picker only applies to income/expense —
+            transfer's two wallets are both already selected in TransferForm
+            above. */}
+        {type !== 'transfer' && (
+          <WalletPicker wallets={wallets} value={walletId} onChange={onWalletChange} />
+        )}
         <DatePicker value={date} onChange={onDateChange} />
         {/* Household toggle (🏠) lands in task 12 — this row's height is
             fixed (h-11) regardless of what's in it, and Simpan lives in the

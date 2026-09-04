@@ -41,6 +41,11 @@ interface TransactionDayGroupProps {
   total: DayTotal | undefined;
   onOpenDetail: (item: TransactionHistoryClientItem) => void;
   onQuickDelete: (item: TransactionHistoryClientItem) => void;
+  /** Bulk-tagging select mode — tasks/12-sharing-and-privacy. All default
+   * to inert values so every existing caller renders exactly as before. */
+  selectMode?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onToggleSelect?: (item: TransactionHistoryClientItem) => void;
 }
 
 export function TransactionDayGroup({
@@ -51,6 +56,9 @@ export function TransactionDayGroup({
   total,
   onOpenDetail,
   onQuickDelete,
+  selectMode = false,
+  selectedIds,
+  onToggleSelect,
 }: TransactionDayGroupProps) {
   const net = (total?.income ?? 0n) - (total?.expense ?? 0n);
 
@@ -67,6 +75,9 @@ export function TransactionDayGroup({
               transaction={item}
               onOpenDetail={() => onOpenDetail(item)}
               onQuickDelete={() => onQuickDelete(item)}
+              selectMode={selectMode}
+              selected={selectedIds?.has(item.id) ?? false}
+              onToggleSelect={() => onToggleSelect?.(item)}
             />
           </li>
         ))}

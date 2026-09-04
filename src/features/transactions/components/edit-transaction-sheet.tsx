@@ -29,6 +29,7 @@ export interface EditedTransactionFields {
   walletId: string;
   transactionDate: Date;
   note: string | null;
+  householdId: string | null;
 }
 
 interface EditTransactionSheetProps {
@@ -85,6 +86,10 @@ function EditTransactionForm({ transaction, sheetData, onDone }: EditTransaction
   const [walletId, setWalletId] = useState<string>(
     transaction.wallet?.id ?? sheetData.wallets[0]?.id ?? '',
   );
+  // The 🏠 toggle — tasks/12-sharing-and-privacy. Pre-filled from the
+  // transaction's ACTUAL current tag, never a guessed/remembered default
+  // (that convenience is Add-only — src/features/transactions/components/add-transaction-sheet.tsx).
+  const [householdId, setHouseholdId] = useState<string | null>(transaction.householdId);
   const [date, setDate] = useState<Date>(transaction.transactionDate);
   const [note, setNote] = useState(transaction.note ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +128,7 @@ function EditTransactionForm({ transaction, sheetData, onDone }: EditTransaction
         walletId,
         transactionDate: date,
         note: trimmedNote,
+        householdId,
       });
 
       if (result.error) {
@@ -139,6 +145,7 @@ function EditTransactionForm({ transaction, sheetData, onDone }: EditTransaction
         walletId,
         transactionDate: date,
         note: trimmedNote,
+        householdId,
       });
     });
   }
@@ -164,6 +171,9 @@ function EditTransactionForm({ transaction, sheetData, onDone }: EditTransaction
       saveDisabled={saveDisabled}
       saving={isPending}
       onSave={handleSave}
+      households={sheetData.households}
+      householdId={householdId}
+      onHouseholdChange={setHouseholdId}
     />
   );
 }

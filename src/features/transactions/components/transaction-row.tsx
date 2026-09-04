@@ -20,8 +20,9 @@
  * one at all, so drag capture is disabled entirely for a transfer row.
  */
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, Check } from 'lucide-react';
 import { MoneyText } from '@/components/finance/money-text';
+import { cn } from '@/lib/utils';
 import { CategoryIcon } from '@/features/categories/components/category-icon';
 import {
   historyItemAmount,
@@ -39,16 +40,37 @@ interface TransactionRowProps {
   transaction: TransactionHistoryClientItem;
   onOpenDetail: () => void;
   onQuickDelete: () => void;
+  /**
+   * Bulk-tagging select mode (tasks/12-sharing-and-privacy spec.md
+   * "Penandaan massal transaksi lama") — `selectMode` swaps the swipe-to-
+   * delete gesture and tap-to-open-detail for a checkbox and tap-to-select,
+   * driven entirely by the parent list (src/features/transactions/components/transaction-list.tsx).
+   * All three default to inert values so every EXISTING caller (and every
+   * existing test) keeps behaving exactly as before this task.
+   */
+  selectMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }
 
-export function TransactionRow({ transaction, onOpenDetail, onQuickDelete }: TransactionRowProps) {
+export function TransactionRow({
+  transaction,
+  onOpenDetail,
+  onQuickDelete,
+  selectMode = false,
+  selected = false,
+  onToggleSelect,
+}: TransactionRowProps) {
   const isTransfer = transaction.type === 'transfer';
+  // A transfer has no single "payer" tag path (see transaction-editor.tsx's
+  // household-toggle comment) — not offered for bulk-tagging either.
+  const isSelectable = selectMode && !isTransfer;
   const [revealed, setRevealed] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
   const dragState = useRef<{ startX: number; startTranslate: number; dragging: boolean } | null>(null);
 
   function handlePointerDown(e: ReactPointerEvent) {
-    if (isTransfer) return;
+    if (isTransfer || selectMode) return;
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     dragState.current = {
       startX: e.clientX,
@@ -87,7 +109,7 @@ export function TransactionRow({ transaction, onOpenDetail, onQuickDelete }: Tra
 
   return (
     <div className="relative overflow-hidden">
-      {!isTransfer && (
+      {!isTransfer && !selectMode && (
         <button
           type="button"
           onClick={() => {
@@ -105,11 +127,16 @@ export function TransactionRow({ transaction, onOpenDetail, onQuickDelete }: Tra
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onClick={isTransfer ? onOpenDetail : undefined}
+        onClick={selectMode ? (isSelectable ? onToggleSelect : undefined) : isTransfer ? onOpenDetail : undefined}
+        aria-pressed={isSelectable ? selected : undefined}
+        aria-disabled={selectMode && !isSelectable ? true : undefined}
         style={{ transform: revealed ? `translateX(-${REVEAL_WIDTH}px)` : undefined }}
-        className="bg-surface relative flex touch-pan-y items-center gap-3 px-2 py-3 transition-transform"
+        className={cn(
+          'bg-surface relative flex touch-pan-y items-center gap-3 px-2 py-3 transition-transform',
+          selectMode && !isSelectable && 'opacity-50',
+        )}
       >
-        <RowLeading transaction={transaction} />
+        <RowLeading transaction={transaction} selectMode={selectMode} selected={selected} />
         <div className="min-w-0 flex-1">
           <p className="text-text truncate text-sm font-medium">
             <RowTitle transaction={transaction} />
@@ -124,7 +151,28 @@ export function TransactionRow({ transaction, onOpenDetail, onQuickDelete }: Tra
   );
 }
 
-function RowLeading({ transaction }: { transaction: TransactionHistoryClientItem }) {
+function RowLeading({
+  transaction,
+  selectMode,
+  selected,
+}: {
+  transaction: TransactionHistoryClientItem;
+  selectMode: boolean;
+  selected: boolean;
+}) {
+  if (selectMode && transaction.type !== 'transfer') {
+    return (
+      <span
+        aria-hidden="true"
+        className={cn(
+          'flex size-10 shrink-0 items-center justify-center rounded-full border-2',
+          selected ? 'border-brand bg-brand text-on-brand' : 'border-border bg-surface',
+        )}
+      >
+        {selected && <Check className="size-5" aria-hidden="true" />}
+      </span>
+    );
+  }
   if (transaction.type === 'transfer') {
     return (
       <span className="bg-surface-raised text-text-muted flex size-10 shrink-0 items-center justify-center rounded-full">

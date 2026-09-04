@@ -54,6 +54,7 @@ import { ownedBy } from '@/lib/db/scoped';
 import { postEntries } from '@/lib/finance/ledger';
 import type { Money } from '@/lib/finance/money';
 import { NotFoundError, ValidationError } from '@/lib/api/errors';
+import { requireHouseholdMember } from '@/lib/auth/require-household';
 import type { TransactionClient } from '@/lib/db';
 
 export type TransactionRow = typeof transactions.$inferSelect;
@@ -155,6 +156,19 @@ export interface CreateTransactionInput {
   transactionDate: Date;
   note: string | null;
   idempotencyKey: string;
+  /**
+   * Household to tag this transaction to — docs/03-domain-model.md §8.2,
+   * mechanism #1 of tasks/12-sharing-and-privacy/spec.md's "dua mekanisme
+   * saja". `null` or omitted means a purely personal transaction (the
+   * default — docs/12-security-and-auth.md's "default privat").
+   *
+   * Re-verified INSIDE this same `dbWrite.transaction()` via
+   * `requireHouseholdMember`, never trusted from the caller alone — spec.md
+   * "Keanggotaan aktif diverifikasi di dalam transaction saat menulis
+   * household_id" and docs/12 §5 threat H1. Membership can be revoked at any
+   * moment, so the check and the write it gates must be atomic.
+   */
+  householdId?: string | null;
 }
 
 /**
@@ -178,6 +192,9 @@ export async function createTransaction(
     return await dbWrite.transaction(async (tx) => {
       await assertWalletOwned(tx, userId, input.walletId);
       await assertCategoryMatchesType(tx, userId, input.categoryId, input.type);
+      if (input.householdId) {
+        await requireHouseholdMember(tx, userId, input.householdId);
+      }
 
       const id = uuidv7();
       const [row] = await tx
@@ -192,6 +209,7 @@ export async function createTransaction(
           note: input.note,
           createdBy: userId,
           idempotencyKey: input.idempotencyKey,
+          householdId: input.householdId ?? null,
         })
         .returning();
 
@@ -224,6 +242,17 @@ export interface UpdateTransactionInput {
   walletId: string;
   transactionDate: Date;
   note: string | null;
+  /**
+   * Household tag — same rule as `CreateTransactionInput.householdId`
+   * (re-verified inside this transaction), but tri-state here because an
+   * edit is otherwise a full field replace (every other field above is
+   * always sent): `undefined` (the key omitted) leaves the transaction's
+   * EXISTING tag untouched — for callers that don't care about this field at
+   * all — `null` clears it, and a household id re-tags (or re-verifies) it.
+   * The real edit sheet (src/features/transactions/components/edit-transaction-sheet.tsx)
+   * always sends an explicit value, never omits it.
+   */
+  householdId?: string | null;
 }
 
 /**
@@ -253,6 +282,9 @@ export async function updateTransaction(
 
     await assertWalletOwned(tx, userId, input.walletId);
     await assertCategoryMatchesType(tx, userId, input.categoryId, input.type);
+    if (input.householdId) {
+      await requireHouseholdMember(tx, userId, input.householdId);
+    }
 
     const oldEntries = await tx
       .select()
@@ -300,11 +332,112 @@ export async function updateTransaction(
         transactionDate: input.transactionDate,
         note: input.note,
         updatedAt: now,
+        // Tri-state — see UpdateTransactionInput.householdId's doc comment.
+        ...(input.householdId !== undefined ? { householdId: input.householdId } : {}),
       })
       .where(and(eq(transactions.id, transactionId), ownedBy(transactions, userId)))
       .returning();
 
     return updated!;
+  });
+}
+
+/** Exported so src/features/sharing/schema.ts's Zod cap can't silently drift from the authoritative service-layer cap. */
+export const BULK_TAG_MAX = 200;
+
+/**
+ * Toggles just the household tag on an existing, non-voided income/expense
+ * transaction — the lightweight counterpart to passing `householdId` through
+ * the full `updateTransaction` edit flow, used by a quick toggle and by
+ * `bulkTagTransactions` below. Same re-verification discipline: membership
+ * is checked INSIDE this transaction, right before the write it gates.
+ */
+export async function setTransactionHousehold(
+  userId: string,
+  transactionId: string,
+  householdId: string | null,
+): Promise<void> {
+  await dbWrite.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ id: transactions.id, type: transactions.type })
+      .from(transactions)
+      .where(
+        and(eq(transactions.id, transactionId), ownedBy(transactions, userId), isNull(transactions.voidedAt)),
+      )
+      .limit(1);
+    if (!existing) {
+      throw new NotFoundError('Transaksi tidak ditemukan');
+    }
+
+    if (householdId !== null) {
+      await requireHouseholdMember(tx, userId, householdId);
+    }
+
+    await tx
+      .update(transactions)
+      .set({ householdId, updatedAt: new Date() })
+      .where(and(eq(transactions.id, transactionId), ownedBy(transactions, userId)));
+  });
+}
+
+export interface BulkTagResult {
+  /** How many of `transactionIds` were actually tagged — excludes ids that
+   * didn't belong to the caller, were already voided, or didn't exist.
+   * Surfaced by the UI as the "confirmed count" spec.md's acceptance
+   * criteria asks for ("Penandaan massal ... berfungsi dengan konfirmasi
+   * jumlah"). */
+  taggedCount: number;
+}
+
+/**
+ * Tags many of the caller's own transactions to one household in a single
+ * `dbWrite.transaction()` — todo.md "Penandaan Massal": most people create a
+ * household weeks into using the app, and shouldn't have to wait for NEW
+ * transactions to see a family report fill in.
+ *
+ * Membership is verified ONCE, inside this same transaction, before any row
+ * is touched (same "verify inside the transaction" discipline as every
+ * other household-tagging path here — the check and the writes it gates
+ * stay atomic). Every id is additionally re-scoped with `ownedBy` on the
+ * UPDATE itself, so an id belonging to someone else silently matches zero
+ * rows rather than erroring — the same "affects 0 rows" isolation shape as
+ * every other cross-user-id-rejection in this codebase (see
+ * src/lib/db/__tests__/scoped.isolation.integration.test.ts).
+ *
+ * `BULK_TAG_MAX` bounds a single call (todo.md "dengan batas jumlah per
+ * panggilan") — a request for more than that is rejected outright rather
+ * than silently truncated, so the caller's confirmation count always
+ * matches what actually got tagged.
+ */
+export async function bulkTagTransactions(
+  userId: string,
+  transactionIds: string[],
+  householdId: string,
+): Promise<BulkTagResult> {
+  if (transactionIds.length === 0) {
+    return { taggedCount: 0 };
+  }
+  if (transactionIds.length > BULK_TAG_MAX) {
+    throw new ValidationError({
+      transactionIds: [`Maksimal ${BULK_TAG_MAX} transaksi per penandaan massal`],
+    });
+  }
+
+  return dbWrite.transaction(async (tx) => {
+    await requireHouseholdMember(tx, userId, householdId);
+
+    const result = await tx
+      .update(transactions)
+      .set({ householdId, updatedAt: new Date() })
+      .where(
+        and(
+          inArray(transactions.id, transactionIds),
+          ownedBy(transactions, userId),
+          isNull(transactions.voidedAt),
+        ),
+      );
+
+    return { taggedCount: result.rowCount ?? 0 };
   });
 }
 

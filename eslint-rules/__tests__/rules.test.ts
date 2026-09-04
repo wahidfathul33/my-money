@@ -11,6 +11,7 @@ import type { Linter as LinterTypes, Rule } from 'eslint';
 import tsParser from '@typescript-eslint/parser';
 import { noDbReadMutation } from '../no-db-read-mutation.js';
 import { noMoneyNumber } from '../no-money-number.js';
+import { requireVisibilityModule } from '../require-visibility-module.js';
 
 function lint(code: string, ruleId: string, rule: unknown) {
   const linter = new Linter({ configType: 'flat' });
@@ -118,5 +119,68 @@ describe('local/no-money-number', () => {
     expect(flagged).toHaveLength(1);
     const notFlagged = lint(`interface X { amounts: number }`, rule, noMoneyNumber);
     expect(notFlagged).toHaveLength(0);
+  });
+});
+
+describe('local/require-visibility-module', () => {
+  const rule = 'require-visibility-module';
+
+  it('flags or(...) combining a userId check with a householdId check', () => {
+    const messages = lint(
+      `or(eq(transactions.userId, me), and(isNotNull(transactions.householdId), inArray(transactions.householdId, ids)))`,
+      rule,
+      requireVisibilityModule,
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.message).toMatch(/visibleTransactionsWhere/);
+  });
+
+  it('flags a shareWealth check nested inside .innerJoin(...)', () => {
+    const messages = lint(
+      `dbRead.select().from(wallets).innerJoin(householdMembers, and(eq(householdMembers.userId, wallets.userId), eq(householdMembers.shareWealth, true)))`,
+      rule,
+      requireVisibilityModule,
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.message).toMatch(/householdWealthJoin/);
+  });
+
+  it('does NOT flag a bare shareWealth equality check outside a join — e.g. filtering the caller\'s OWN currently-sharing memberships to turn off (src/lib/services/sharing.ts stopSharingEverything)', () => {
+    const messages = lint(
+      `dbWrite.update(householdMembers).set({ shareWealth: false }).where(and(eq(householdMembers.userId, userId), eq(householdMembers.status, 'active'), eq(householdMembers.shareWealth, true)))`,
+      rule,
+      requireVisibilityModule,
+    );
+    expect(messages).toHaveLength(0);
+  });
+
+  it('does not flag or(...) that has nothing to do with household visibility', () => {
+    const messages = lint(`or(eq(a.foo, 1), eq(b.bar, 2))`, rule, requireVisibilityModule);
+    expect(messages).toHaveLength(0);
+  });
+
+  it('does not flag and(...) scoping a query to the caller\'s OWN household-tagged rows (userId + householdId, no or)', () => {
+    // The legitimate shape used throughout src/lib/services/** — e.g.
+    // memberships.ts's revokeSharingFor: and(eq(userId), eq(householdId)).
+    const messages = lint(
+      `and(eq(transactions.userId, userId), eq(transactions.householdId, householdId))`,
+      rule,
+      requireVisibilityModule,
+    );
+    expect(messages).toHaveLength(0);
+  });
+
+  it('does not flag a write that SETS shareWealth (not an eq() read)', () => {
+    const messages = lint(
+      `tx.update(householdMembers).set({ shareWealth: false })`,
+      rule,
+      requireVisibilityModule,
+    );
+    expect(messages).toHaveLength(0);
+  });
+
+  it('does not flag an unrelated or(...) that merely mentions "userId" without "householdId"', () => {
+    const messages = lint(`or(eq(a.userId, x), eq(b.userId, y))`, rule, requireVisibilityModule);
+    expect(messages).toHaveLength(0);
   });
 });

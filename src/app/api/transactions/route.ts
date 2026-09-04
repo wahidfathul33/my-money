@@ -56,6 +56,7 @@ function toItemDto(item: TransactionHistoryItem) {
     transferFrom: item.transferFrom,
     transferTo: item.transferTo,
     counterpartyName: item.counterpartyName,
+    householdId: item.householdId,
   };
 }
 

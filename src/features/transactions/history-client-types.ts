@@ -33,6 +33,8 @@ export interface TransactionHistoryClientItem {
   transferFrom: HistoryWalletInfo | null;
   transferTo: HistoryWalletInfo | null;
   counterpartyName: string | null;
+  /** tasks/12-sharing-and-privacy — the 🏠 tag, `null` when untagged. */
+  householdId: string | null;
 }
 
 export function toHistoryClientItem(row: TransactionHistoryItem): TransactionHistoryClientItem {
@@ -47,6 +49,7 @@ export function toHistoryClientItem(row: TransactionHistoryItem): TransactionHis
     transferFrom: row.transferFrom,
     transferTo: row.transferTo,
     counterpartyName: row.counterpartyName,
+    householdId: row.householdId,
   };
 }
 
@@ -62,6 +65,7 @@ export function parseHistoryItemResponse(raw: {
   transferFrom: HistoryWalletInfo | null;
   transferTo: HistoryWalletInfo | null;
   counterpartyName: string | null;
+  householdId: string | null;
 }): TransactionHistoryClientItem {
   return { ...raw, transactionDate: new Date(raw.transactionDate) };
 }
@@ -107,5 +111,6 @@ export function toEditableTransactionClientData(item: TransactionHistoryClientIt
     // income/expense (transfer rows return null above, unreachable via
     // Edit per docs/09 §3 "Edit tidak ditawarkan untuk transfer").
     transfer: null,
+    householdId: item.householdId,
   };
 }

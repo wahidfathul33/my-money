@@ -20,6 +20,8 @@ import { wallets } from '@/lib/db/schema';
 import { ownedBy } from '@/lib/db/scoped';
 import { listUserHouseholds } from '@/features/household/queries';
 import { listMemberTransferPeople, type TransferTargetPerson } from '@/features/transfers/target-queries';
+import { listHouseholdOptions } from '@/features/sharing/queries';
+import type { HouseholdOption } from '@/features/sharing/components/household-toggle';
 import {
   getQuickCategories,
   listCategories,
@@ -50,6 +52,10 @@ export interface AddTransactionSheetData {
   /** "Pick a member, then their wallet" — never carries a `balance` field
    * anywhere in its shape (src/lib/visibility/transfer-targets.ts). */
   memberTransferPeople: TransferTargetPerson[];
+  /** The caller's active household memberships — tasks/12-sharing-and-privacy's
+   * 🏠 toggle. `[]` for an account with no household, which is what keeps
+   * the toggle from rendering at all (src/features/transactions/components/transaction-editor.tsx). */
+  households: HouseholdOption[];
 }
 
 async function listWalletOptions(userId: string): Promise<WalletOption[]> {
@@ -74,8 +80,9 @@ export async function getAddTransactionSheetData(userId: string): Promise<AddTra
     quickIncome,
     fullExpense,
     fullIncome,
-    households,
+    userHouseholds,
     memberTransferPeople,
+    householdOptions,
   ] = await Promise.all([
     listWalletOptions(userId),
     resolveDefaultWalletId(userId),
@@ -85,6 +92,7 @@ export async function getAddTransactionSheetData(userId: string): Promise<AddTra
     listCategories(userId, 'income'),
     listUserHouseholds(userId),
     listMemberTransferPeople(userId),
+    listHouseholdOptions(userId),
   ]);
 
   return {
@@ -92,7 +100,8 @@ export async function getAddTransactionSheetData(userId: string): Promise<AddTra
     defaultWalletId,
     quickCategories: { expense: quickExpense, income: quickIncome },
     fullCategories: { expense: fullExpense, income: fullIncome },
-    hasHousehold: households.length > 0,
+    hasHousehold: userHouseholds.length > 0,
     memberTransferPeople,
+    households: householdOptions,
   };
 }

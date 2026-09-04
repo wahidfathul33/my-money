@@ -66,6 +66,21 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+
+  // 4. Cross-user visibility predicates (docs/12-security-and-auth.md §4 —
+  // "dua mekanisme saja") are implemented exactly once, in
+  // src/lib/visibility/**, and never re-derived inline elsewhere
+  // (tasks/12-sharing-and-privacy/spec.md). Excluded there (both shapes
+  // legitimately appear in that module itself) and in tests, which
+  // deliberately construct these exact shapes to verify the real functions.
+  {
+    plugins: { local: localRulesPlugin },
+    files: ['**/*.{ts,tsx}'],
+    ignores: ['src/lib/visibility/**', '**/__tests__/**', '**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}'],
+    rules: {
+      'local/require-visibility-module': 'error',
+    },
+  },
 ]);
 
 export default eslintConfig;

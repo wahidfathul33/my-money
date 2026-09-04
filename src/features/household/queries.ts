@@ -58,6 +58,10 @@ export interface HouseholdWithRole {
   household: typeof households.$inferSelect;
   role: HouseholdRole;
   memberCount: number;
+  /** tasks/12-sharing-and-privacy — the caller's OWN `share_wealth` for
+   * this household, used by `/household/[id]`'s setup-steps "Bagikan yang
+   * ingin dihitung" line. */
+  shareWealth: boolean;
 }
 
 /**
@@ -76,6 +80,7 @@ export async function getHouseholdWithRole(
     .select({
       household: households,
       role: householdMembers.role,
+      shareWealth: householdMembers.shareWealth,
       memberCount: sql<number>`(
         select count(*)::int from household_members hm2
         where hm2.household_id = ${households.id} and hm2.status = 'active'

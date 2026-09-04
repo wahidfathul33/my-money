@@ -35,6 +35,16 @@ const baseTransactionFields = {
   walletId: z.uuid('Dompet tidak valid'),
   transactionDate: z.coerce.date({ message: 'Tanggal tidak valid' }),
   note: noteSchema,
+  /**
+   * The 🏠 toggle — tasks/12-sharing-and-privacy. `undefined` (the key
+   * omitted) behaves as "no household" for `createTransactionSchema` and as
+   * "leave the existing tag untouched" for `updateTransactionSchema` — see
+   * src/lib/services/transactions.ts's `UpdateTransactionInput.householdId`
+   * doc comment for the full tri-state rationale. Membership is re-verified
+   * at the service layer, inside the write transaction — this schema only
+   * checks shape.
+   */
+  householdId: z.uuid('Household tidak valid').nullable().optional(),
 };
 
 export const createTransactionSchema = z.object({

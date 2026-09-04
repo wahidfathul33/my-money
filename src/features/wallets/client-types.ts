@@ -25,6 +25,10 @@ export interface WalletClientData {
   color: string;
   isArchived: boolean;
   sortOrder: number;
+  /** tasks/12-sharing-and-privacy — docs/03-domain-model.md §5.1's per-item
+   * escape hatch. Hides this wallet from household wealth (AND from the
+   * transfer-target picker, docs §5) even when `share_wealth` is on. */
+  excludeFromHousehold: boolean;
 }
 
 export function toWalletClientData(wallet: WalletRow): WalletClientData {
@@ -37,6 +41,7 @@ export function toWalletClientData(wallet: WalletRow): WalletClientData {
     color: wallet.color,
     isArchived: wallet.isArchived,
     sortOrder: wallet.sortOrder,
+    excludeFromHousehold: wallet.excludeFromHousehold,
   };
 }
 

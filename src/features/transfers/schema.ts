@@ -36,4 +36,23 @@ export const transferIdSchema = z.object({
   transactionId: z.uuid('Transfer tidak valid'),
 });
 
+/**
+ * tasks/13-transfers-member. Unlike `createSelfTransferSchema`, there's no
+ * `fromWalletId !== toWalletId` refine here — the two wallets already belong
+ * to DIFFERENT people (enforced by `counterpartyUserId !== callerUserId`
+ * below), so they can never collide the way two of one person's own wallets
+ * could.
+ */
+export const createMemberTransferSchema = z.object({
+  householdId: z.uuid('Keluarga tidak valid'),
+  fromWalletId: z.uuid('Dompet asal tidak valid'),
+  counterpartyUserId: z.uuid('Anggota tidak valid'),
+  toWalletId: z.uuid('Dompet tujuan tidak valid'),
+  amount: moneyAmountSchema,
+  transactionDate: z.coerce.date({ message: 'Tanggal tidak valid' }),
+  note: noteSchema,
+  idempotencyKey: idempotencyKeySchema,
+});
+
 export type CreateSelfTransferActionInput = z.infer<typeof createSelfTransferSchema>;
+export type CreateMemberTransferActionInput = z.infer<typeof createMemberTransferSchema>;

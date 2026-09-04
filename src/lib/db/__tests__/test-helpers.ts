@@ -7,12 +7,12 @@
  * or (if malformed) as a false invariant violation.
  */
 import { uuidv7 } from 'uuidv7';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { dbWrite } from '@/lib/db/write';
 import { users } from '@/lib/db/schema/users';
 import { wallets } from '@/lib/db/schema/wallets';
 import { categories } from '@/lib/db/schema/categories';
-import { ledgerEntries } from '@/lib/db/schema/transactions';
+import { ledgerEntries, transactions } from '@/lib/db/schema/transactions';
 import { households, householdMembers } from '@/lib/db/schema/households';
 
 export async function createTestUser(overrides: Partial<typeof users.$inferInsert> = {}) {
@@ -114,6 +114,21 @@ export async function deleteTestHousehold(householdId: string) {
  * `household_members` rows for OTHER users in a household this user created
  * cascade from `households` being deleted here, so no separate cleanup is
  * needed for those.
+ *
+ * tasks/13-transfers-member: `transactions.created_by` is ALSO ON DELETE
+ * RESTRICT (src/lib/db/schema/transactions.ts's `tx_created_by_rule`), and a
+ * member-transfer's receiving side is a row this user may have WRITTEN
+ * (`created_by`) without OWNING (`user_id` — the counterparty's). That row
+ * is invisible to the `ledger_entries`/cascade cleanup below, which only
+ * follows `user_id`. Deleting every transaction this user is `created_by`
+ * on — BEFORE the rest — clears it regardless: `created_by` is the SENDER
+ * on both sides of a member-transfer pair, so this one query always catches
+ * BOTH rows (the sender's own, and the receiver's), making cleanup
+ * order-independent no matter which of the two users in a pair
+ * `deleteTestUser` is called on first. For every OTHER transaction (every
+ * non-member-transfer row), `created_by = user_id` always holds (the CHECK
+ * constraint guarantees it), so this is simply that user's own rows —
+ * exactly what the cascade below would have deleted anyway.
  */
 export async function deleteTestUser(userId: string) {
   const createdHouseholds = await dbWrite
@@ -122,6 +137,16 @@ export async function deleteTestUser(userId: string) {
     .where(eq(households.createdBy, userId));
   for (const household of createdHouseholds) {
     await deleteTestHousehold(household.id);
+  }
+
+  const writtenByThisUser = await dbWrite
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(eq(transactions.createdBy, userId));
+  if (writtenByThisUser.length > 0) {
+    const ids = writtenByThisUser.map((row) => row.id);
+    await dbWrite.delete(ledgerEntries).where(inArray(ledgerEntries.transactionId, ids));
+    await dbWrite.delete(transactions).where(inArray(transactions.id, ids));
   }
 
   await dbWrite.delete(householdMembers).where(eq(householdMembers.userId, userId));

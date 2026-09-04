@@ -103,3 +103,24 @@ export class CannotRemoveSelfError extends AppError {
     super(message);
   }
 }
+
+/**
+ * tasks/13-transfers-member — `WALLET_NOT_ELIGIBLE`. Thrown by
+ * `createMemberTransfer` (src/lib/services/transfers.ts) when `toWalletId`
+ * fails docs/12-security-and-auth.md §4.3's eligibility check — doesn't
+ * belong to the counterparty, isn't active, is `exclude_from_household`, or
+ * is a credit card. Covers "penerima tanpa dompet layak" too: an invalid or
+ * stale `toWalletId` fails the exact same check.
+ *
+ * Deliberately names the counterparty — NOT a general household-error
+ * exception (docs/12 §5 H9 "pesan error household tidak pernah memuat nama
+ * anggota" governs error paths that could leak a stranger's name; this one
+ * can't, because the caller only ever reaches it after already picking that
+ * exact person from the eligible-target picker, spec.md's "Penerima tanpa
+ * dompet layak → ditolak dengan pesan menyebut namanya").
+ */
+export class WalletNotEligibleError extends AppError {
+  constructor(counterpartyName: string) {
+    super(`Dompet ini tidak dapat dipakai untuk mengirim ke ${counterpartyName}`);
+  }
+}

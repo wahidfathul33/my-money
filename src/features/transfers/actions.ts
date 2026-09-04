@@ -9,10 +9,10 @@
  */
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth/require-user';
-import { createSelfTransfer, unvoidTransfer, voidTransfer } from '@/lib/services/transfers';
+import { createMemberTransfer, createSelfTransfer, unvoidTransfer, voidTransfer } from '@/lib/services/transfers';
 import { deserializeMoney } from '@/lib/finance/money';
 import { AppError, ValidationError } from '@/lib/api/errors';
-import { createSelfTransferSchema, transferIdSchema } from './schema';
+import { createMemberTransferSchema, createSelfTransferSchema, transferIdSchema } from './schema';
 
 export interface TransferActionResult {
   error: string | null;
@@ -61,6 +61,50 @@ export async function createSelfTransferAction(input: unknown): Promise<Transfer
   }
 
   revalidateTransfers();
+  return { error: null, transactionId };
+}
+
+/**
+ * Records a transfer to a household member — thin adapter only, same shape
+ * as `createSelfTransferAction`: `requireUser()`, parse, delegate to
+ * `createMemberTransfer` (src/lib/services/transfers.ts, which does every
+ * REAL check — both users' membership, the destination wallet's eligibility
+ * — INSIDE its own `dbWrite.transaction()`), revalidate.
+ *
+ * `WalletNotEligibleError`'s message (already names the counterparty — see
+ * that error class's own doc comment) flows straight through `toActionError`
+ * like every other domain error here.
+ */
+export async function createMemberTransferAction(input: unknown): Promise<TransferActionResult> {
+  const user = await requireUser();
+
+  const parsed = createMemberTransferSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Input tidak valid' };
+  }
+
+  let transactionId: string;
+  try {
+    const row = await createMemberTransfer(user.id, {
+      householdId: parsed.data.householdId,
+      fromWalletId: parsed.data.fromWalletId,
+      counterpartyUserId: parsed.data.counterpartyUserId,
+      toWalletId: parsed.data.toWalletId,
+      amount: deserializeMoney(parsed.data.amount),
+      transactionDate: parsed.data.transactionDate,
+      note: parsed.data.note,
+      idempotencyKey: parsed.data.idempotencyKey,
+    });
+    transactionId = row.id;
+  } catch (err) {
+    return toActionError(err);
+  }
+
+  revalidateTransfers();
+  // The receiver's Activity badge count changes too — their NEXT request
+  // recomputes it regardless (docs/03 §9.3: "penerima melihatnya saat
+  // memuat halaman", no real-time push in v1), so nothing receiver-specific
+  // needs revalidating from the SENDER's own request here.
   return { error: null, transactionId };
 }
 

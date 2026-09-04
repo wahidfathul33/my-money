@@ -10,6 +10,15 @@
  * `tx_category_rule`/`ledger_amount_nonzero` CHECKs, and — the ultimate
  * proof — net worth held exactly constant across an arbitrary sequence of
  * transfers (property test).
+ *
+ * tasks/13-transfers-member extends this file with `createMemberTransfer`
+ * and friends — spec.md frames this as "the only operation in the whole app
+ * that writes to another person's ledger", so this suite leans hard on:
+ * every boundary in spec.md's "Batas yang Harus Dijaga" table, the
+ * `tx_created_by_rule` CHECK independent of application code, rollback
+ * leaving neither side behind, and I11/I12/I18/I19
+ * (src/lib/db/reconcile.ts) staying green through create → acknowledge →
+ * move → void.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import fc from 'fast-check';
@@ -17,23 +26,44 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { dbWrite } from '@/lib/db/write';
 import { ledgerEntries, transactions } from '@/lib/db/schema/transactions';
 import { wallets } from '@/lib/db/schema/wallets';
-import { NotFoundError, ValidationError } from '@/lib/api/errors';
-import { findWalletBalanceDrift } from '@/lib/db/reconcile';
+import { householdMembers } from '@/lib/db/schema/households';
+import { NotFoundError, ValidationError, WalletNotEligibleError } from '@/lib/api/errors';
+import {
+  findInvalidCreatedByRows,
+  findLedgerOwnerMismatches,
+  findOneWayTransferLinks,
+  findUnbalancedMemberTransfers,
+  findWalletBalanceDrift,
+} from '@/lib/db/reconcile';
 import {
   createTestCategory,
+  createTestHouseholdMember,
   createTestUser,
   createTestWallet,
+  deleteTestHousehold,
   deleteTestUser,
 } from '@/lib/db/__tests__/test-helpers';
 import { getMonthlyTotals } from '@/features/transactions/queries';
 import { createTransaction } from '../transactions';
 import { archiveWallet } from '../wallets';
-import { createSelfTransfer, unvoidTransfer, voidTransfer } from '../transfers';
+import { createHousehold } from '../households';
+import {
+  acknowledgeTransaction,
+  createMemberTransfer,
+  createSelfTransfer,
+  moveMemberTransferWallet,
+  unvoidTransfer,
+  voidTransfer,
+} from '../transfers';
 
 describe('transfers service', () => {
   const userIds: string[] = [];
+  const householdIds: string[] = [];
 
   afterEach(async () => {
+    for (const id of householdIds.splice(0)) {
+      await deleteTestHousehold(id);
+    }
     for (const id of userIds.splice(0)) {
       await deleteTestUser(id);
     }
@@ -50,6 +80,42 @@ describe('transfers service', () => {
       .from(ledgerEntries)
       .where(and(eq(ledgerEntries.userId, userId), isNull(ledgerEntries.voidedAt)));
     return rows.length;
+  }
+
+  /** Two active members of one fresh household, each with one wallet — the
+   * fixture every `createMemberTransfer` test below builds on. `sender`
+   * owns the household (irrelevant to the transfer itself — any two active
+   * members can send to each other regardless of role). */
+  async function setupHouseholdPair() {
+    const sender = await createTestUser();
+    const receiver = await createTestUser();
+    userIds.push(sender, receiver);
+    const household = await createHousehold(sender, { name: 'Keluarga Test', timezone: 'Asia/Jakarta' });
+    householdIds.push(household.id);
+    await createTestHouseholdMember(household.id, receiver, { role: 'member' });
+    const senderWallet = await createTestWallet(sender, { name: 'BCA Sender' });
+    const receiverWallet = await createTestWallet(receiver, { name: 'BRI Receiver' });
+    return { sender, receiver, household: household.id, senderWallet, receiverWallet };
+  }
+
+  interface MemberTransferOverrides {
+    householdId: string;
+    fromWalletId: string;
+    counterpartyUserId: string;
+    toWalletId: string;
+    amount?: bigint;
+    note?: string | null;
+    idempotencyKey?: string;
+  }
+
+  function memberTransferInput(overrides: MemberTransferOverrides) {
+    return {
+      amount: 1_000_000_00n,
+      transactionDate: new Date(),
+      note: null,
+      idempotencyKey: crypto.randomUUID(),
+      ...overrides,
+    };
   }
 
   describe('createSelfTransfer', () => {
@@ -468,6 +534,752 @@ describe('transfers service', () => {
       );
 
       expect(await netWorth()).toBe(before);
+    }, 90_000);
+  });
+
+  describe('createMemberTransfer', () => {
+    it('writes 2 transactions + 2 ledger entries + moves both balances, in one dbWrite.transaction', async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+
+      const senderRow = await createMemberTransfer(
+        sender,
+        memberTransferInput({
+          householdId: household,
+          fromWalletId: senderWallet,
+          counterpartyUserId: receiver,
+          toWalletId: receiverWallet,
+          amount: 1_000_000_00n,
+        }),
+      );
+
+      expect(senderRow.userId).toBe(sender);
+      expect(senderRow.type).toBe('transfer');
+      expect(senderRow.categoryId).toBeNull();
+      expect(senderRow.counterpartyUserId).toBe(receiver);
+      expect(senderRow.createdBy).toBe(sender);
+      expect(senderRow.householdId).toBe(household);
+
+      const [receiverRow] = await dbWrite
+        .select()
+        .from(transactions)
+        .where(eq(transactions.linkedTransactionId, senderRow.id));
+      expect(receiverRow).toBeDefined();
+      expect(receiverRow!.userId).toBe(receiver);
+      expect(receiverRow!.counterpartyUserId).toBe(sender);
+      // The one legal exception `tx_created_by_rule` permits — the SENDER
+      // wrote the receiver's row too.
+      expect(receiverRow!.createdBy).toBe(sender);
+      expect(receiverRow!.acknowledgedAt).toBeNull();
+      expect(receiverRow!.householdId).toBe(household);
+
+      // linked_transaction_id both ways.
+      expect(senderRow.linkedTransactionId).toBe(receiverRow!.id);
+      expect(receiverRow!.linkedTransactionId).toBe(senderRow.id);
+
+      const allTx = await dbWrite
+        .select()
+        .from(transactions)
+        .where(and(eq(transactions.userId, sender), eq(transactions.type, 'transfer')));
+      expect(allTx).toHaveLength(1); // exactly one row for the sender
+
+      const entries = await dbWrite
+        .select()
+        .from(ledgerEntries)
+        .where(
+          and(
+            eq(ledgerEntries.transactionId, senderRow.id),
+            isNull(ledgerEntries.voidedAt),
+          ),
+        );
+      const receiverEntries = await dbWrite
+        .select()
+        .from(ledgerEntries)
+        .where(and(eq(ledgerEntries.transactionId, receiverRow!.id), isNull(ledgerEntries.voidedAt)));
+
+      expect(entries).toHaveLength(1);
+      expect(receiverEntries).toHaveLength(1);
+      // ledger_entries.user_id = the WALLET's owner on EACH entry, never the
+      // caller — this is what keeps invariant I11 true.
+      expect(entries[0]!.userId).toBe(sender);
+      expect(entries[0]!.walletId).toBe(senderWallet);
+      expect(entries[0]!.amount).toBe(-1_000_000_00n);
+      expect(receiverEntries[0]!.userId).toBe(receiver);
+      expect(receiverEntries[0]!.walletId).toBe(receiverWallet);
+      expect(receiverEntries[0]!.amount).toBe(1_000_000_00n);
+
+      // Both balances updated, seketika (immediately), in the same write.
+      expect(await walletBalance(senderWallet)).toBe(-1_000_000_00n);
+      expect(await walletBalance(receiverWallet)).toBe(1_000_000_00n);
+    });
+
+    it('rejects an amount that is not positive', async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+
+      await expect(
+        createMemberTransfer(
+          sender,
+          memberTransferInput({
+            householdId: household,
+            fromWalletId: senderWallet,
+            counterpartyUserId: receiver,
+            toWalletId: receiverWallet,
+            amount: 0n,
+          }),
+        ),
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it('rejects counterpartyUserId === userId — cannot member-transfer to yourself', async () => {
+      const { sender, household, senderWallet } = await setupHouseholdPair();
+      const secondWallet = await createTestWallet(sender, { name: 'GoPay Sender' });
+
+      await expect(
+        createMemberTransfer(
+          sender,
+          memberTransferInput({
+            householdId: household,
+            fromWalletId: senderWallet,
+            counterpartyUserId: sender,
+            toWalletId: secondWallet,
+          }),
+        ),
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it("rejects a fromWalletId that isn't the caller's own — cross-user isolation, zero changes on either side", async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+
+      await expect(
+        createMemberTransfer(
+          sender,
+          memberTransferInput({
+            householdId: household,
+            fromWalletId: receiverWallet, // not the sender's
+            counterpartyUserId: receiver,
+            toWalletId: receiverWallet,
+          }),
+        ),
+      ).rejects.toThrow(ValidationError);
+
+      expect(await walletBalance(senderWallet)).toBe(0n);
+      expect(await walletBalance(receiverWallet)).toBe(0n);
+      expect(await liveEntryCount(sender)).toBe(0);
+      expect(await liveEntryCount(receiver)).toBe(0);
+    });
+
+    it("rejects a destination wallet that doesn't belong to counterpartyUserId — even if it belongs to some OTHER active member", async () => {
+      const { sender, receiver, household, senderWallet } = await setupHouseholdPair();
+      const outsider = await createTestUser();
+      userIds.push(outsider);
+      await createTestHouseholdMember(household, outsider, { role: 'member' });
+      const outsiderWallet = await createTestWallet(outsider, { name: 'Outsider Wallet' });
+
+      await expect(
+        createMemberTransfer(
+          sender,
+          memberTransferInput({
+            householdId: household,
+            fromWalletId: senderWallet,
+            counterpartyUserId: receiver,
+            toWalletId: outsiderWallet, // belongs to a DIFFERENT member, not `receiver`
+          }),
+        ),
+      ).rejects.toThrow(WalletNotEligibleError);
+
+      expect(await walletBalance(senderWallet)).toBe(0n);
+      expect(await liveEntryCount(sender)).toBe(0);
+    });
+
+    it('rejects a destination wallet that is exclude_from_household — WALLET_NOT_ELIGIBLE', async () => {
+      const { sender, receiver, household, senderWallet } = await setupHouseholdPair();
+      const excludedWallet = await createTestWallet(receiver, {
+        name: 'Dompet Pribadi',
+        excludeFromHousehold: true,
+      });
+
+      await expect(
+        createMemberTransfer(
+          sender,
+          memberTransferInput({
+            householdId: household,
+            fromWalletId: senderWallet,
+            counterpartyUserId: receiver,
+            toWalletId: excludedWallet,
+          }),
+        ),
+      ).rejects.toThrow(WalletNotEligibleError);
+    });
+
+    it('rejects a credit card destination wallet — transferring TO one is a bill payment, a different flow', async () => {
+      const { sender, receiver, household, senderWallet } = await setupHouseholdPair();
+      const ccWallet = await createTestWallet(receiver, { name: 'Kartu Kredit', type: 'credit_card' });
+
+      await expect(
+        createMemberTransfer(
+          sender,
+          memberTransferInput({
+            householdId: household,
+            fromWalletId: senderWallet,
+            counterpartyUserId: receiver,
+            toWalletId: ccWallet,
+          }),
+        ),
+      ).rejects.toThrow(WalletNotEligibleError);
+    });
+
+    it('rejects an archived destination wallet', async () => {
+      const { sender, receiver, household, senderWallet } = await setupHouseholdPair();
+      const archivedWallet = await createTestWallet(receiver, { name: 'Lama', isArchived: true });
+
+      await expect(
+        createMemberTransfer(
+          sender,
+          memberTransferInput({
+            householdId: household,
+            fromWalletId: senderWallet,
+            counterpartyUserId: receiver,
+            toWalletId: archivedWallet,
+          }),
+        ),
+      ).rejects.toThrow(WalletNotEligibleError);
+    });
+
+    it("WALLET_NOT_ELIGIBLE's message names the counterparty — spec.md \"pesan menyebut namanya\"", async () => {
+      const sender = await createTestUser();
+      const receiver = await createTestUser({ name: 'Istri Test' });
+      userIds.push(sender, receiver);
+      const household = await createHousehold(sender, { name: 'Keluarga Test', timezone: 'Asia/Jakarta' });
+      householdIds.push(household.id);
+      await createTestHouseholdMember(household.id, receiver, { role: 'member' });
+      const senderWallet = await createTestWallet(sender, { name: 'BCA Sender' });
+      const excludedWallet = await createTestWallet(receiver, {
+        name: 'Dompet Pribadi',
+        excludeFromHousehold: true,
+      });
+
+      await expect(
+        createMemberTransfer(
+          sender,
+          memberTransferInput({
+            householdId: household.id,
+            fromWalletId: senderWallet,
+            counterpartyUserId: receiver,
+            toWalletId: excludedWallet,
+          }),
+        ),
+      ).rejects.toThrow(/Istri Test/);
+    });
+
+    it('rejects when counterpartyUserId is not an active member of householdId at all', async () => {
+      const { sender, household, senderWallet } = await setupHouseholdPair();
+      const outsider = await createTestUser();
+      userIds.push(outsider);
+      const outsiderWallet = await createTestWallet(outsider, { name: 'Outsider Wallet' });
+
+      await expect(
+        createMemberTransfer(
+          sender,
+          memberTransferInput({
+            householdId: household,
+            fromWalletId: senderWallet,
+            counterpartyUserId: outsider, // never joined this household
+            toWalletId: outsiderWallet,
+          }),
+        ),
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it('rejects when the CALLER is not an active member of householdId (e.g. already removed)', async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+      // Remove the sender's own membership directly (bypassing the service).
+      await dbWrite
+        .update(householdMembers)
+        .set({ status: 'removed' })
+        .where(and(eq(householdMembers.householdId, household), eq(householdMembers.userId, sender)));
+
+      await expect(
+        createMemberTransfer(
+          sender,
+          memberTransferInput({
+            householdId: household,
+            fromWalletId: senderWallet,
+            counterpartyUserId: receiver,
+            toWalletId: receiverWallet,
+          }),
+        ),
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it('rollback: a failure partway through the validation sequence leaves NEITHER side behind', async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+      await archiveWallet(receiver, receiverWallet); // makes the eligibility check fail, AFTER fromWallet + both memberships already passed
+
+      await expect(
+        createMemberTransfer(
+          sender,
+          memberTransferInput({
+            householdId: household,
+            fromWalletId: senderWallet,
+            counterpartyUserId: receiver,
+            toWalletId: receiverWallet,
+          }),
+        ),
+      ).rejects.toThrow(WalletNotEligibleError);
+
+      // Not even the SENDER's own side was left behind.
+      expect(await walletBalance(senderWallet)).toBe(0n);
+      expect(await walletBalance(receiverWallet)).toBe(0n);
+      expect(await liveEntryCount(sender)).toBe(0);
+      expect(await liveEntryCount(receiver)).toBe(0);
+      const txCount = await dbWrite
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(and(eq(transactions.userId, sender), eq(transactions.type, 'transfer')));
+      expect(txCount).toHaveLength(0);
+      const receiverTxCount = await dbWrite
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(and(eq(transactions.userId, receiver), eq(transactions.type, 'transfer')));
+      expect(receiverTxCount).toHaveLength(0);
+    });
+
+    it('is idempotent: the same idempotencyKey twice returns the SAME sender row and moves each balance exactly once', async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+      const idempotencyKey = crypto.randomUUID();
+
+      const first = await createMemberTransfer(
+        sender,
+        memberTransferInput({
+          householdId: household,
+          fromWalletId: senderWallet,
+          counterpartyUserId: receiver,
+          toWalletId: receiverWallet,
+          amount: 250_000_00n,
+          idempotencyKey,
+        }),
+      );
+      const second = await createMemberTransfer(
+        sender,
+        memberTransferInput({
+          householdId: household,
+          fromWalletId: senderWallet,
+          counterpartyUserId: receiver,
+          toWalletId: receiverWallet,
+          amount: 250_000_00n,
+          idempotencyKey,
+        }),
+      );
+
+      expect(second.id).toBe(first.id);
+      expect(await walletBalance(senderWallet)).toBe(-250_000_00n);
+      expect(await walletBalance(receiverWallet)).toBe(250_000_00n);
+      expect(await liveEntryCount(sender)).toBe(1);
+      expect(await liveEntryCount(receiver)).toBe(1);
+    });
+
+    it('never appears in getMonthlyTotals income or expense for either side — docs/03 §9.4', async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+      const category = await createTestCategory(sender, { type: 'expense' });
+      const now = new Date();
+
+      await createTransaction(sender, {
+        type: 'expense',
+        amount: 20_000_00n,
+        categoryId: category,
+        walletId: senderWallet,
+        transactionDate: now,
+        note: null,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      await createMemberTransfer(
+        sender,
+        memberTransferInput({
+          householdId: household,
+          fromWalletId: senderWallet,
+          counterpartyUserId: receiver,
+          toWalletId: receiverWallet,
+          amount: 9_999_999_00n, // deliberately huge — would blow up totals if miscounted
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      );
+
+      const period = { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 };
+      const senderTotals = await getMonthlyTotals(sender, period);
+      const receiverTotals = await getMonthlyTotals(receiver, period);
+      expect(senderTotals.expense).toBe(20_000_00n);
+      expect(senderTotals.income).toBe(0n);
+      expect(receiverTotals.income).toBe(0n);
+      expect(receiverTotals.expense).toBe(0n);
+    });
+  });
+
+  describe('the DB CHECK itself (tx_created_by_rule)', () => {
+    it('rejects a raw INSERT with created_by <> user_id on anything other than the receiving side of a transfer, independent of application code', async () => {
+      const owner = await createTestUser();
+      const stranger = await createTestUser();
+      userIds.push(owner, stranger);
+      const category = await createTestCategory(owner, { type: 'expense' });
+
+      await expect(
+        dbWrite.insert(transactions).values({
+          id: crypto.randomUUID(),
+          userId: owner,
+          type: 'expense', // not a transfer — the exception never applies
+          categoryId: category,
+          amount: 10_000_00n,
+          transactionDate: new Date(),
+          createdBy: stranger, // invalid: created_by <> user_id
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('rejects a transfer whose created_by is neither its own user_id NOR its counterparty', async () => {
+      const owner = await createTestUser();
+      const counterparty = await createTestUser();
+      const thirdParty = await createTestUser();
+      userIds.push(owner, counterparty, thirdParty);
+
+      await expect(
+        dbWrite.insert(transactions).values({
+          id: crypto.randomUUID(),
+          userId: owner,
+          type: 'transfer',
+          categoryId: null,
+          amount: 10_000_00n,
+          transactionDate: new Date(),
+          counterpartyUserId: counterparty,
+          createdBy: thirdParty, // neither owner NOR counterparty wrote this
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('accepts the ONE legal shape the constraint permits: the receiving side of a transfer, created_by = counterparty_user_id', async () => {
+      const sender = await createTestUser();
+      const receiver = await createTestUser();
+      userIds.push(sender, receiver);
+      const senderTxId = crypto.randomUUID();
+      const receiverTxId = crypto.randomUUID();
+
+      await expect(
+        dbWrite.insert(transactions).values([
+          {
+            id: senderTxId,
+            userId: sender,
+            type: 'transfer',
+            categoryId: null,
+            amount: 1000n,
+            transactionDate: new Date(),
+            counterpartyUserId: receiver,
+            linkedTransactionId: receiverTxId,
+            createdBy: sender,
+          },
+          {
+            id: receiverTxId,
+            userId: receiver,
+            type: 'transfer',
+            categoryId: null,
+            amount: 1000n,
+            transactionDate: new Date(),
+            counterpartyUserId: sender,
+            linkedTransactionId: senderTxId,
+            createdBy: sender, // legal: type='transfer' AND counterparty_user_id = created_by
+          },
+        ]),
+      ).resolves.not.toThrow();
+    });
+  });
+
+  describe('acknowledgeTransaction', () => {
+    it("sets acknowledged_at on the RECEIVER's own row", async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+      const senderRow = await createMemberTransfer(
+        sender,
+        memberTransferInput({ householdId: household, fromWalletId: senderWallet, counterpartyUserId: receiver, toWalletId: receiverWallet }),
+      );
+      const [receiverRow] = await dbWrite
+        .select()
+        .from(transactions)
+        .where(eq(transactions.linkedTransactionId, senderRow.id));
+
+      expect(receiverRow!.acknowledgedAt).toBeNull();
+      await acknowledgeTransaction(receiver, receiverRow!.id);
+
+      const [after] = await dbWrite.select().from(transactions).where(eq(transactions.id, receiverRow!.id));
+      expect(after!.acknowledgedAt).not.toBeNull();
+    });
+
+    it('a non-owner (including the sender who wrote the row) cannot acknowledge it', async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+      const senderRow = await createMemberTransfer(
+        sender,
+        memberTransferInput({ householdId: household, fromWalletId: senderWallet, counterpartyUserId: receiver, toWalletId: receiverWallet }),
+      );
+      const [receiverRow] = await dbWrite
+        .select()
+        .from(transactions)
+        .where(eq(transactions.linkedTransactionId, senderRow.id));
+
+      await expect(acknowledgeTransaction(sender, receiverRow!.id)).rejects.toThrow(NotFoundError);
+      const [stillUnacknowledged] = await dbWrite.select().from(transactions).where(eq(transactions.id, receiverRow!.id));
+      expect(stillUnacknowledged!.acknowledgedAt).toBeNull();
+    });
+  });
+
+  describe('moveMemberTransferWallet ("Pindahkan")', () => {
+    it("moves the receiver's entry to another of the receiver's OWN wallets; balances stay correct", async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+      const secondReceiverWallet = await createTestWallet(receiver, { name: 'GoPay Receiver' });
+      const senderRow = await createMemberTransfer(
+        sender,
+        memberTransferInput({
+          householdId: household,
+          fromWalletId: senderWallet,
+          counterpartyUserId: receiver,
+          toWalletId: receiverWallet,
+          amount: 300_000_00n,
+        }),
+      );
+      const [receiverRow] = await dbWrite
+        .select()
+        .from(transactions)
+        .where(eq(transactions.linkedTransactionId, senderRow.id));
+
+      await moveMemberTransferWallet(receiver, receiverRow!.id, secondReceiverWallet);
+
+      expect(await walletBalance(receiverWallet)).toBe(0n); // moved OUT
+      expect(await walletBalance(secondReceiverWallet)).toBe(300_000_00n); // moved IN
+      expect(await walletBalance(senderWallet)).toBe(-300_000_00n); // sender untouched
+
+      // The link survives a move — only the wallet changed.
+      const [afterMove] = await dbWrite.select().from(transactions).where(eq(transactions.id, receiverRow!.id));
+      expect(afterMove!.linkedTransactionId).toBe(senderRow.id);
+      expect(afterMove!.counterpartyUserId).toBe(sender);
+      expect(afterMove!.amount).toBe(300_000_00n);
+    });
+
+    it("cannot move the SENDER's side using a wallet the sender doesn't own", async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+      const senderRow = await createMemberTransfer(
+        sender,
+        memberTransferInput({ householdId: household, fromWalletId: senderWallet, counterpartyUserId: receiver, toWalletId: receiverWallet }),
+      );
+
+      await expect(moveMemberTransferWallet(sender, senderRow.id, receiverWallet)).rejects.toThrow(
+        ValidationError,
+      );
+    });
+
+    it('a non-owner cannot move a side that is not theirs', async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+      const senderRow = await createMemberTransfer(
+        sender,
+        memberTransferInput({ householdId: household, fromWalletId: senderWallet, counterpartyUserId: receiver, toWalletId: receiverWallet }),
+      );
+      const [receiverRow] = await dbWrite
+        .select()
+        .from(transactions)
+        .where(eq(transactions.linkedTransactionId, senderRow.id));
+      const anotherSenderWallet = await createTestWallet(sender, { name: 'GoPay Sender' });
+
+      await expect(
+        moveMemberTransferWallet(sender, receiverRow!.id, anotherSenderWallet),
+      ).rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe('voidTransfer on a member-transfer side ("Hapus")', () => {
+    it("void-ing the RECEIVER's side reverses ONLY their balance, unlinks both rows, and leaves the sender's side untouched", async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+      const senderRow = await createMemberTransfer(
+        sender,
+        memberTransferInput({
+          householdId: household,
+          fromWalletId: senderWallet,
+          counterpartyUserId: receiver,
+          toWalletId: receiverWallet,
+          amount: 400_000_00n,
+        }),
+      );
+      const [receiverRow] = await dbWrite
+        .select()
+        .from(transactions)
+        .where(eq(transactions.linkedTransactionId, senderRow.id));
+
+      await voidTransfer(receiver, receiverRow!.id);
+
+      expect(await walletBalance(receiverWallet)).toBe(0n); // reversed
+      expect(await walletBalance(senderWallet)).toBe(-400_000_00n); // UNTOUCHED — sender's own record of sending stays true
+
+      const [senderAfter] = await dbWrite.select().from(transactions).where(eq(transactions.id, senderRow.id));
+      const [receiverAfter] = await dbWrite.select().from(transactions).where(eq(transactions.id, receiverRow!.id));
+      expect(senderAfter!.voidedAt).toBeNull(); // sender's side was never voided
+      expect(receiverAfter!.voidedAt).not.toBeNull();
+      // Tautan dilepas — dua arah.
+      expect(senderAfter!.linkedTransactionId).toBeNull();
+      expect(receiverAfter!.linkedTransactionId).toBeNull();
+    });
+
+    it("void-ing the SENDER's own side is equally ordinary, and unlinks both rows too", async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+      const senderRow = await createMemberTransfer(
+        sender,
+        memberTransferInput({ householdId: household, fromWalletId: senderWallet, counterpartyUserId: receiver, toWalletId: receiverWallet }),
+      );
+      const [receiverRow] = await dbWrite
+        .select()
+        .from(transactions)
+        .where(eq(transactions.linkedTransactionId, senderRow.id));
+
+      await voidTransfer(sender, senderRow.id);
+
+      expect(await walletBalance(senderWallet)).toBe(0n);
+      expect(await walletBalance(receiverWallet)).toBe(1_000_000_00n); // receiver's own record stays true
+
+      const [receiverAfter] = await dbWrite.select().from(transactions).where(eq(transactions.id, receiverRow!.id));
+      expect(receiverAfter!.linkedTransactionId).toBeNull();
+      expect(receiverAfter!.voidedAt).toBeNull();
+    });
+
+    it('a stranger cannot void either side of a member transfer', async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+      const outsider = await createTestUser();
+      userIds.push(outsider);
+      const senderRow = await createMemberTransfer(
+        sender,
+        memberTransferInput({ householdId: household, fromWalletId: senderWallet, counterpartyUserId: receiver, toWalletId: receiverWallet }),
+      );
+      const [receiverRow] = await dbWrite
+        .select()
+        .from(transactions)
+        .where(eq(transactions.linkedTransactionId, senderRow.id));
+
+      await expect(voidTransfer(outsider, senderRow.id)).rejects.toThrow(NotFoundError);
+      await expect(voidTransfer(outsider, receiverRow!.id)).rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe('reconciliation — I11/I12/I18/I19 stay green through create -> acknowledge -> move -> void', () => {
+    it('reports zero violations, scoped to this test\'s own rows, at every stage', async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+      const secondReceiverWallet = await createTestWallet(receiver, { name: 'GoPay Receiver' });
+      const relevantWallets = new Set([senderWallet, receiverWallet, secondReceiverWallet]);
+      const relevantUsers = new Set([sender, receiver]);
+
+      async function assertInvariantsGreen(relevantTxIds: Set<string>) {
+        const drift = (await findWalletBalanceDrift()).filter((d) => relevantWallets.has(d.walletId));
+        expect(drift).toHaveLength(0); // I1 (sanity — not this task's own invariant, but free to check)
+
+        const ownerMismatches = (await findLedgerOwnerMismatches()).filter(
+          (m) => relevantUsers.has(m.entryOwnerId) || relevantUsers.has(m.walletOwnerId),
+        );
+        expect(ownerMismatches).toHaveLength(0); // I11
+
+        const unbalanced = (await findUnbalancedMemberTransfers()).filter((u) => relevantTxIds.has(u.transactionId));
+        expect(unbalanced).toHaveLength(0); // I12
+
+        const oneWay = (await findOneWayTransferLinks()).filter((id) => relevantTxIds.has(id));
+        expect(oneWay).toHaveLength(0); // I18
+
+        const invalidCreatedBy = (await findInvalidCreatedByRows()).filter((id) => relevantTxIds.has(id));
+        expect(invalidCreatedBy).toHaveLength(0); // I19
+      }
+
+      // Stage 1: create.
+      const senderRow = await createMemberTransfer(
+        sender,
+        memberTransferInput({
+          householdId: household,
+          fromWalletId: senderWallet,
+          counterpartyUserId: receiver,
+          toWalletId: receiverWallet,
+          amount: 777_000_00n,
+        }),
+      );
+      const [receiverRow] = await dbWrite
+        .select()
+        .from(transactions)
+        .where(eq(transactions.linkedTransactionId, senderRow.id));
+      const txIds = new Set([senderRow.id, receiverRow!.id]);
+      await assertInvariantsGreen(txIds);
+
+      // Stage 2: acknowledge.
+      await acknowledgeTransaction(receiver, receiverRow!.id);
+      await assertInvariantsGreen(txIds);
+
+      // Stage 3: move.
+      await moveMemberTransferWallet(receiver, receiverRow!.id, secondReceiverWallet);
+      await assertInvariantsGreen(txIds);
+
+      // Stage 4: void the receiver's side.
+      await voidTransfer(receiver, receiverRow!.id);
+      await assertInvariantsGreen(txIds);
+    });
+  });
+
+  describe('property: household wealth is unaffected by a member transfer (it is a wash)', () => {
+    it('a single transfer moves sender net worth by exactly -amount and receiver by exactly +amount', async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+
+      await createMemberTransfer(
+        sender,
+        memberTransferInput({
+          householdId: household,
+          fromWalletId: senderWallet,
+          counterpartyUserId: receiver,
+          toWalletId: receiverWallet,
+          amount: 1_234_500_00n,
+        }),
+      );
+
+      expect(await walletBalance(senderWallet)).toBe(-1_234_500_00n);
+      expect(await walletBalance(receiverWallet)).toBe(1_234_500_00n);
+    });
+
+    it('holds for a random sequence of member transfers between the same two people: household sum is invariant', async () => {
+      const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();
+
+      async function netWorths() {
+        const s = await walletBalance(senderWallet);
+        const r = await walletBalance(receiverWallet);
+        return { sender: s, receiver: r, sum: s + r };
+      }
+
+      const before = await netWorths();
+      expect(before.sum).toBe(0n);
+
+      await fc.assert(
+        fc.asyncProperty(
+          fc.array(fc.bigInt({ min: 1n, max: 500_00n }), { minLength: 1, maxLength: 5 }),
+          async (amounts) => {
+            const preRun = await netWorths();
+            let expectedSenderDelta = 0n;
+            for (const amount of amounts) {
+              await createMemberTransfer(
+                sender,
+                memberTransferInput({
+                  householdId: household,
+                  fromWalletId: senderWallet,
+                  counterpartyUserId: receiver,
+                  toWalletId: receiverWallet,
+                  amount,
+                  idempotencyKey: crypto.randomUUID(),
+                }),
+              );
+              expectedSenderDelta -= amount;
+            }
+            const after = await netWorths();
+            // Household wealth: unaffected — a wash, every time.
+            expect(after.sum).toBe(preRun.sum);
+            // Sender −Σamount, receiver +Σamount, exactly.
+            expect(after.sender - preRun.sender).toBe(expectedSenderDelta);
+            expect(after.receiver - preRun.receiver).toBe(-expectedSenderDelta);
+          },
+        ),
+        { numRuns: 5 }, // real DB round trips per move — kept small deliberately
+      );
+
+      const finalState = await netWorths();
+      expect(finalState.sum).toBe(before.sum);
     }, 90_000);
   });
 });

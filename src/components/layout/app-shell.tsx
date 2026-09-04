@@ -31,21 +31,32 @@ interface AppShellProps {
   /** The signed-in user's active household memberships — drives the
    * context switcher and the "Keluarga"/"Buat keluarga" nav entry. */
   households: HouseholdSummary[];
+  /** tasks/13-transfers-member — the Activity badge (todo.md: "Lencana
+   * pada context switcher & menu Lainnya"). */
+  unacknowledgedCount: number;
 }
 
-export function AppShell({ children, addTransactionSheetData, households }: AppShellProps) {
+export function AppShell({ children, addTransactionSheetData, households, unacknowledgedCount }: AppShellProps) {
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">
-      <Sidebar addTransactionSheetData={addTransactionSheetData} households={households} />
+      <Sidebar
+        addTransactionSheetData={addTransactionSheetData}
+        households={households}
+        unacknowledgedCount={unacknowledgedCount}
+      />
       {households.length > 0 && (
         <header className="border-border bg-surface px-page-x flex items-center border-b py-2 md:hidden">
-          <ContextSwitcher households={households} variant="mobile" />
+          <ContextSwitcher households={households} variant="mobile" unacknowledgedCount={unacknowledgedCount} />
         </header>
       )}
       <main className="page-content-bottom-nav-padding flex flex-1 flex-col lg:mx-auto lg:w-full lg:max-w-5xl">
         {children}
       </main>
-      <BottomNav addTransactionSheetData={addTransactionSheetData} households={households} />
+      <BottomNav
+        addTransactionSheetData={addTransactionSheetData}
+        households={households}
+        unacknowledgedCount={unacknowledgedCount}
+      />
     </div>
   );
 }

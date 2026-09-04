@@ -4,11 +4,12 @@ import { MoreHorizontal, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Sheet, SheetClose, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { CountBadge } from '@/components/ui/count-badge';
 import { AddTransactionSheet } from '@/features/transactions/components/add-transaction-sheet';
 import type { AddTransactionSheetData } from '@/features/transactions/sheet-data';
 import type { HouseholdSummary } from '@/features/household/queries';
 import { cn } from '@/lib/utils';
-import { beranda, getMoreSheetItems, isRouteActive, kekayaan, transaksi } from './nav-items';
+import { aktivitas, beranda, getMoreSheetItems, isRouteActive, kekayaan, transaksi } from './nav-items';
 import type { NavItem } from './nav-items';
 
 const ITEM_CLASS =
@@ -43,9 +44,12 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 interface BottomNavProps {
   addTransactionSheetData: AddTransactionSheetData;
   households: HouseholdSummary[];
+  /** tasks/13-transfers-member — badges the "Lainnya" trigger AND its
+   * Aktivitas row (todo.md: "Lencana pada context switcher & menu Lainnya"). */
+  unacknowledgedCount: number;
 }
 
-export function BottomNav({ addTransactionSheetData, households }: BottomNavProps) {
+export function BottomNav({ addTransactionSheetData, households, unacknowledgedCount }: BottomNavProps) {
   const pathname = usePathname();
   const moreSheetItems = getMoreSheetItems(households.length > 0);
   const moreActive = moreSheetItems.some((item) => isRouteActive(pathname, item.href, item.exact));
@@ -84,9 +88,17 @@ export function BottomNav({ addTransactionSheetData, households }: BottomNavProp
           <button
             type="button"
             aria-current={moreActive ? 'page' : undefined}
-            className={cn(ITEM_CLASS, moreActive ? 'text-brand-readable' : 'text-text-muted')}
+            aria-label={
+              unacknowledgedCount > 0 ? `Lainnya, ${unacknowledgedCount} aktivitas belum ditinjau` : undefined
+            }
+            className={cn(ITEM_CLASS, 'relative', moreActive ? 'text-brand-readable' : 'text-text-muted')}
           >
-            <MoreHorizontal className="size-6" aria-hidden="true" />
+            <span className="relative">
+              <MoreHorizontal className="size-6" aria-hidden="true" />
+              {unacknowledgedCount > 0 && (
+                <CountBadge count={unacknowledgedCount} className="absolute -top-1 -right-1.5" />
+              )}
+            </span>
             Lainnya
           </button>
         </SheetTrigger>
@@ -98,10 +110,18 @@ export function BottomNav({ addTransactionSheetData, households }: BottomNavProp
                   <SheetClose asChild>
                     <Link
                       href={item.href}
+                      aria-label={
+                        item.href === aktivitas.href && unacknowledgedCount > 0
+                          ? `${item.label}, ${unacknowledgedCount} belum ditinjau`
+                          : undefined
+                      }
                       className="pressable-tint rounded-inner text-body text-text flex h-12 items-center gap-3 px-2"
                     >
                       <item.icon className="text-text-muted size-5" aria-hidden="true" />
                       {item.label}
+                      {item.href === aktivitas.href && (
+                        <CountBadge count={unacknowledgedCount} className="ml-auto" />
+                      )}
                     </Link>
                   </SheetClose>
                 </li>

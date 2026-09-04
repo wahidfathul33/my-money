@@ -18,6 +18,8 @@ import { and, asc, eq } from 'drizzle-orm';
 import { dbRead } from '@/lib/db/read';
 import { wallets } from '@/lib/db/schema';
 import { ownedBy } from '@/lib/db/scoped';
+import { listUserHouseholds } from '@/features/household/queries';
+import { listMemberTransferPeople, type TransferTargetPerson } from '@/features/transfers/target-queries';
 import {
   getQuickCategories,
   listCategories,
@@ -39,6 +41,15 @@ export interface AddTransactionSheetData {
   defaultWalletId: string | null;
   quickCategories: { expense: CategoryRow[]; income: CategoryRow[] };
   fullCategories: { expense: CategoryWithChildren[]; income: CategoryWithChildren[] };
+  /** tasks/13-transfers-member: gates the "Ke anggota keluarga" segment —
+   * docs/09-screen-specs.md §2: "Bila user punya household, muncul
+   * segmented kecil". `true` even if no OTHER member has an eligible
+   * wallet yet — `memberTransferPeople` (below) is what's possibly empty,
+   * not this. */
+  hasHousehold: boolean;
+  /** "Pick a member, then their wallet" — never carries a `balance` field
+   * anywhere in its shape (src/lib/visibility/transfer-targets.ts). */
+  memberTransferPeople: TransferTargetPerson[];
 }
 
 async function listWalletOptions(userId: string): Promise<WalletOption[]> {
@@ -56,20 +67,32 @@ async function listWalletOptions(userId: string): Promise<WalletOption[]> {
 }
 
 export async function getAddTransactionSheetData(userId: string): Promise<AddTransactionSheetData> {
-  const [walletOptions, defaultWalletId, quickExpense, quickIncome, fullExpense, fullIncome] =
-    await Promise.all([
-      listWalletOptions(userId),
-      resolveDefaultWalletId(userId),
-      getQuickCategories(userId, 'expense'),
-      getQuickCategories(userId, 'income'),
-      listCategories(userId, 'expense'),
-      listCategories(userId, 'income'),
-    ]);
+  const [
+    walletOptions,
+    defaultWalletId,
+    quickExpense,
+    quickIncome,
+    fullExpense,
+    fullIncome,
+    households,
+    memberTransferPeople,
+  ] = await Promise.all([
+    listWalletOptions(userId),
+    resolveDefaultWalletId(userId),
+    getQuickCategories(userId, 'expense'),
+    getQuickCategories(userId, 'income'),
+    listCategories(userId, 'expense'),
+    listCategories(userId, 'income'),
+    listUserHouseholds(userId),
+    listMemberTransferPeople(userId),
+  ]);
 
   return {
     wallets: walletOptions,
     defaultWalletId,
     quickCategories: { expense: quickExpense, income: quickIncome },
     fullCategories: { expense: fullExpense, income: fullIncome },
+    hasHousehold: households.length > 0,
+    memberTransferPeople,
   };
 }

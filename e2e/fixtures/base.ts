@@ -80,19 +80,24 @@ export async function waitForDomToSettle(page: import('@playwright/test').Page):
     .catch(() => {}); // best-effort — a genuinely unstable page still fails at the real assertion below
 }
 
+/** The actual portal-neutralizing script — factored out so
+ * `suppressDevOverlay` (below) can apply the exact same fix to a manually
+ * created `BrowserContext`, not just the `page` fixture's own context. */
+function neutralizeDevOverlayPortal(): void {
+  // A plain `<style>` node appended to the document gets wiped the
+  // moment React hydrates (it reconciles <html> against the
+  // server-rendered tree and discards children it didn't render) —
+  // confirmed by inspecting the live DOM, the node was gone post-
+  // hydration. `adoptedStyleSheets` lives outside the DOM tree
+  // entirely, so it survives hydration.
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync('nextjs-portal { pointer-events: none !important; }');
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+}
+
 export const test = base.extend({
   page: async ({ page }, use) => {
-    await page.addInitScript(() => {
-      // A plain `<style>` node appended to the document gets wiped the
-      // moment React hydrates (it reconciles <html> against the
-      // server-rendered tree and discards children it didn't render) —
-      // confirmed by inspecting the live DOM, the node was gone post-
-      // hydration. `adoptedStyleSheets` lives outside the DOM tree
-      // entirely, so it survives hydration.
-      const sheet = new CSSStyleSheet();
-      sheet.replaceSync('nextjs-portal { pointer-events: none !important; }');
-      document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
-    });
+    await page.addInitScript(neutralizeDevOverlayPortal);
 
     const originalGoto = page.goto.bind(page);
     page.goto = async (url, options) => {
@@ -104,5 +109,24 @@ export const test = base.extend({
     await use(page);
   },
 });
+
+/**
+ * The SAME `<nextjs-portal>` fix as the `page` fixture above, exposed for
+ * specs that need MULTIPLE independent sessions at once (two or more
+ * `browser.newContext()` calls, e.g. e2e/household-membership.spec.ts and
+ * e2e/transfers-member.spec.ts) and therefore never request the single
+ * `page` fixture at all — so its override above never runs for them. Call
+ * once per manually-created context, before `context.newPage()`.
+ *
+ * Without this, a two-context spec that clicks anything near where the dev
+ * overlay's issues badge renders (confirmed: the Add Transaction sheet's
+ * bottom-aligned amount keypad) hangs on that click, retrying for the
+ * full test timeout, with no application-level error — see
+ * e2e/transfers-member.spec.ts's own doc comment for how this was
+ * root-caused.
+ */
+export async function suppressDevOverlay(context: import('@playwright/test').BrowserContext): Promise<void> {
+  await context.addInitScript(neutralizeDevOverlayPortal);
+}
 
 export { expect };

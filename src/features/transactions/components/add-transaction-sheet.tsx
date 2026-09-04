@@ -29,11 +29,13 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/components/ui/toast';
 import { serializeMoney } from '@/lib/finance/money';
-import { createSelfTransferAction, voidTransferAction } from '@/features/transfers/actions';
+import { createMemberTransferAction, createSelfTransferAction, voidTransferAction } from '@/features/transfers/actions';
+import { ConfirmMemberTransfer } from '@/features/transfers/components/confirm-member-transfer';
+import type { MemberTransferSelection } from '@/features/transfers/components/transfer-target-picker';
 import { evaluateExpression } from '../amount-math';
 import { createTransactionAction, voidTransactionAction } from '../actions';
 import type { AddTransactionSheetData } from '../sheet-data';
-import { TransactionEditor, type EditorTabType } from './transaction-editor';
+import { TransactionEditor, type EditorTabType, type TransferMode } from './transaction-editor';
 
 interface AddTransactionSheetProps extends AddTransactionSheetData {
   trigger: ReactNode;
@@ -111,6 +113,8 @@ function AddTransactionSheetForm({
   defaultWalletId,
   quickCategories,
   fullCategories,
+  hasHousehold,
+  memberTransferPeople,
   onHasInputChange,
   onDone,
 }: AddTransactionSheetFormProps) {
@@ -135,16 +139,31 @@ function AddTransactionSheetForm({
   // sheet is reopened" (tasks/07 spec.md) is automatic.
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
 
+  // tasks/13-transfers-member — the "Ke anggota keluarga" half of the
+  // Transfer tab. `memberSelection` carries the counterparty + household +
+  // destination wallet together (src/features/transfers/components/transfer-target-picker.tsx)
+  // since a member-transfer's `toWalletId` alone doesn't determine WHICH
+  // household governs it the way a self-transfer's does.
+  const [transferMode, setTransferMode] = useState<TransferMode>('own');
+  const [memberSelection, setMemberSelection] = useState<MemberTransferSelection | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+
   useEffect(() => {
     onHasInputChange(expression !== '');
   }, [expression, onHasInputChange]);
 
   const amount = evaluateExpression(expression);
+  const isMemberTransfer = type === 'transfer' && transferMode === 'member';
   const saveDisabled =
     amount <= 0n ||
     walletId === '' ||
     isPending ||
-    (type === 'transfer' ? toWalletId === '' || toWalletId === walletId : categoryId === null);
+    (type === 'transfer'
+      ? isMemberTransfer
+        ? memberSelection === null
+        : toWalletId === '' || toWalletId === walletId
+      : categoryId === null);
 
   function handleTypeChange(next: EditorTabType) {
     setType(next);
@@ -165,11 +184,46 @@ function AddTransactionSheetForm({
     }
   }
 
+  /** Shared by both save paths below — the toast/undo contract is identical
+   * whether the new row is an income/expense, a self-transfer, or (via
+   * `voidTransferAction`, generalized by task 13 to also sever a member
+   * transfer's two-way link when either side is voided) a member transfer. */
+  function finishSave(newTransactionId: string, kind: 'record' | 'self-transfer' | 'member-transfer') {
+    onHasInputChange(false);
+    onDone();
+    router.refresh();
+    toast.show({
+      title: 'Tersimpan',
+      variant: 'success',
+      action: {
+        label: 'Urungkan',
+        onClick: () => {
+          startTransition(async () => {
+            if (kind === 'record') await voidTransactionAction(newTransactionId);
+            else await voidTransferAction(newTransactionId);
+            router.refresh();
+          });
+        },
+      },
+    });
+  }
+
   function handleSave() {
     if (saveDisabled) return;
     if (type !== 'transfer' && categoryId === null) return;
-    setError(null);
 
+    // A member transfer confirms first — docs/10-ux-states.md §5.2, spec.md:
+    // its effect lands on someone ELSE's ledger. Everything else (self-
+    // transfer, income, expense) saves immediately, matching every other
+    // reversible action in this app.
+    if (isMemberTransfer) {
+      setError(null);
+      setConfirmError(null);
+      setConfirmOpen(true);
+      return;
+    }
+
+    setError(null);
     startTransition(async () => {
       const result =
         type === 'transfer'
@@ -196,52 +250,89 @@ function AddTransactionSheetForm({
         return;
       }
 
-      const newTransactionId = result.transactionId;
-      const isTransfer = type === 'transfer';
-      onHasInputChange(false);
-      onDone();
-      router.refresh();
-      toast.show({
-        title: 'Tersimpan',
-        variant: 'success',
-        action: {
-          label: 'Urungkan',
-          onClick: () => {
-            startTransition(async () => {
-              if (isTransfer) await voidTransferAction(newTransactionId);
-              else await voidTransactionAction(newTransactionId);
-              router.refresh();
-            });
-          },
-        },
-      });
+      finishSave(result.transactionId, type === 'transfer' ? 'self-transfer' : 'record');
     });
   }
 
+  function handleConfirmMemberTransfer() {
+    if (!memberSelection) return;
+
+    startTransition(async () => {
+      const result = await createMemberTransferAction({
+        householdId: memberSelection.householdId,
+        fromWalletId: walletId,
+        counterpartyUserId: memberSelection.counterpartyUserId,
+        toWalletId: memberSelection.toWalletId,
+        amount: serializeMoney(amount),
+        transactionDate: date,
+        note,
+        idempotencyKey: idempotencyKeyRef.current,
+      });
+
+      if (result.error || !result.transactionId) {
+        setConfirmError(result.error ?? 'Gagal menyimpan. Data Anda tidak berubah — coba lagi.');
+        return;
+      }
+
+      setConfirmOpen(false);
+      finishSave(result.transactionId, 'member-transfer');
+    });
+  }
+
+  const selectedCounterparty = memberTransferPeople.find(
+    (person) => person.userId === memberSelection?.counterpartyUserId,
+  );
+  const selectedTargetWallet = selectedCounterparty?.wallets.find(
+    (wallet) => wallet.id === memberSelection?.toWalletId,
+  );
+  const selectedFromWallet = wallets.find((w) => w.id === walletId);
+
   return (
-    <TransactionEditor
-      type={type}
-      onTypeChange={handleTypeChange}
-      expression={expression}
-      onExpressionChange={setExpression}
-      categoryId={categoryId}
-      onCategoryChange={setCategoryId}
-      walletId={walletId}
-      onWalletChange={handleFromWalletChange}
-      date={date}
-      onDateChange={setDate}
-      note={note}
-      onNoteChange={setNote}
-      wallets={wallets}
-      quickCategories={quickCategories}
-      fullCategories={fullCategories}
-      error={error}
-      saveDisabled={saveDisabled}
-      saving={isPending}
-      onSave={handleSave}
-      allowTransfer
-      toWalletId={toWalletId}
-      onToWalletChange={setToWalletId}
-    />
+    <>
+      <TransactionEditor
+        type={type}
+        onTypeChange={handleTypeChange}
+        expression={expression}
+        onExpressionChange={setExpression}
+        categoryId={categoryId}
+        onCategoryChange={setCategoryId}
+        walletId={walletId}
+        onWalletChange={handleFromWalletChange}
+        date={date}
+        onDateChange={setDate}
+        note={note}
+        onNoteChange={setNote}
+        wallets={wallets}
+        quickCategories={quickCategories}
+        fullCategories={fullCategories}
+        error={error}
+        saveDisabled={saveDisabled}
+        saving={isPending}
+        onSave={handleSave}
+        allowTransfer
+        toWalletId={toWalletId}
+        onToWalletChange={setToWalletId}
+        hasHousehold={hasHousehold}
+        memberTransferPeople={memberTransferPeople}
+        transferMode={transferMode}
+        onTransferModeChange={setTransferMode}
+        memberSelection={memberSelection}
+        onMemberSelectionChange={setMemberSelection}
+      />
+
+      {isMemberTransfer && selectedCounterparty && selectedTargetWallet && selectedFromWallet && (
+        <ConfirmMemberTransfer
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          amount={amount}
+          fromWalletName={selectedFromWallet.name}
+          toWalletName={selectedTargetWallet.name}
+          counterpartyName={selectedCounterparty.name ?? selectedCounterparty.email}
+          onConfirm={handleConfirmMemberTransfer}
+          pending={isPending}
+          error={confirmError}
+        />
+      )}
+    </>
   );
 }

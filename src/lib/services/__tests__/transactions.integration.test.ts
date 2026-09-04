@@ -12,20 +12,26 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { and, eq, isNull } from 'drizzle-orm';
+import { uuidv7 } from 'uuidv7';
 import { dbWrite } from '@/lib/db/write';
-import { ledgerEntries } from '@/lib/db/schema/transactions';
+import { ledgerEntries, transactions } from '@/lib/db/schema/transactions';
 import { wallets } from '@/lib/db/schema/wallets';
 import { NotFoundError, ValidationError } from '@/lib/api/errors';
 import { findWalletBalanceDrift } from '@/lib/db/reconcile';
 import {
   createTestCategory,
+  createTestHousehold,
+  createTestHouseholdMember,
   createTestUser,
   createTestWallet,
+  deleteTestHousehold,
   deleteTestUser,
 } from '@/lib/db/__tests__/test-helpers';
 import { getMonthlyTotals, getTransaction } from '@/features/transactions/queries';
 import {
+  bulkTagTransactions,
   createTransaction,
+  setTransactionHousehold,
   unvoidTransaction,
   updateTransaction,
   voidTransaction,
@@ -33,8 +39,12 @@ import {
 
 describe('transactions service', () => {
   const userIds: string[] = [];
+  const householdIds: string[] = [];
 
   afterEach(async () => {
+    for (const id of householdIds.splice(0)) {
+      await deleteTestHousehold(id);
+    }
     for (const id of userIds.splice(0)) {
       await deleteTestUser(id);
     }
@@ -488,6 +498,369 @@ describe('transactions service', () => {
       // walletB: -60_000_00 (t1, edited) + 10_000_00 - 10_000_00 (t3 voided) = -60_000_00
       expect(await walletBalance(walletA)).toBe(500_000_00n);
       expect(await walletBalance(walletB)).toBe(-60_000_00n);
+    });
+  });
+
+  describe('household tagging — tasks/12-sharing-and-privacy', () => {
+    async function taggedHouseholdId(transactionId: string): Promise<string | null> {
+      const [row] = await dbWrite
+        .select({ householdId: transactions.householdId })
+        .from(transactions)
+        .where(eq(transactions.id, transactionId));
+      return row?.householdId ?? null;
+    }
+
+    describe('createTransaction', () => {
+      it('tags the new transaction when the caller is an active member of the given household', async () => {
+        const owner = await createTestUser();
+        userIds.push(owner);
+        const household = await createTestHousehold(owner);
+        householdIds.push(household);
+        await createTestHouseholdMember(household, owner, { role: 'owner' });
+        const walletId = await createTestWallet(owner);
+        const categoryId = await createTestCategory(owner, { type: 'expense' });
+
+        const row = await createTransaction(owner, {
+          type: 'expense',
+          amount: 20_000_00n,
+          categoryId,
+          walletId,
+          transactionDate: new Date(),
+          note: null,
+          idempotencyKey: crypto.randomUUID(),
+          householdId: household,
+        });
+
+        expect(row.householdId).toBe(household);
+      });
+
+      it("rejects tagging to a household the caller is NOT an active member of — 'household yang bukan miliknya ditolak', and rolls back the whole write", async () => {
+        const owner = await createTestUser();
+        const stranger = await createTestUser();
+        userIds.push(owner, stranger);
+        const household = await createTestHousehold(owner);
+        householdIds.push(household);
+        const walletId = await createTestWallet(stranger);
+        const categoryId = await createTestCategory(stranger, { type: 'expense' });
+
+        await expect(
+          createTransaction(stranger, {
+            type: 'expense',
+            amount: 20_000_00n,
+            categoryId,
+            walletId,
+            transactionDate: new Date(),
+            note: null,
+            idempotencyKey: crypto.randomUUID(),
+            householdId: household,
+          }),
+        ).rejects.toThrow(NotFoundError);
+
+        // Rollback proof: neither the transaction row nor the wallet balance exist.
+        expect(await walletBalance(walletId)).toBe(0n);
+        expect(await liveEntryCount(stranger)).toBe(0);
+      });
+
+      it('defaults to untagged (household_id NULL) when householdId is omitted', async () => {
+        const userId = await createTestUser();
+        userIds.push(userId);
+        const walletId = await createTestWallet(userId);
+        const categoryId = await createTestCategory(userId, { type: 'expense' });
+
+        const row = await createTransaction(userId, {
+          type: 'expense',
+          amount: 20_000_00n,
+          categoryId,
+          walletId,
+          transactionDate: new Date(),
+          note: null,
+          idempotencyKey: crypto.randomUUID(),
+        });
+
+        expect(row.householdId).toBeNull();
+      });
+    });
+
+    describe('updateTransaction', () => {
+      it('re-tags to a different household the caller actively belongs to', async () => {
+        const owner = await createTestUser();
+        userIds.push(owner);
+        const household = await createTestHousehold(owner);
+        householdIds.push(household);
+        await createTestHouseholdMember(household, owner, { role: 'owner' });
+        const walletId = await createTestWallet(owner);
+        const categoryId = await createTestCategory(owner, { type: 'expense' });
+
+        const created = await createTransaction(owner, {
+          type: 'expense',
+          amount: 20_000_00n,
+          categoryId,
+          walletId,
+          transactionDate: new Date(),
+          note: null,
+          idempotencyKey: crypto.randomUUID(),
+        });
+        expect(await taggedHouseholdId(created.id)).toBeNull();
+
+        await updateTransaction(owner, created.id, {
+          type: 'expense',
+          amount: 20_000_00n,
+          categoryId,
+          walletId,
+          transactionDate: new Date(),
+          note: null,
+          householdId: household,
+        });
+        expect(await taggedHouseholdId(created.id)).toBe(household);
+      });
+
+      it('rejects re-tagging to a household the caller is not an active member of, leaving the existing tag untouched', async () => {
+        const owner = await createTestUser();
+        const outsiderHouseholdOwner = await createTestUser();
+        userIds.push(owner, outsiderHouseholdOwner);
+        const ownHousehold = await createTestHousehold(owner);
+        const outsiderHousehold = await createTestHousehold(outsiderHouseholdOwner);
+        householdIds.push(ownHousehold, outsiderHousehold);
+        await createTestHouseholdMember(ownHousehold, owner, { role: 'owner' });
+        const walletId = await createTestWallet(owner);
+        const categoryId = await createTestCategory(owner, { type: 'expense' });
+
+        const created = await createTransaction(owner, {
+          type: 'expense',
+          amount: 20_000_00n,
+          categoryId,
+          walletId,
+          transactionDate: new Date(),
+          note: null,
+          idempotencyKey: crypto.randomUUID(),
+          householdId: ownHousehold,
+        });
+
+        await expect(
+          updateTransaction(owner, created.id, {
+            type: 'expense',
+            amount: 20_000_00n,
+            categoryId,
+            walletId,
+            transactionDate: new Date(),
+            note: null,
+            householdId: outsiderHousehold,
+          }),
+        ).rejects.toThrow(NotFoundError);
+
+        expect(await taggedHouseholdId(created.id)).toBe(ownHousehold); // untouched
+      });
+
+      it('omitting householdId leaves the existing tag untouched; passing null clears it', async () => {
+        const owner = await createTestUser();
+        userIds.push(owner);
+        const household = await createTestHousehold(owner);
+        householdIds.push(household);
+        await createTestHouseholdMember(household, owner, { role: 'owner' });
+        const walletId = await createTestWallet(owner);
+        const categoryId = await createTestCategory(owner, { type: 'expense' });
+
+        const created = await createTransaction(owner, {
+          type: 'expense',
+          amount: 20_000_00n,
+          categoryId,
+          walletId,
+          transactionDate: new Date(),
+          note: null,
+          idempotencyKey: crypto.randomUUID(),
+          householdId: household,
+        });
+
+        // Full field replace WITHOUT householdId — the key itself is absent.
+        await updateTransaction(owner, created.id, {
+          type: 'expense',
+          amount: 25_000_00n,
+          categoryId,
+          walletId,
+          transactionDate: new Date(),
+          note: 'masih tertandai',
+        });
+        expect(await taggedHouseholdId(created.id)).toBe(household); // unchanged
+
+        await updateTransaction(owner, created.id, {
+          type: 'expense',
+          amount: 25_000_00n,
+          categoryId,
+          walletId,
+          transactionDate: new Date(),
+          note: 'lepas tag',
+          householdId: null,
+        });
+        expect(await taggedHouseholdId(created.id)).toBeNull();
+      });
+    });
+
+    describe('setTransactionHousehold', () => {
+      it('tags and untags a transaction independently of its other fields', async () => {
+        const owner = await createTestUser();
+        userIds.push(owner);
+        const household = await createTestHousehold(owner);
+        householdIds.push(household);
+        await createTestHouseholdMember(household, owner, { role: 'owner' });
+        const walletId = await createTestWallet(owner);
+        const categoryId = await createTestCategory(owner, { type: 'expense' });
+        const created = await createTransaction(owner, {
+          type: 'expense',
+          amount: 20_000_00n,
+          categoryId,
+          walletId,
+          transactionDate: new Date(),
+          note: null,
+          idempotencyKey: crypto.randomUUID(),
+        });
+
+        await setTransactionHousehold(owner, created.id, household);
+        expect(await taggedHouseholdId(created.id)).toBe(household);
+
+        await setTransactionHousehold(owner, created.id, null);
+        expect(await taggedHouseholdId(created.id)).toBeNull();
+      });
+
+      it("rejects tagging to a household the caller isn't an active member of", async () => {
+        const owner = await createTestUser();
+        const outsiderOwner = await createTestUser();
+        userIds.push(owner, outsiderOwner);
+        const outsiderHousehold = await createTestHousehold(outsiderOwner);
+        householdIds.push(outsiderHousehold);
+        const walletId = await createTestWallet(owner);
+        const categoryId = await createTestCategory(owner, { type: 'expense' });
+        const created = await createTransaction(owner, {
+          type: 'expense',
+          amount: 20_000_00n,
+          categoryId,
+          walletId,
+          transactionDate: new Date(),
+          note: null,
+          idempotencyKey: crypto.randomUUID(),
+        });
+
+        await expect(setTransactionHousehold(owner, created.id, outsiderHousehold)).rejects.toThrow(
+          NotFoundError,
+        );
+        expect(await taggedHouseholdId(created.id)).toBeNull();
+      });
+
+      it("cannot tag another user's transaction — cross-user isolation", async () => {
+        const owner = await createTestUser();
+        const attacker = await createTestUser();
+        userIds.push(owner, attacker);
+        const household = await createTestHousehold(attacker);
+        householdIds.push(household);
+        await createTestHouseholdMember(household, attacker, { role: 'owner' });
+        const walletId = await createTestWallet(owner);
+        const categoryId = await createTestCategory(owner, { type: 'expense' });
+        const created = await createTransaction(owner, {
+          type: 'expense',
+          amount: 20_000_00n,
+          categoryId,
+          walletId,
+          transactionDate: new Date(),
+          note: null,
+          idempotencyKey: crypto.randomUUID(),
+        });
+
+        await expect(setTransactionHousehold(attacker, created.id, household)).rejects.toThrow(
+          NotFoundError,
+        );
+        expect(await taggedHouseholdId(created.id)).toBeNull();
+      });
+    });
+
+    describe('bulkTagTransactions', () => {
+      async function makeExpense(userId: string, walletId: string, categoryId: string) {
+        const row = await createTransaction(userId, {
+          type: 'expense',
+          amount: 15_000_00n,
+          categoryId,
+          walletId,
+          transactionDate: new Date(),
+          note: null,
+          idempotencyKey: crypto.randomUUID(),
+        });
+        return row.id;
+      }
+
+      it('tags every one of the caller\'s own listed transactions and reports the exact count', async () => {
+        const owner = await createTestUser();
+        userIds.push(owner);
+        const household = await createTestHousehold(owner);
+        householdIds.push(household);
+        await createTestHouseholdMember(household, owner, { role: 'owner' });
+        const walletId = await createTestWallet(owner);
+        const categoryId = await createTestCategory(owner, { type: 'expense' });
+        const ids = await Promise.all([
+          makeExpense(owner, walletId, categoryId),
+          makeExpense(owner, walletId, categoryId),
+          makeExpense(owner, walletId, categoryId),
+        ]);
+
+        const result = await bulkTagTransactions(owner, ids, household);
+
+        expect(result.taggedCount).toBe(3);
+        for (const id of ids) {
+          expect(await taggedHouseholdId(id)).toBe(household);
+        }
+      });
+
+      it("silently skips ids that don't belong to the caller — cross-user isolation, not an error", async () => {
+        const owner = await createTestUser();
+        const other = await createTestUser();
+        userIds.push(owner, other);
+        const household = await createTestHousehold(owner);
+        householdIds.push(household);
+        await createTestHouseholdMember(household, owner, { role: 'owner' });
+        const ownWalletId = await createTestWallet(owner);
+        const ownCategoryId = await createTestCategory(owner, { type: 'expense' });
+        const otherWalletId = await createTestWallet(other);
+        const otherCategoryId = await createTestCategory(other, { type: 'expense' });
+
+        const mine = await makeExpense(owner, ownWalletId, ownCategoryId);
+        const notMine = await makeExpense(other, otherWalletId, otherCategoryId);
+
+        const result = await bulkTagTransactions(owner, [mine, notMine], household);
+
+        expect(result.taggedCount).toBe(1);
+        expect(await taggedHouseholdId(mine)).toBe(household);
+        expect(await taggedHouseholdId(notMine)).toBeNull(); // untouched
+      });
+
+      it("rejects the WHOLE call when the caller isn't an active member of the target household — nothing partially applied", async () => {
+        const owner = await createTestUser();
+        const outsiderOwner = await createTestUser();
+        userIds.push(owner, outsiderOwner);
+        const outsiderHousehold = await createTestHousehold(outsiderOwner);
+        householdIds.push(outsiderHousehold);
+        const walletId = await createTestWallet(owner);
+        const categoryId = await createTestCategory(owner, { type: 'expense' });
+        const id = await makeExpense(owner, walletId, categoryId);
+
+        await expect(bulkTagTransactions(owner, [id], outsiderHousehold)).rejects.toThrow(NotFoundError);
+        expect(await taggedHouseholdId(id)).toBeNull();
+      });
+
+      it('rejects more than the per-call cap outright, before touching the database', async () => {
+        const owner = await createTestUser();
+        userIds.push(owner);
+        const household = await createTestHousehold(owner);
+        householdIds.push(household);
+        await createTestHouseholdMember(household, owner, { role: 'owner' });
+        const tooMany = Array.from({ length: 201 }, () => uuidv7());
+
+        await expect(bulkTagTransactions(owner, tooMany, household)).rejects.toThrow(ValidationError);
+      });
+
+      it('returns taggedCount 0 for an empty id list without touching membership at all', async () => {
+        const soloUser = await createTestUser();
+        userIds.push(soloUser);
+
+        const result = await bulkTagTransactions(soloUser, [], 'not-a-real-household-id-but-never-checked');
+        expect(result.taggedCount).toBe(0);
+      });
     });
   });
 });

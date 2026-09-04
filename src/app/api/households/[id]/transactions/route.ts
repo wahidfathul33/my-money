@@ -48,6 +48,7 @@ function toItemDto(item: HouseholdTransactionItem) {
     category: item.category,
     payerId: item.payerId,
     payerName: item.payerName,
+    wallet: item.wallet,
   };
 }
 

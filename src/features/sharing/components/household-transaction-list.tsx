@@ -2,14 +2,17 @@
 
 /**
  * The household expenses list — todo.md: "struktur seperti riwayat
- * pribadi" (src/features/transactions/components/transaction-list.tsx), but
- * deliberately simpler: no swipe-to-delete (this isn't the payer's own edit
- * surface), no day grouping/subtotals (task 19 owns household aggregate
- * reporting), just a flat newest-first list with a "Muat lebih banyak"
- * button. Meta row is the PAYER's name, never a wallet
- * (spec.md "Halaman itu TIDAK menampilkan saldo dompet siapa pun" — there
- * is no wallet name/icon/balance anywhere in this component or the data it
- * receives).
+ * pribadi" (src/features/transactions/components/transaction-list.tsx).
+ * Deliberately simpler in ONE way: a flat newest-first list with a "Muat
+ * lebih banyak" button rather than day-grouped headers with per-day
+ * subtotals — docs/09-screen-specs.md §13's mockup shows day grouping
+ * ("Kemarin −2.850.000"), which this task's final report discloses as a
+ * simplification (task 19 owns household aggregate reporting; a flat list
+ * still satisfies every one of spec.md's acceptance criteria for this
+ * page). Everything else matches §13 exactly: meta row is
+ * "PayerName · WalletName" (never a balance — `HouseholdTransactionWalletInfo`,
+ * src/features/sharing/household-transactions-queries.ts, has no
+ * `balance` field to even accidentally render).
  */
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -20,8 +23,6 @@ import {
   signedHouseholdTransactionAmount,
   type HouseholdTransactionClientItem,
 } from '../household-transactions-client-types';
-
-const TIME_FORMAT = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 interface HouseholdTransactionListProps {
   householdId: string;
@@ -77,8 +78,11 @@ export function HouseholdTransactionList({
             )}
             <div className="min-w-0 flex-1">
               <p className="text-text truncate text-sm font-medium">{item.category?.name ?? 'Transaksi'}</p>
+              {/* docs/09-screen-specs.md §13's exact meta row: "Wahid · BCA" —
+                  payer name, then wallet name. Never the wallet's balance;
+                  `item.wallet` has no such field to render even by mistake. */}
               <p className="text-text-muted truncate text-xs">
-                {item.payerName} · {TIME_FORMAT.format(item.transactionDate)}
+                {item.payerName} · {item.wallet?.name ?? '—'}
               </p>
             </div>
             <MoneyText amount={signedHouseholdTransactionAmount(item)} showSign size="sm" />

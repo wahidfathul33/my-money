@@ -206,6 +206,10 @@ test.describe('sharing & privacy — two-context flows', () => {
         await memberPage.goto(`/household/${householdId}/transactions`);
         await expect(memberPage.getByText('Rp45.000')).toBeVisible(DB_TIMEOUT);
         await expect(memberPage.getByText('Owner Pengeluaran').first()).toBeVisible();
+        // docs/09-screen-specs.md §13's exact meta row: payer name AND
+        // wallet NAME — "Tunai" is every onboarded user's starter wallet
+        // (seedNewUser), never its balance.
+        await expect(memberPage.getByText('Tunai').first()).toBeVisible();
         await expect(memberPage.getByText('Rp20.000')).toHaveCount(0); // untagged — never shown
 
         // Never a wallet balance anywhere on this page.

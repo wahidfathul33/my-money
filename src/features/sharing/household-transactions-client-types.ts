@@ -9,6 +9,7 @@ import { deserializeMoney, type Money } from '@/lib/finance/money';
 import type {
   HouseholdTransactionCategoryInfo,
   HouseholdTransactionItem,
+  HouseholdTransactionWalletInfo,
 } from './household-transactions-queries';
 
 export interface HouseholdTransactionClientItem {
@@ -20,6 +21,9 @@ export interface HouseholdTransactionClientItem {
   category: HouseholdTransactionCategoryInfo | null;
   payerId: string;
   payerName: string;
+  /** Name/icon/color only — never a balance. docs/09-screen-specs.md §13's
+   * meta row: "Wahid · BCA". */
+  wallet: HouseholdTransactionWalletInfo | null;
 }
 
 export function toHouseholdTransactionClientItem(
@@ -34,6 +38,7 @@ export function toHouseholdTransactionClientItem(
     category: row.category,
     payerId: row.payerId,
     payerName: row.payerName,
+    wallet: row.wallet,
   };
 }
 
@@ -47,6 +52,7 @@ export function parseHouseholdTransactionResponse(raw: {
   category: HouseholdTransactionCategoryInfo | null;
   payerId: string;
   payerName: string;
+  wallet: HouseholdTransactionWalletInfo | null;
 }): HouseholdTransactionClientItem {
   return { ...raw, transactionDate: new Date(raw.transactionDate) };
 }

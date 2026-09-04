@@ -103,5 +103,9 @@ export function toEditableTransactionClientData(item: TransactionHistoryClientIt
     note: item.note,
     category: item.category,
     wallet: item.wallet,
+    // Always null here — this function only ever returns for
+    // income/expense (transfer rows return null above, unreachable via
+    // Edit per docs/09 §3 "Edit tidak ditawarkan untuk transfer").
+    transfer: null,
   };
 }

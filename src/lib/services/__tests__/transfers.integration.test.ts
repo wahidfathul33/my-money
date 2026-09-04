@@ -414,6 +414,9 @@ describe('transfers service', () => {
   });
 
   describe('property: net worth is unchanged by any sequence of self-transfers', () => {
+    // Up to 5 property runs x 5 moves each = up to 25 real dbWrite.transaction
+    // round trips to Neon — comfortably exceeds the global 30s testTimeout
+    // (vitest.config.ts) under real network conditions, not a hang.
     it('holds for a random sequence of transfers between 3 wallets', async () => {
       const userId = await createTestUser();
       userIds.push(userId);
@@ -465,6 +468,6 @@ describe('transfers service', () => {
       );
 
       expect(await netWorth()).toBe(before);
-    });
+    }, 90_000);
   });
 });

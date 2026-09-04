@@ -47,6 +47,8 @@ import {
 import { apiFiltersToSearchParams, toApiFilters } from '../history-filters';
 import { unvoidTransactionAction, voidTransactionAction } from '../actions';
 import { unvoidTransferAction, voidTransferAction } from '@/features/transfers/actions';
+import { setTransactionHouseholdAction } from '@/features/sharing/actions';
+import { BulkTagBar } from '@/features/sharing/components/bulk-tag-bar';
 import type { AddTransactionSheetData } from '../sheet-data';
 import { hasActiveFilters, useHistoryFilters } from '../use-history-filters';
 import { TransactionDayGroup, type DayTotal } from './day-group';
@@ -95,6 +97,12 @@ export function TransactionList({
   const [selected, setSelected] = useState<TransactionHistoryClientItem | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+
+  // Bulk-tagging select mode — tasks/12-sharing-and-privacy spec.md
+  // "Penandaan massal transaksi lama". Only ever entered when the caller
+  // has somewhere to tag TO; see the "Pilih" entry point below.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -160,6 +168,43 @@ export function TransactionList({
   function openDetail(item: TransactionHistoryClientItem) {
     setSelected(item);
     setDetailOpen(true);
+  }
+
+  function toggleSelect(item: TransactionHistoryClientItem) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.add(item.id);
+      return next;
+    });
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }
+
+  /** `taggedIds`/`householdId` come straight back from `<BulkTagBar>` on a
+   * successful `bulkTagTransactionsAction` call. `router.refresh()` picks
+   * up the household expenses page's new count next time it's visited;
+   * this list itself shows no household badge per row today, so there's no
+   * local `items` patch needed here beyond exiting select mode. */
+  function handleBulkTagged(taggedIds: string[], householdId: string) {
+    const householdName = sheetData.households.find((h) => h.id === householdId)?.name ?? 'keluarga';
+    exitSelectMode();
+    router.refresh();
+    toast.show({
+      title: `${taggedIds.length} transaksi ditandai ke ${householdName}`,
+      variant: 'success',
+      action: {
+        label: 'Urungkan',
+        onClick: () => {
+          Promise.all(taggedIds.map((id) => setTransactionHouseholdAction(id, null))).then(() => {
+            router.refresh();
+          });
+        },
+      },
+    });
   }
 
   function adjustDayTotal(item: TransactionHistoryClientItem, sign: 1 | -1) {
@@ -325,6 +370,22 @@ export function TransactionList({
 
   return (
     <div className="flex flex-col" data-testid="transaction-list">
+      {/* Bulk-tagging entry point (tasks/12-sharing-and-privacy) — only
+          offered when there's actually a household to tag TO; hidden for
+          an account with no household, same "don't offer a dead end"
+          reasoning as every other household-gated control in this app. */}
+      {sheetData.households.length > 0 && !selectMode && (
+        <div className="px-page-x flex justify-end py-2">
+          <button
+            type="button"
+            onClick={() => setSelectMode(true)}
+            className="pressable-tint rounded-inner text-brand-readable px-2 py-1 text-sm font-medium"
+          >
+            Pilih
+          </button>
+        </div>
+      )}
+
       {grouped.map(([date, dayItems]) => (
         <TransactionDayGroup
           key={date}
@@ -335,8 +396,20 @@ export function TransactionList({
           total={toDayTotal(dayTotals[date])}
           onOpenDetail={openDetail}
           onQuickDelete={quickDelete}
+          selectMode={selectMode}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
         />
       ))}
+
+      {selectMode && (
+        <BulkTagBar
+          selectedIds={[...selectedIds]}
+          households={sheetData.households}
+          onCancel={exitSelectMode}
+          onTagged={handleBulkTagged}
+        />
+      )}
 
       {nextCursor && (
         <div ref={sentinelRef} className="flex justify-center py-6">

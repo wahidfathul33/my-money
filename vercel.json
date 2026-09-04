@@ -5,6 +5,10 @@
     {
       "path": "/api/cron/expire-invitations",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/budget-rollover",
+      "schedule": "5 17 * * *"
     }
   ]
 }

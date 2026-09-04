@@ -9,6 +9,11 @@ interface LinearProgressProps {
   max?: number;
   label: string;
   className?: string;
+  /** Fill color override — default `bg-brand`. Task 14 (budgets):
+   * `BudgetBar` needs a threshold-dependent fill (safe/warning/over), per
+   * docs/07-design-system.md §... "BudgetBar: progress dengan ambang
+   * warna" — every other caller keeps the default by omitting this. */
+  indicatorClassName?: string;
 }
 
 /**
@@ -16,7 +21,7 @@ interface LinearProgressProps {
  * `width`. Menganimasikan `width` memicu layout setiap frame; §12 dari
  * docs/07 melarangnya secara eksplisit (hanya `transform`/`opacity`/`filter`).
  */
-export function Progress({ value, max = 100, label, className }: LinearProgressProps) {
+export function Progress({ value, max = 100, label, className, indicatorClassName }: LinearProgressProps) {
   const ratio = Math.min(1, Math.max(0, value / max));
   return (
     <ProgressPrimitive.Root
@@ -26,7 +31,10 @@ export function Progress({ value, max = 100, label, className }: LinearProgressP
       className={cn('bg-surface-raised h-2 w-full overflow-hidden rounded-full', className)}
     >
       <ProgressPrimitive.Indicator
-        className="bg-brand h-full w-full origin-left rounded-full transition-transform duration-300 ease-out"
+        className={cn(
+          'h-full w-full origin-left rounded-full transition-transform duration-300 ease-out',
+          indicatorClassName ?? 'bg-brand',
+        )}
         style={{ transform: `scaleX(${ratio})` }}
       />
     </ProgressPrimitive.Root>

@@ -22,7 +22,6 @@ import {
 } from '@/lib/services/budgets';
 import {
   createTestCategory,
-  createTestHousehold,
   createTestHouseholdMember,
   createTestUser,
   deleteTestHousehold,

@@ -33,7 +33,16 @@ test.describe('shared savings goal — two-context flows', () => {
     browser,
     baseURL,
   }) => {
-    test.setTimeout(120_000);
+    // Two full contribution flows (each: open sheet, switch wallet picker,
+    // type 7 keypad digits, save) across two real wallet-funding steps, a
+    // goal creation, two breakdown re-reads, and a withdraw-sheet check —
+    // genuinely more real browser/DB round trips than any single-context
+    // spec in this suite. 120s was observed to be tight specifically on the
+    // Mobile Chrome (Pixel 5) project under concurrent load (this exact
+    // test passed in 1.2m on Desktop Chrome the same run) — same
+    // "legitimately heavy flow" reasoning as household-membership.spec.ts's
+    // own generous timeouts, just for a bigger flow.
+    test.setTimeout(180_000);
 
     const owner = await seedSessionUser({ onboarded: true, name: 'Wahid E2E' });
     const member = await seedSessionUser({ onboarded: true, name: 'Istri E2E' });

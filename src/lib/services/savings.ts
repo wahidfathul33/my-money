@@ -31,7 +31,7 @@ import { dbWrite } from '@/lib/db/write';
 import { savingsContributions, savingsGoals, wallets } from '@/lib/db/schema';
 import { ownedBy } from '@/lib/db/scoped';
 import { postEntries } from '@/lib/finance/ledger';
-import type { Money } from '@/lib/finance/money';
+import { formatIDR, type Money } from '@/lib/finance/money';
 import { requireHouseholdMember } from '@/lib/auth/require-household';
 import { NotFoundError, ValidationError } from '@/lib/api/errors';
 import type { TransactionClient } from '@/lib/db';
@@ -70,7 +70,7 @@ function assertNotTooFarInFuture(date: Date): void {
 
 function assertGoalName(name: string): void {
   if (name.trim().length === 0) {
-    throw new ValidationError({ name: ['Nama goal wajib diisi'] });
+    throw new ValidationError({ name: ['Nama target wajib diisi'] });
   }
 }
 
@@ -106,7 +106,7 @@ async function assertWalletOwnedAndActive(tx: TransactionClient, userId: string,
 async function assertGoalAccess(tx: TransactionClient, userId: string, goal: SavingsGoalRow): Promise<void> {
   if (goal.householdId === null) {
     if (goal.userId !== userId) {
-      throw new NotFoundError('Goal tidak ditemukan');
+      throw new NotFoundError('Target tidak ditemukan');
     }
     return;
   }
@@ -116,7 +116,7 @@ async function assertGoalAccess(tx: TransactionClient, userId: string, goal: Sav
 async function fetchGoalOrThrow(tx: TransactionClient, goalId: string): Promise<SavingsGoalRow> {
   const [goal] = await tx.select().from(savingsGoals).where(eq(savingsGoals.id, goalId)).limit(1);
   if (!goal) {
-    throw new NotFoundError('Goal tidak ditemukan');
+    throw new NotFoundError('Target tidak ditemukan');
   }
   return goal;
 }
@@ -303,7 +303,7 @@ export async function contribute(
       const goal = await fetchGoalOrThrow(tx, goalId);
       await assertGoalAccess(tx, userId, goal);
       if (goal.status === 'archived') {
-        throw new ValidationError({ goalId: ['Goal ini sudah diarsipkan'] });
+        throw new ValidationError({ goalId: ['Target ini sudah diarsipkan'] });
       }
 
       await assertWalletOwnedAndActive(tx, userId, input.walletId);
@@ -389,7 +389,7 @@ export async function withdraw(
     return await dbWrite.transaction(async (tx) => {
       const [goal] = await tx.select().from(savingsGoals).where(eq(savingsGoals.id, goalId)).for('update');
       if (!goal) {
-        throw new NotFoundError('Goal tidak ditemukan');
+        throw new NotFoundError('Target tidak ditemukan');
       }
       await assertGoalAccess(tx, userId, goal);
 
@@ -405,8 +405,12 @@ export async function withdraw(
         );
       const available = BigInt(row?.netFunded ?? '0');
       if (input.amount > available) {
+        // "Sebutkan apa yang salah, lalu apa yang bisa dilakukan" —
+        // docs/08-copywriting.md §5.7, whose own examples state the actual
+        // available figure ("Saldo BCA tidak mencukupi. Tersedia
+        // Rp1.240.000.") rather than a bare rejection.
         throw new ValidationError({
-          amount: ['Jumlah penarikan melebihi kontribusi Anda pada goal ini'],
+          amount: [`Melebihi kontribusi Anda pada target ini. Tersedia ${formatIDR(available)}.`],
         });
       }
 

@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { CountBadge } from '@/components/ui/count-badge';
 import { AddTransactionSheet } from '@/features/transactions/components/add-transaction-sheet';
 import type { AddTransactionSheetData } from '@/features/transactions/sheet-data';
 import type { HouseholdSummary } from '@/features/household/queries';
 import { ContextSwitcher } from '@/features/household/components/context-switcher';
 import { getHouseholdMenuItems } from '@/features/household/household-menu-items';
 import { cn } from '@/lib/utils';
-import { getSidebarItems, isRouteActive } from './nav-items';
+import { aktivitas, getSidebarItems, isRouteActive } from './nav-items';
 import type { NavItem } from './nav-items';
 
 /**
@@ -65,9 +66,14 @@ function activeHouseholdFrom(pathname: string, households: HouseholdSummary[]): 
 interface SidebarProps {
   addTransactionSheetData: AddTransactionSheetData;
   households: HouseholdSummary[];
+  /** tasks/13-transfers-member — badges both the rail icon and the full
+   * sidebar's Aktivitas row (todo.md: "Lencana pada context switcher &
+   * menu Lainnya"; the rail/sidebar is this app's desktop equivalent of
+   * "Lainnya", per docs/02-IA §4). */
+  unacknowledgedCount: number;
 }
 
-export function Sidebar({ addTransactionSheetData, households }: SidebarProps) {
+export function Sidebar({ addTransactionSheetData, households, unacknowledgedCount }: SidebarProps) {
   const pathname = usePathname();
   const activeHousehold = activeHouseholdFrom(pathname, households);
   const items: NavItem[] = activeHousehold
@@ -108,19 +114,27 @@ export function Sidebar({ addTransactionSheetData, households }: SidebarProps) {
             );
           }
           const active = isRouteActive(pathname, item.href, item.exact);
+          const isAktivitas = item.href === aktivitas.href;
           return (
             <Link
               key={item.label}
               href={item.href}
               title={item.label}
-              aria-label={item.label}
+              aria-label={
+                isAktivitas && unacknowledgedCount > 0
+                  ? `${item.label}, ${unacknowledgedCount} belum ditinjau`
+                  : item.label
+              }
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'pressable-tint flex size-11 items-center justify-center rounded-full',
+                'pressable-tint relative flex size-11 items-center justify-center rounded-full',
                 active ? 'text-brand-readable bg-brand-subtle' : 'text-text-muted',
               )}
             >
               <item.icon className="size-6" aria-hidden="true" />
+              {isAktivitas && unacknowledgedCount > 0 && (
+                <CountBadge count={unacknowledgedCount} className="absolute top-1 right-1" />
+              )}
             </Link>
           );
         })}
@@ -131,7 +145,7 @@ export function Sidebar({ addTransactionSheetData, households }: SidebarProps) {
         <div className="text-title text-text px-3 pb-4 font-semibold">MyMoney</div>
         {households.length > 0 && (
           <div className="px-3 pb-4">
-            <ContextSwitcher households={households} variant="desktop" />
+            <ContextSwitcher households={households} variant="desktop" unacknowledgedCount={unacknowledgedCount} />
           </div>
         )}
         <ul className="flex flex-1 flex-col gap-1">
@@ -141,6 +155,11 @@ export function Sidebar({ addTransactionSheetData, households }: SidebarProps) {
                 <Link
                   href={item.href}
                   aria-current={isRouteActive(pathname, item.href, item.exact) ? 'page' : undefined}
+                  aria-label={
+                    item.href === aktivitas.href && unacknowledgedCount > 0
+                      ? `${item.label}, ${unacknowledgedCount} belum ditinjau`
+                      : undefined
+                  }
                   className={cn(
                     'pressable-tint rounded-inner flex h-11 items-center gap-3 px-3 text-sm font-medium',
                     isRouteActive(pathname, item.href, item.exact)
@@ -150,6 +169,9 @@ export function Sidebar({ addTransactionSheetData, households }: SidebarProps) {
                 >
                   <item.icon className="size-5" aria-hidden="true" />
                   {item.label}
+                  {item.href === aktivitas.href && (
+                    <CountBadge count={unacknowledgedCount} className="ml-auto" />
+                  )}
                 </Link>
               ) : (
                 <div className="text-text-subtle flex h-11 items-center gap-3 px-3 text-sm opacity-60">

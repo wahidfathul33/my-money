@@ -4,6 +4,7 @@ import { Check, ChevronDown, Plus, User, Users } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Sheet, SheetClose, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { CountBadge } from '@/components/ui/count-badge';
 import { cn } from '@/lib/utils';
 import type { HouseholdSummary } from '../queries';
 
@@ -14,6 +15,10 @@ interface ContextSwitcherProps {
    * every other presentation-variant pair in this app (docs/02-IA §4,
    * src/components/layout/sidebar.tsx's `AddEntryDialog`). */
   variant: 'mobile' | 'desktop';
+  /** tasks/13-transfers-member — unreviewed Activity count (todo.md:
+   * "Lencana pada context switcher & menu Lainnya"). Defaults to 0 so
+   * every other existing caller/test keeps working unchanged. */
+  unacknowledgedCount?: number;
 }
 
 /**
@@ -28,7 +33,7 @@ interface ContextSwitcherProps {
  * rule in exactly one place, no matter how many call sites this component
  * gets.
  */
-export function ContextSwitcher({ households, variant }: ContextSwitcherProps) {
+export function ContextSwitcher({ households, variant, unacknowledgedCount = 0 }: ContextSwitcherProps) {
   const pathname = usePathname();
   if (households.length === 0) return null;
 
@@ -41,6 +46,11 @@ export function ContextSwitcher({ households, variant }: ContextSwitcherProps) {
       <SheetTrigger asChild>
         <button
           type="button"
+          aria-label={
+            unacknowledgedCount > 0
+              ? `${label}, ${unacknowledgedCount} aktivitas belum ditinjau`
+              : undefined
+          }
           className="pressable-tint rounded-inner border-border bg-surface text-text flex h-10 max-w-full items-center gap-2 border px-3 text-sm font-medium"
         >
           {activeHousehold ? (
@@ -49,6 +59,7 @@ export function ContextSwitcher({ households, variant }: ContextSwitcherProps) {
             <User className="text-text-muted size-4 shrink-0" aria-hidden="true" />
           )}
           <span className="truncate">{label}</span>
+          <CountBadge count={unacknowledgedCount} />
           <ChevronDown className="text-text-muted size-4 shrink-0" aria-hidden="true" />
         </button>
       </SheetTrigger>

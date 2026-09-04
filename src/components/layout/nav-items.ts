@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { BarChart3, Gem, Home, PiggyBank, Receipt, Settings, Users, Wallet } from 'lucide-react';
+import { ArrowDownLeft, BarChart3, Gem, Home, PiggyBank, Receipt, Settings, Users, Wallet } from 'lucide-react';
 
 /**
  * Satu sumber kebenaran untuk item navigasi — dipakai BottomNav (mobile),
@@ -35,6 +35,11 @@ const dompet: NavItem = { label: 'Dompet', icon: Wallet, href: '/wallets' };
 const anggaran: NavItem = { label: 'Anggaran', icon: PiggyBank, href: '/budgets' };
 const laporan: NavItem = { label: 'Laporan', icon: BarChart3, href: '/reports' };
 const pengaturan: NavItem = { label: 'Pengaturan', icon: Settings, href: '/settings' };
+// tasks/13-transfers-member — never a disabled "Segera" slot: OMITTED
+// entirely without a household, exactly like the switcher itself
+// (docs/09-screen-specs.md §14: "Halaman ini tidak muncul di navigasi bila
+// pengguna tidak punya household"), not shown-but-greyed-out.
+export const aktivitas: NavItem = { label: 'Aktivitas', icon: ArrowDownLeft, href: '/activity' };
 
 /**
  * Keluarga — dinamis sejak task 10 (docs/02-IA §2 "Kenapa Keluarga tidak
@@ -51,9 +56,18 @@ export function getKeluargaNavItem(hasHousehold: boolean): NavItem {
 }
 
 // Urutan sheet "Lainnya" (bottom nav slot 5) — docs/02-IA §2 tabel: "Sheet
-// menu → Keluarga, Dompet, Budget, Laporan, Pengaturan".
+// menu → Keluarga, Dompet, Budget, Laporan, Pengaturan". Aktivitas
+// (task 13) masuk tepat sesudah Keluarga — household-adjacent, dan sama
+// sekali tidak ada tanpa household.
 export function getMoreSheetItems(hasHousehold: boolean): NavItem[] {
-  return [getKeluargaNavItem(hasHousehold), dompet, anggaran, laporan, pengaturan];
+  return [
+    getKeluargaNavItem(hasHousehold),
+    ...(hasHousehold ? [aktivitas] : []),
+    dompet,
+    anggaran,
+    laporan,
+    pengaturan,
+  ];
 }
 
 // Urutan sidebar desktop / rail tablet — docs/02-IA §4 diagram: Home,
@@ -65,6 +79,7 @@ export function getSidebarItems(hasHousehold: boolean): NavItem[] {
     anggaran,
     laporan,
     getKeluargaNavItem(hasHousehold),
+    ...(hasHousehold ? [aktivitas] : []),
     pengaturan,
   ];
 }

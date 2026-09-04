@@ -7,6 +7,7 @@ import { users } from '@/lib/db/schema';
 import { AppShell } from '@/components/layout/app-shell';
 import { getAddTransactionSheetData } from '@/features/transactions/sheet-data';
 import { listUserHouseholds } from '@/features/household/queries';
+import { countUnacknowledged } from '@/features/activity/queries';
 
 /**
  * Session guard for every route under `(app)` — docs/12-security-and-auth.md
@@ -43,8 +44,19 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // addTransactionSheetData above.
   const households = await listUserHouseholds(session.user.id);
 
+  // tasks/13-transfers-member — the Activity badge on the context switcher
+  // and "Lainnya" menu. Cheap for a user with no household (naturally 0 —
+  // nobody could have written into their ledger), so no `households.length`
+  // guard is needed here; the NAV ENTRY itself is what's conditional
+  // (src/components/layout/nav-items.ts), not this count.
+  const unacknowledgedCount = await countUnacknowledged(session.user.id);
+
   return (
-    <AppShell addTransactionSheetData={addTransactionSheetData} households={households}>
+    <AppShell
+      addTransactionSheetData={addTransactionSheetData}
+      households={households}
+      unacknowledgedCount={unacknowledgedCount}
+    >
       {children}
     </AppShell>
   );

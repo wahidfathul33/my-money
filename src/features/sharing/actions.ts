@@ -130,13 +130,32 @@ export async function setExcludeFromHouseholdAction(
   return OK;
 }
 
-/** Every route a transaction's household tag can change the numbers on —
- * same set as src/features/transactions/actions.ts's `revalidateTransactions`,
- * plus the household's own expenses page. */
+/**
+ * Every route a transaction's household tag can change the numbers on —
+ * docs/06-api-contracts.md §10's "Transaksi (dengan tag household)" row:
+ * the base transaction set (`/`, `/transactions`) PLUS `/household/[id]`
+ * "dan sub-rutenya" — both the household's summary page (its setup-steps
+ * "Tandai pengeluaran keluarga" line reads `hasAnyHouseholdTransaction`,
+ * src/app/(app)/household/[householdId]/page.tsx) and its expenses page.
+ * Not `/wallets` — tagging/untagging never touches a ledger entry or
+ * balance, only `transactions.household_id`.
+ *
+ * Known limitation: only revalidates the NEW householdId, not a previous
+ * one a transaction was moved away FROM — `setTransactionHousehold`
+ * doesn't report the prior value. The underlying data is correct the
+ * instant the write commits either way (docs §10: "Datanya sendiri sudah
+ * benar seketika — yang tertunda hanya tampilannya"); a viewer already on
+ * the OLD household's page in the same session would need a manual reload
+ * to see it drop off, same class of staleness the same doc section
+ * accepts for a transfer's counterparty.
+ */
 function revalidateHouseholdTag(householdId: string | null): void {
   revalidatePath('/transactions');
   revalidatePath('/');
-  if (householdId) revalidatePath(`/household/${householdId}/transactions`);
+  if (householdId) {
+    revalidatePath(`/household/${householdId}`);
+    revalidatePath(`/household/${householdId}/transactions`);
+  }
 }
 
 export async function setTransactionHouseholdAction(

@@ -2,6 +2,8 @@
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { signInWithEmailAction, signInWithGoogleAction, type SignInFormState } from './actions';
 
 const initialState: SignInFormState = { error: null, sentTo: null };
@@ -16,13 +18,10 @@ function SubmitButton({
   variant?: 'primary' | 'secondary';
 }) {
   const { pending } = useFormStatus();
-  const base = 'w-full rounded-lg px-4 py-3 text-sm font-semibold disabled:opacity-60';
-  const styles =
-    variant === 'primary' ? `${base} bg-zinc-900 text-white` : `${base} border border-zinc-300 text-zinc-900`;
   return (
-    <button type="submit" disabled={pending} className={styles}>
+    <Button type="submit" variant={variant} loading={pending} className="w-full">
       {pending ? pendingLabel : label}
-    </button>
+    </Button>
   );
 }
 
@@ -31,26 +30,27 @@ export function SignInForm({ callbackUrl }: { callbackUrl: string }) {
   const [emailState, emailAction] = useActionState(signInWithEmailAction, initialState);
 
   return (
-    <div className="mt-8 space-y-6">
+    <div className="mt-8 flex flex-col gap-6">
       <form action={googleAction}>
         <input type="hidden" name="callbackUrl" value={callbackUrl} />
         <SubmitButton label="Masuk dengan Google" pendingLabel="Mengalihkan…" />
         {googleState.error ? (
-          <p role="alert" className="mt-2 text-sm text-red-600">
+          <p role="alert" className="text-negative mt-2 text-sm">
             {googleState.error}
           </p>
         ) : null}
       </form>
 
-      <div className="flex items-center gap-3 text-xs text-zinc-400">
-        <div className="h-px flex-1 bg-zinc-200" />
+      <div className="text-text-subtle flex items-center gap-3 text-xs">
+        <div className="bg-border h-px flex-1" />
         atau
-        <div className="h-px flex-1 bg-zinc-200" />
+        <div className="bg-border h-px flex-1" />
       </div>
 
       {emailState.sentTo ? (
-        <p className="text-sm text-zinc-600">
-          Tautan masuk telah dikirim ke <strong>{emailState.sentTo}</strong>. Periksa kotak masuk Anda.
+        <p className="text-text-muted text-sm">
+          Tautan masuk telah dikirim ke <strong className="text-text">{emailState.sentTo}</strong>. Periksa
+          kotak masuk Anda.
         </p>
       ) : (
         // noValidate: Zod (src/app/(auth)/signin/actions.ts) is the
@@ -59,23 +59,12 @@ export function SignInForm({ callbackUrl }: { callbackUrl: string }) {
         // silently short-circuit the submit on some inputs and never call
         // the server at all, giving a stock browser tooltip instead of this
         // form's own styled, consistent error message.
-        <form action={emailAction} className="space-y-3" noValidate>
+        <form action={emailAction} className="flex flex-col gap-3" noValidate>
           <input type="hidden" name="callbackUrl" value={callbackUrl} />
-          <div>
-            <label htmlFor="email" className="text-sm font-medium">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="nama@email.com"
-              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-            />
-          </div>
+          <Input label="Email" name="email" type="text" inputMode="email" placeholder="nama@email.com" />
           <SubmitButton label="Kirim tautan masuk" pendingLabel="Mengirim…" variant="secondary" />
           {emailState.error ? (
-            <p role="alert" className="text-sm text-red-600">
+            <p role="alert" className="text-negative text-sm">
               {emailState.error}
             </p>
           ) : null}

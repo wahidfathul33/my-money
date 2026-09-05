@@ -95,7 +95,7 @@ export function CategoryList({ type, categories }: CategoryListProps) {
           description="Kategori bawaan seharusnya sudah ada — coba muat ulang halaman."
         />
       ) : (
-        <ul className="divide-separator border-border divide-y rounded-lg border">
+        <ul className="divide-separator border-border rounded-card divide-y border">
           {order.map((category, index) => (
             <li key={category.id}>
               <CategoryListRow

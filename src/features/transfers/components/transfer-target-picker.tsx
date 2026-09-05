@@ -90,7 +90,7 @@ export function TransferTargetPicker({ people, value, onChange }: TransferTarget
                     <button
                       type="button"
                       onClick={() => setPendingPersonId(person.userId)}
-                      className="pressable-tint rounded-inner flex h-14 w-full items-center gap-3 px-2 text-left"
+                      className="pressable-tint rounded-inner flex h-12 w-full items-center gap-3 px-2 text-left"
                     >
                       <MemberAvatar seed={person.userId} name={person.name ?? person.email} />
                       <div className="min-w-0 flex-1">
@@ -123,7 +123,7 @@ export function TransferTargetPicker({ people, value, onChange }: TransferTarget
                     // to equal its name (e.g. a "Tunai" cash wallet), the
                     // default would announce "Tunai Tunai".
                     aria-label={`${wallet.name}, ${WALLET_TYPE_META[wallet.type].label}`}
-                    className="pressable-tint rounded-inner text-text flex h-14 w-full items-center gap-3 px-2 text-left"
+                    className="pressable-tint rounded-inner text-text flex h-12 w-full items-center gap-3 px-2 text-left"
                   >
                     <Icon name={wallet.icon} className="size-5 shrink-0" aria-hidden="true" />
                     <span className="min-w-0 flex-1">

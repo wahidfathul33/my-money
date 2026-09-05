@@ -16,10 +16,10 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center p-6">
-      <h1 className="text-xl font-semibold">Masuk ke MyMoney</h1>
-      <p className="mt-2 text-sm text-zinc-500">Kelola pemasukan, pengeluaran, dan kekayaan bersih Anda.</p>
+      <h1 className="text-title text-text font-semibold">Masuk ke MyMoney</h1>
+      <p className="text-text-muted mt-2 text-sm">Kelola pemasukan, pengeluaran, dan kekayaan bersih Anda.</p>
       {error ? (
-        <p role="alert" className="mt-4 text-sm text-red-600">
+        <p role="alert" className="text-negative mt-4 text-sm">
           {mapAuthError(error)}
         </p>
       ) : null}

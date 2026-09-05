@@ -126,7 +126,7 @@ function CategorySheetForm({ type, category, parentOptions, onDone }: CategorySh
   const error = state.status === 'error' ? state.error : null;
 
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <form action={formAction} className="flex flex-col gap-4">
       {isEdit && <input type="hidden" name="categoryId" value={category.id} />}
       {!isEdit && <input type="hidden" name="type" value={type} />}
       <input type="hidden" name="icon" value={icon} />

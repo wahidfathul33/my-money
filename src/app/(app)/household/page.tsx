@@ -53,7 +53,7 @@ export default async function HouseholdListPage() {
               <li key={household.id}>
                 <Link
                   href={`/household/${household.id}`}
-                  className="pressable-tint rounded-inner border-border bg-surface flex h-14 items-center justify-between border px-4"
+                  className="pressable-tint rounded-inner border-border bg-surface flex items-center justify-between border px-4 py-3"
                 >
                   <span className="text-text font-medium">{household.name}</span>
                   <span className="text-text-muted text-sm">{household.memberCount} orang</span>

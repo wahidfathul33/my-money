@@ -10,7 +10,7 @@ export default function SettingsPage() {
     <>
       <PageHeader title="Pengaturan" />
       <nav aria-label="Pengaturan" className="px-page-x">
-        <ul className="divide-separator border-border divide-y rounded-lg border">
+        <ul className="divide-separator border-border rounded-card divide-y border">
           <li>
             <Link
               href="/settings/categories"

@@ -1,9 +1,11 @@
+import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
+import { MoneyText } from '@/components/finance/money-text';
 import { dbRead } from '@/lib/db/read';
 import { wallets } from '@/lib/db/schema';
 import { requireUser } from '@/lib/auth/require-user';
 import { signOutAction } from '@/lib/auth/actions';
 import { ownedBy } from '@/lib/db/scoped';
-import { formatIDR } from '@/lib/finance/money';
 
 /**
  * Minimal placeholder dashboard — task 04's onboarding flow needs a real,
@@ -30,33 +32,29 @@ export default async function DashboardPage() {
   const total = myWallets.reduce((sum, w) => sum + w.balance, 0n);
 
   return (
-    // <div>, not <main> — this renders inside AppShell's own <main>
-    // (src/components/layout/app-shell.tsx); a nested <main> is a duplicate
-    // landmark (axe: landmark-no-duplicate-main) and broke task 02's
-    // max-w-5xl content-width assertion, which targets the outer <main>.
-    <div className="mx-auto max-w-md p-6">
-      <h1 className="text-lg font-semibold">Halo, {user.name ?? user.email}</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Total saldo dompet</p>
-      <p className="text-2xl font-bold">{formatIDR(total)}</p>
+    <>
+      <PageHeader title={`Halo, ${user.name ?? user.email}`} />
+      <div className="px-page-x flex flex-col gap-6 pb-8">
+        <div className="flex flex-col gap-1">
+          <p className="text-text-muted text-sm">Total saldo dompet</p>
+          <MoneyText amount={total} tone="plain" size="display" />
+        </div>
 
-      <ul className="mt-6 space-y-2">
-        {myWallets.map((w) => (
-          <li key={w.id} className="flex justify-between rounded-lg border p-3 text-sm">
-            <span>{w.name}</span>
-            <span>{formatIDR(w.balance)}</span>
-          </li>
-        ))}
-      </ul>
+        <ul className="border-border divide-border rounded-card divide-y border">
+          {myWallets.map((w) => (
+            <li key={w.id} className="flex items-center justify-between px-4 py-3">
+              <span className="text-text text-sm font-medium">{w.name}</span>
+              <MoneyText amount={w.balance} tone="plain" size="sm" />
+            </li>
+          ))}
+        </ul>
 
-      <form action={signOutAction} className="mt-8">
-        {/* text-muted-foreground, not text-zinc-500 — the latter is an
-            unchecked raw Tailwind color and fails WCAG AA contrast in dark
-            mode (4.06:1 vs the required 4.5:1); see src/test/tokens.ts for
-            the tokens this design system actually verifies. */}
-        <button type="submit" className="text-sm text-muted-foreground underline">
-          Keluar
-        </button>
-      </form>
-    </div>
+        <form action={signOutAction}>
+          <Button type="submit" variant="ghost" size="sm">
+            Keluar
+          </Button>
+        </form>
+      </div>
+    </>
   );
 }

@@ -51,7 +51,7 @@ export function ContextSwitcher({ households, variant, unacknowledgedCount = 0 }
               ? `${label}, ${unacknowledgedCount} aktivitas belum ditinjau`
               : undefined
           }
-          className="pressable-tint rounded-inner border-border bg-surface text-text flex h-10 max-w-full items-center gap-2 border px-3 text-sm font-medium"
+          className="pressable-tint rounded-inner border-border bg-surface text-text flex h-11 max-w-full items-center gap-2 border px-3 text-sm font-medium"
         >
           {activeHousehold ? (
             <Users className="text-text-muted size-4 shrink-0" aria-hidden="true" />

@@ -23,8 +23,8 @@ export default async function OnboardingPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center p-6">
-      <h1 className="text-xl font-semibold">Selamat datang di MyMoney</h1>
-      <p className="mt-2 text-sm text-zinc-500">
+      <h1 className="text-title text-text font-semibold">Selamat datang di MyMoney</h1>
+      <p className="text-text-muted mt-2 text-sm">
         Kategori bawaan sudah disiapkan. Sebelum mulai mencatat, atur dompet pertama Anda.
       </p>
       <OnboardingForm />

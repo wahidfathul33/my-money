@@ -15,6 +15,7 @@ import { categories } from '@/lib/db/schema/categories';
 import { ledgerEntries, transactions } from '@/lib/db/schema/transactions';
 import { households, householdMembers } from '@/lib/db/schema/households';
 import { savingsContributions, savingsGoals } from '@/lib/db/schema/savings';
+import { debtPayments, debts, receivablePayments, receivables } from '@/lib/db/schema/obligations';
 
 export async function createTestUser(overrides: Partial<typeof users.$inferInsert> = {}) {
   const id = uuidv7();
@@ -107,6 +108,71 @@ export async function deleteTestHousehold(householdId: string) {
   await dbWrite.delete(households).where(eq(households.id, householdId));
 }
 
+/** `YYYY-MM-DD` for "today" — used as the default `start_date` below (a
+ * `date` NOT NULL column with no schema default, src/lib/db/schema/obligations.ts). */
+function todayDateStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Inserts a `debts` row directly (bypassing the service) — task 18. Prefer
+ * the real `createDebt` service function when the test is exercising
+ * creation itself; this is for tests that need a debt to already exist
+ * (e.g. seeding a specific `status`/`dueDate` for query-layer assertions). */
+export async function createTestDebt(userId: string, overrides: Partial<typeof debts.$inferInsert> = {}) {
+  const id = uuidv7();
+  const initialAmount = overrides.initialAmount ?? 1_000_000_00n;
+  await dbWrite.insert(debts).values({
+    id,
+    userId,
+    creditorName: 'Test Creditor',
+    initialAmount,
+    remainingAmount: initialAmount,
+    startDate: todayDateStr(),
+    affectsWallet: false, // no wallet required unless a test opts in via overrides
+    ...overrides,
+  });
+  return id;
+}
+
+/** Same as `createTestDebt`, for `receivables`. */
+export async function createTestReceivable(
+  userId: string,
+  overrides: Partial<typeof receivables.$inferInsert> = {},
+) {
+  const id = uuidv7();
+  const initialAmount = overrides.initialAmount ?? 1_000_000_00n;
+  await dbWrite.insert(receivables).values({
+    id,
+    userId,
+    debtorName: 'Test Debtor',
+    initialAmount,
+    remainingAmount: initialAmount,
+    startDate: todayDateStr(),
+    affectsWallet: false,
+    ...overrides,
+  });
+  return id;
+}
+
+/**
+ * Removes a debt and every payment row against it — task 18.
+ * `debt_payments.debt_id` is `ON DELETE RESTRICT`
+ * (src/lib/db/schema/obligations.ts), so payments must go first. Needed
+ * separately from `deleteTestUser` for the rare case a test wants to tear
+ * one down mid-test; `deleteTestUser` itself calls this for every debt it
+ * finds owned by the user being removed.
+ */
+export async function deleteTestDebt(debtId: string) {
+  await dbWrite.delete(debtPayments).where(eq(debtPayments.debtId, debtId));
+  await dbWrite.delete(debts).where(eq(debts.id, debtId));
+}
+
+/** Same as `deleteTestDebt`, for `receivables`. */
+export async function deleteTestReceivable(receivableId: string) {
+  await dbWrite.delete(receivablePayments).where(eq(receivablePayments.receivableId, receivableId));
+  await dbWrite.delete(receivables).where(eq(receivables.id, receivableId));
+}
+
 /**
  * Removes a savings goal and every contribution/withdrawal row against it —
  * task 15. `savings_contributions.savings_goal_id` is `ON DELETE RESTRICT`
@@ -176,6 +242,26 @@ export async function deleteTestUser(userId: string) {
   // goal) — not covered by the loop above, which only clears goals this
   // user CREATED.
   await dbWrite.delete(savingsContributions).where(eq(savingsContributions.userId, userId));
+
+  // task 18: debts/receivables are always personal (no shared/cross-user
+  // payment concept in v1 — `debt_payments.user_id` is always the SAME as
+  // the owning debt's `user_id`), so unlike savings there is no separate
+  // "this user's own payments on someone else's row" case to handle.
+  // Payments must go before both the debt/receivable itself
+  // (`debt_payments.debt_id` RESTRICT) and before `ledgerEntries` below
+  // (`debt_payments.ledger_entry_id` RESTRICT); the debt/receivable row
+  // itself must go before `wallets` (`debts.wallet_id` RESTRICT).
+  const ownedDebts = await dbWrite.select({ id: debts.id }).from(debts).where(eq(debts.userId, userId));
+  for (const debt of ownedDebts) {
+    await deleteTestDebt(debt.id);
+  }
+  const ownedReceivables = await dbWrite
+    .select({ id: receivables.id })
+    .from(receivables)
+    .where(eq(receivables.userId, userId));
+  for (const receivable of ownedReceivables) {
+    await deleteTestReceivable(receivable.id);
+  }
 
   const writtenByThisUser = await dbWrite
     .select({ id: transactions.id })

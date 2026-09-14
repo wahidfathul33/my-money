@@ -127,12 +127,70 @@ export async function findOneWayTransferLinks(): Promise<string[]> {
   return rows.rows.map((r) => r.id);
 }
 
+export interface ObligationRemainingDrift {
+  obligationId: string;
+  cachedRemaining: string;
+  actualRemaining: string;
+  drift: string;
+}
+
+/**
+ * I4 (task 18): `debts.remaining_amount` must always equal
+ * `initial_amount − SUM(non-void debt_payments.amount)` — `remaining_amount`
+ * is a CACHE (src/lib/db/schema/obligations.ts's own column comment), and
+ * `applyRemainingDelta` (src/lib/services/obligations.ts) is the only
+ * code path allowed to move it, always via the same SQL-relative-delta
+ * discipline `findWalletBalanceDrift` verifies for `wallets.balance`.
+ */
+export async function findDebtRemainingDrift(): Promise<ObligationRemainingDrift[]> {
+  const rows = await dbRead.execute<{ id: string; cached: string; actual: string; drift: string }>(sql`
+    SELECT d.id, d.remaining_amount AS cached,
+           d.initial_amount - COALESCE(SUM(dp.amount), 0) AS actual,
+           d.remaining_amount - (d.initial_amount - COALESCE(SUM(dp.amount), 0)) AS drift
+    FROM debts d
+    LEFT JOIN debt_payments dp
+           ON dp.debt_id = d.id AND dp.voided_at IS NULL
+    GROUP BY d.id, d.remaining_amount, d.initial_amount
+    HAVING d.remaining_amount <> (d.initial_amount - COALESCE(SUM(dp.amount), 0))
+  `);
+
+  return rows.rows.map((r) => ({
+    obligationId: r.id,
+    cachedRemaining: r.cached,
+    actualRemaining: r.actual,
+    drift: r.drift,
+  }));
+}
+
+/** Same as `findDebtRemainingDrift`, for `receivables`/`receivable_payments`. */
+export async function findReceivableRemainingDrift(): Promise<ObligationRemainingDrift[]> {
+  const rows = await dbRead.execute<{ id: string; cached: string; actual: string; drift: string }>(sql`
+    SELECT r.id, r.remaining_amount AS cached,
+           r.initial_amount - COALESCE(SUM(rp.amount), 0) AS actual,
+           r.remaining_amount - (r.initial_amount - COALESCE(SUM(rp.amount), 0)) AS drift
+    FROM receivables r
+    LEFT JOIN receivable_payments rp
+           ON rp.receivable_id = r.id AND rp.voided_at IS NULL
+    GROUP BY r.id, r.remaining_amount, r.initial_amount
+    HAVING r.remaining_amount <> (r.initial_amount - COALESCE(SUM(rp.amount), 0))
+  `);
+
+  return rows.rows.map((r) => ({
+    obligationId: r.id,
+    cachedRemaining: r.cached,
+    actualRemaining: r.actual,
+    drift: r.drift,
+  }));
+}
+
 export interface ReconciliationReport {
   walletBalanceDrift: WalletBalanceDrift[];
   ledgerOwnerMismatches: OwnerMismatch[];
   unbalancedMemberTransfers: UnbalancedTransferPair[];
   invalidCreatedByRows: string[];
   oneWayTransferLinks: string[];
+  debtRemainingDrift: ObligationRemainingDrift[];
+  receivableRemainingDrift: ObligationRemainingDrift[];
   hasFindings: boolean;
 }
 
@@ -148,13 +206,17 @@ export async function runReconciliation(): Promise<ReconciliationReport> {
   const unbalancedMemberTransfers = await findUnbalancedMemberTransfers();
   const invalidCreatedByRows = await findInvalidCreatedByRows();
   const oneWayTransferLinks = await findOneWayTransferLinks();
+  const debtRemainingDrift = await findDebtRemainingDrift();
+  const receivableRemainingDrift = await findReceivableRemainingDrift();
 
   const hasFindings =
     walletBalanceDrift.length > 0 ||
     ledgerOwnerMismatches.length > 0 ||
     unbalancedMemberTransfers.length > 0 ||
     invalidCreatedByRows.length > 0 ||
-    oneWayTransferLinks.length > 0;
+    oneWayTransferLinks.length > 0 ||
+    debtRemainingDrift.length > 0 ||
+    receivableRemainingDrift.length > 0;
 
   return {
     walletBalanceDrift,
@@ -162,6 +224,8 @@ export async function runReconciliation(): Promise<ReconciliationReport> {
     unbalancedMemberTransfers,
     invalidCreatedByRows,
     oneWayTransferLinks,
+    debtRemainingDrift,
+    receivableRemainingDrift,
     hasFindings,
   };
 }

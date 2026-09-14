@@ -17,6 +17,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { obligationStatusEnum } from './enums';
@@ -89,6 +90,14 @@ export const debtPayments = pgTable(
       .on(table.debtId, table.paymentDate.desc())
       .where(sql`${table.voidedAt} IS NULL`),
     check('debt_payment_positive', sql`${table.amount} > 0`),
+    // Idempotency enforcement — same shape as savings_contributions'
+    // `sc_idempotency_uniq` (src/lib/db/schema/savings.ts): docs/05
+    // §6 requires this for every payment-recording action, and a column
+    // with no enforcing index is not real idempotency, just a place to
+    // store a key nobody checks.
+    uniqueIndex('dp_idempotency_uniq')
+      .on(table.userId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
   ],
 );
 
@@ -157,5 +166,9 @@ export const receivablePayments = pgTable(
       .on(table.receivableId, table.paymentDate.desc())
       .where(sql`${table.voidedAt} IS NULL`),
     check('receivable_payment_positive', sql`${table.amount} > 0`),
+    // See debt_payments' `dp_idempotency_uniq` above — identical shape.
+    uniqueIndex('rp_idempotency_uniq')
+      .on(table.userId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
   ],
 );

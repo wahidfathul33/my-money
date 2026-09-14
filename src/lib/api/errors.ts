@@ -10,6 +10,7 @@
  * "not found" — never confirming to the caller that the record exists but
  * belongs to someone else. See docs/12 §3 and H2 in its threat table.
  */
+import { formatIDR } from '@/lib/finance/money';
 
 export class AppError extends Error {
   constructor(message: string) {
@@ -122,5 +123,26 @@ export class CannotRemoveSelfError extends AppError {
 export class WalletNotEligibleError extends AppError {
   constructor(counterpartyName: string) {
     super(`Dompet ini tidak dapat dipakai untuk mengirim ke ${counterpartyName}`);
+  }
+}
+
+/**
+ * tasks/18-debts-receivables — `OVERPAYMENT`. Thrown by
+ * `recordDebtPayment`/`recordReceivablePayment` (src/lib/services/obligations.ts)
+ * when a payment's amount exceeds `remaining_amount`, checked against a row
+ * locked with `SELECT ... FOR UPDATE` inside the same transaction as the
+ * write — docs/06-api-contracts.md §8's own example ends with exactly
+ * `throw new OverpaymentError(debt.remainingAmount)`.
+ *
+ * Message wording follows docs/08-copywriting.md §5.7's exact example
+ * verbatim — "Pembayaran melebihi sisa hutang. Sisa Rp2.500.000." (no colon
+ * after "Sisa") — not docs/06-api-contracts.md §9's own illustrative table
+ * row for the same error ("Sisa: {sisa}."), since docs/08's own header is
+ * explicit that it is authoritative for every piece of UI text and wins
+ * over any other doc's illustrative wording wherever the two disagree.
+ */
+export class OverpaymentError extends AppError {
+  constructor(remainingAmount: bigint, kind: 'hutang' | 'piutang' = 'hutang') {
+    super(`Pembayaran melebihi sisa ${kind}. Sisa ${formatIDR(remainingAmount)}.`);
   }
 }

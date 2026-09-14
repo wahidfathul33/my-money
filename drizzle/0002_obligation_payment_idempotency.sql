@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "dp_idempotency_uniq" ON "debt_payments" USING btree ("user_id","idempotency_key") WHERE "debt_payments"."idempotency_key" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "rp_idempotency_uniq" ON "receivable_payments" USING btree ("user_id","idempotency_key") WHERE "receivable_payments"."idempotency_key" IS NOT NULL;

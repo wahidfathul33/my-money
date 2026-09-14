@@ -9,6 +9,10 @@
     {
       "path": "/api/cron/budget-rollover",
       "schedule": "5 17 * * *"
+    },
+    {
+      "path": "/api/cron/gold-price",
+      "schedule": "0 19 * * *"
     }
   ]
 }

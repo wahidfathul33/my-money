@@ -525,6 +525,10 @@ CREATE TABLE deposits (
   status               deposit_status NOT NULL DEFAULT 'active',
   wallet_id            UUID REFERENCES dompet(id) ON DELETE RESTRICT,
   rolled_from_id       UUID REFERENCES deposits(id) ON DELETE SET NULL,
+  -- task 17 additions:
+  idempotency_key             TEXT,  -- createDeposit's create-once guard
+  withdrawal_idempotency_key  TEXT,  -- withdrawDeposit's — a SEPARATE column, see note below
+  last_interest_payment_date  DATE,  -- cursor for `monthly` payout's next accrual period
   created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
 
@@ -536,7 +540,11 @@ CREATE TABLE deposits (
 
 CREATE INDEX deposits_user_status_idx ON deposits (user_id, status);
 CREATE INDEX deposits_maturity_idx    ON deposits (maturity_date) WHERE status = 'active';
+CREATE UNIQUE INDEX deposits_idempotency_uniq ON deposits (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX deposits_withdrawal_idempotency_uniq ON deposits (user_id, withdrawal_idempotency_key) WHERE withdrawal_idempotency_key IS NOT NULL;
 ```
+
+`withdrawDeposit` gets its OWN idempotency column rather than reusing `idempotency_key`: it `UPDATE`s the same row `createDeposit` `INSERT`ed, so overwriting `idempotency_key` at withdrawal time would destroy the creation's dedup key permanently. This is belt-and-suspenders alongside the natural `WHERE status IN ('active','matured')` guard (a deposit can only ever be withdrawn once regardless) — the unique-violation → re-select path lets a retried withdrawal request return the exact prior success response, same shape as `savings.ts`'s `contribute`/`withdraw` — see src/lib/services/deposits.ts.
 
 ## 10. Hutang & Piutang
 

@@ -148,6 +148,36 @@ export const deposits = pgTable(
     rolledFromId: uuid('rolled_from_id').references((): AnyPgColumn => deposits.id, {
       onDelete: 'set null',
     }),
+    // task 17 additions — NOT in docs/04-database-schema.md §9.2's original
+    // sketch, added here because the acceptance criteria explicitly require
+    // both create AND withdraw to carry an idempotency key (spec.md's task
+    // instructions: "like every other mutating action in the app"), and
+    // neither has anywhere else to live:
+    //   - `idempotencyKey`: createDeposit's create-once guard, identical
+    //     shape to `savings_contributions.idempotency_key`
+    //     (src/lib/db/schema/savings.ts) — unique (user_id, idempotency_key)
+    //     below.
+    //   - `withdrawalIdempotencyKey`: a SEPARATE column, not a reuse of the
+    //     one above — `withdrawDeposit` UPDATEs the same row `createDeposit`
+    //     INSERTed, so overwriting `idempotencyKey` at withdrawal time would
+    //     destroy the creation's own dedup key permanently (a retried CREATE
+    //     arriving late would then find no match and create a duplicate).
+    //     Its own unique (user_id, withdrawal_idempotency_key) index below.
+    //     Belt-and-suspenders alongside (not instead of) the natural
+    //     `WHERE status IN ('active','matured')` guard: a deposit can only
+    //     ever be withdrawn once regardless, but this lets a retried
+    //     withdrawal request return the EXACT prior success response
+    //     (via the unique-violation → re-select path, same shape as
+    //     `savings.ts`'s `contribute`/`withdraw`) instead of a "sudah
+    //     dicairkan" error — see src/lib/services/deposits.ts.
+    //   - `lastInterestPaymentDate`: cursor for `monthly` payout — where the
+    //     NEXT payment's accrual period starts, and the efficient
+    //     `WHERE last_interest_payment_date IS NULL OR < :periodStart` guard
+    //     `payMonthlyInterest` uses instead of scanning `ledger_entries` for
+    //     every monthly deposit on every cron run.
+    idempotencyKey: text('idempotency_key'),
+    withdrawalIdempotencyKey: text('withdrawal_idempotency_key'),
+    lastInterestPaymentDate: date('last_interest_payment_date'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -156,6 +186,12 @@ export const deposits = pgTable(
     index('deposits_maturity_idx')
       .on(table.maturityDate)
       .where(sql`${table.status} = 'active'`),
+    uniqueIndex('deposits_idempotency_uniq')
+      .on(table.userId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
+    uniqueIndex('deposits_withdrawal_idempotency_uniq')
+      .on(table.userId, table.withdrawalIdempotencyKey)
+      .where(sql`${table.withdrawalIdempotencyKey} IS NOT NULL`),
     check('deposit_principal_positive', sql`${table.principal} > 0`),
     check('deposit_dates_valid', sql`${table.maturityDate} > ${table.startDate}`),
     check('deposit_rate_sane', sql`${table.interestRateAnnual} BETWEEN 0 AND 100`),

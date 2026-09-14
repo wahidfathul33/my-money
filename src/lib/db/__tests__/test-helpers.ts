@@ -16,6 +16,7 @@ import { ledgerEntries, transactions } from '@/lib/db/schema/transactions';
 import { households, householdMembers } from '@/lib/db/schema/households';
 import { savingsContributions, savingsGoals } from '@/lib/db/schema/savings';
 import { debtPayments, debts, receivablePayments, receivables } from '@/lib/db/schema/obligations';
+import { assets, deposits } from '@/lib/db/schema/assets';
 
 export async function createTestUser(overrides: Partial<typeof users.$inferInsert> = {}) {
   const id = uuidv7();
@@ -93,6 +94,58 @@ export async function createTestHouseholdMember(
     ...overrides,
   });
   return id;
+}
+
+/** Inserts an `assets` row directly — task 17. Used to back a
+ * directly-inserted `deposits` row (`deposits.asset_id` is `NOT NULL`); most
+ * deposit tests should prefer going through `createDeposit`
+ * (src/lib/services/deposits.ts), which creates both rows itself — this is
+ * for the few tests that need to seed a deposit's exact status/dates
+ * directly (e.g. an already-`matured` row for the cron tests) without
+ * going through the service's own validation. */
+export async function createTestAsset(userId: string, overrides: Partial<typeof assets.$inferInsert> = {}) {
+  const id = uuidv7();
+  await dbWrite.insert(assets).values({
+    id,
+    userId,
+    name: 'Test Asset',
+    assetType: 'deposit',
+    ...overrides,
+  });
+  return id;
+}
+
+/** Inserts a `deposits` row directly, plus its backing `assets` row unless
+ * `assetId` is passed in `overrides` — task 17. See `createTestAsset`'s doc
+ * comment for when to prefer this over the real `createDeposit` service. */
+export async function createTestDeposit(userId: string, overrides: Partial<typeof deposits.$inferInsert> = {}) {
+  const assetId = overrides.assetId ?? (await createTestAsset(userId));
+  const id = uuidv7();
+  await dbWrite.insert(deposits).values({
+    id,
+    assetId,
+    userId,
+    bankName: 'Test Bank',
+    principal: 10_000_000_00n,
+    interestRateAnnual: '4.2500',
+    taxRate: '0.2000',
+    startDate: '2026-01-01',
+    maturityDate: '2027-01-01',
+    ...overrides,
+  });
+  return id;
+}
+
+/** Removes a deposit and its backing asset — `deposits.asset_id` is
+ * `ON DELETE RESTRICT`, so the deposit must go first. Any `rolled_from_id`
+ * pointing AT this deposit from a successor is `ON DELETE SET NULL`, so no
+ * separate handling is needed for ARO chains either direction. */
+export async function deleteTestDeposit(depositId: string) {
+  const [deposit] = await dbWrite.select({ assetId: deposits.assetId }).from(deposits).where(eq(deposits.id, depositId));
+  await dbWrite.delete(deposits).where(eq(deposits.id, depositId));
+  if (deposit) {
+    await dbWrite.delete(assets).where(eq(assets.id, deposit.assetId));
+  }
 }
 
 /**
@@ -271,6 +324,15 @@ export async function deleteTestUser(userId: string) {
     const ids = writtenByThisUser.map((row) => row.id);
     await dbWrite.delete(ledgerEntries).where(inArray(ledgerEntries.transactionId, ids));
     await dbWrite.delete(transactions).where(inArray(transactions.id, ids));
+  }
+
+  // task 17: `deposits.wallet_id` and `deposits.asset_id` are both
+  // ON DELETE RESTRICT, so deposits (and their backing assets) must go
+  // before `wallets` below. `rolled_from_id` self-references are
+  // ON DELETE SET NULL, so an ARO chain can be cleared in any order.
+  const ownedDeposits = await dbWrite.select({ id: deposits.id }).from(deposits).where(eq(deposits.userId, userId));
+  for (const deposit of ownedDeposits) {
+    await deleteTestDeposit(deposit.id);
   }
 
   await dbWrite.delete(householdMembers).where(eq(householdMembers.userId, userId));

@@ -1,0 +1,2 @@
+ALTER TABLE "deposits" ADD COLUMN "withdrawal_idempotency_key" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "deposits_withdrawal_idempotency_uniq" ON "deposits" USING btree ("user_id","withdrawal_idempotency_key") WHERE "deposits"."withdrawal_idempotency_key" IS NOT NULL;

@@ -55,6 +55,11 @@ interface DepositFormSheetProps {
   /** Present => edit mode. Absent => create mode. */
   deposit?: DepositDetailClientData;
   wallets: WalletOption[];
+  /** The caller's account-level default wallet (create mode's initial
+   * source-wallet selection) — same `resolveDefaultWalletId` prop shape as
+   * src/features/savings/components/contribute-sheet.tsx. `null` when the
+   * account has none, or no active wallets exist at all. */
+  defaultWalletId?: string | null;
   onSuccess?: (depositId: string) => void;
 }
 
@@ -74,7 +79,7 @@ export function DepositFormSheet(props: DepositFormSheetProps) {
   );
 }
 
-function DepositFormSheetForm({ onOpenChange, deposit, wallets, onSuccess }: DepositFormSheetProps) {
+function DepositFormSheetForm({ onOpenChange, deposit, wallets, defaultWalletId, onSuccess }: DepositFormSheetProps) {
   const isEdit = Boolean(deposit);
   const action = isEdit ? updateDepositAction : createDepositAction;
   const [state, formAction, isPending] = useActionState(action, initialState);
@@ -84,7 +89,7 @@ function DepositFormSheetForm({ onOpenChange, deposit, wallets, onSuccess }: Dep
   const [payoutSchedule, setPayoutSchedule] = useState(deposit?.payoutSchedule ?? 'at_maturity');
   const [aroEnabled, setAroEnabled] = useState(deposit?.aroEnabled ?? false);
   const [aroIncludeInterest, setAroIncludeInterest] = useState(deposit?.aroIncludeInterest ?? false);
-  const [walletId, setWalletId] = useState(deposit?.walletId ?? wallets[0]?.id ?? NO_WALLET_VALUE);
+  const [walletId, setWalletId] = useState(deposit?.walletId ?? defaultWalletId ?? wallets[0]?.id ?? NO_WALLET_VALUE);
 
   const wasPending = useRef(isPending);
   useEffect(() => {

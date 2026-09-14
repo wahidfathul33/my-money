@@ -133,13 +133,24 @@ describe('gold queries', () => {
       expect(summary.unrealizedGain).toBe(summary.currentValue - gramsToMoney(parseGrams('15'), 1_100_000_00n));
     });
 
-    it('listGoldLots returns every lot with remaining grams, oldest purchase first, excluding fully-sold lots', async () => {
+    it('listGoldLots excludes fully-sold lots but includes ones bought afterward, oldest purchase first', async () => {
+      // NOTE: an earlier version of this test tried to "fully liquidate"
+      // one SPECIFIC lot by selling exactly its own weight (3g) out of a
+      // 10g+3g=13g pool. That's not how sellGold works — computeSale
+      // reduces every lot PROPORTIONALLY to its share of the TOTAL
+      // (src/lib/finance/gold.ts's own doc comment: chosen over FIFO
+      // because physical gold is fungible), so selling 3g out of 13g
+      // shaves a little off BOTH lots rather than zeroing either one. That
+      // was a bug in this test's premise, caught by actually running it
+      // against the real DB — fixed by selling the ENTIRE pool (which
+      // provably zeroes every lot exactly, see computeSale's full-sale
+      // proof case) and then buying a fresh lot afterward instead.
       const { userId, walletId } = await setupUser();
       await buyGold(userId, {
         weightGrams: '10',
         pricePerGram: 1_000_000_00n,
         walletId,
-        purchaseDate: new Date('2026-01-15'),
+        purchaseDate: new Date('2026-01-01'),
         goldForm: null,
         idempotencyKey: uuidv7(),
       });
@@ -147,22 +158,31 @@ describe('gold queries', () => {
         weightGrams: '3',
         pricePerGram: 1_100_000_00n,
         walletId,
-        purchaseDate: new Date('2026-01-01'),
+        purchaseDate: new Date('2026-01-05'),
         goldForm: null,
         idempotencyKey: uuidv7(),
       });
-      // Fully liquidate the second (3g) lot -> it must disappear from listGoldLots.
       await sellGold(userId, {
-        weightGrams: '3',
+        weightGrams: '13', // the ENTIRE combined holding
         pricePerGram: 1_050_000_00n,
         walletId,
-        saleDate: new Date('2026-01-20'),
+        saleDate: new Date('2026-01-10'),
+        idempotencyKey: uuidv7(),
+      });
+      expect(await listGoldLots(userId)).toEqual([]);
+
+      await buyGold(userId, {
+        weightGrams: '5',
+        pricePerGram: 1_200_000_00n,
+        walletId,
+        purchaseDate: new Date('2026-01-20'),
+        goldForm: null,
         idempotencyKey: uuidv7(),
       });
 
       const lots = await listGoldLots(userId);
       expect(lots).toHaveLength(1);
-      expect(lots[0]?.remainingGrams).toBe('10.0000');
+      expect(lots[0]?.remainingGrams).toBe('5.0000');
     });
 
     it('getLatestGoldPrice reports the newest price with a correctly computed age and staleness', async () => {

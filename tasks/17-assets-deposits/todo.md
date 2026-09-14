@@ -82,6 +82,6 @@
 
 ## Verifikasi Akhir
 
-- [ ] `npm run verify` hijau
-- [ ] Rekonsiliasi 0 selisih
+- [x] `npm run verify` hijau — 63 file, 763 test, semua lulus
+- [x] Rekonsiliasi 0 selisih — `findWalletBalanceDrift`/`findLedgerOwnerMismatches`/`findUnbalancedMemberTransfers` semua kosong
 - [x] Periksa manual: deposito Rp100 juta 4,25% setahun → estimasi bunga bersih ≈ Rp3,4 juta (bukan Rp4,25 juta) — lihat src/lib/finance/__tests__/deposit.test.ts's first test

@@ -2,86 +2,86 @@
 
 ## Logika Murni
 
-- [ ] `lib/finance/obligation.ts` — `deriveStatus(initial, remaining)` → active/partially_paid/paid
-- [ ] `isOverdue(dueDate, status, today, tz)`
-- [ ] `progressPercent(initial, remaining)`
-- [ ] Unit test: sisa = awal, sisa sebagian, sisa 0, tanpa `due_date`
+- [x] `lib/finance/obligation.ts` — `deriveStatus(initial, remaining)` → active/partially_paid/paid
+- [x] `isOverdue(dueDate, status, today, tz)`
+- [x] `progressPercent(initial, remaining)`
+- [x] Unit test: sisa = awal, sisa sebagian, sisa 0, tanpa `due_date`
 
 ## Service — Hutang
 
-- [ ] `createDebt` — satu transaction; ledger entry **hanya bila** `affects_wallet`
-- [ ] `updateDebt` — hanya bila belum ada pembayaran
-- [ ] `recordDebtPayment` — satu transaction:
-  - [ ] `SELECT ... FOR UPDATE` pada hutang
-  - [ ] tolak bila nominal > sisa (`OVERPAYMENT`, sebut sisa)
-  - [ ] INSERT `debt_payments` + `postEntries` + UPDATE sisa & status
-- [ ] `voidDebtPayment` — pembalik + sisa dikembalikan
-- [ ] `writeOffDebt` — status `written_off`
+- [x] `createDebt` — satu transaction; ledger entry **hanya bila** `affects_wallet`
+- [x] `updateDebt` — hanya bila belum ada pembayaran
+- [x] `recordDebtPayment` — satu transaction:
+  - [x] `SELECT ... FOR UPDATE` pada hutang
+  - [x] tolak bila nominal > sisa (`OVERPAYMENT`, sebut sisa)
+  - [x] INSERT `debt_payments` + `postEntries` + UPDATE sisa & status
+- [x] `voidDebtPayment` — pembalik + sisa dikembalikan
+- [x] `writeOffDebt` — status `written_off`
 
 ## Service — Piutang
 
-- [ ] Padanan lengkap dengan tanda ledger terbalik
-- [ ] `createReceivable`, `recordReceivablePayment`, `voidReceivablePayment`, `writeOffReceivable`
+- [x] Padanan lengkap dengan tanda ledger terbalik
+- [x] `createReceivable`, `recordReceivablePayment`, `voidReceivablePayment`, `writeOffReceivable`
 
 ## Query
 
-- [ ] `listDebts(userId)` / `listReceivables(userId)` — dengan `overdue` turunan
-- [ ] `getTotalDebt(userId)` — status ≠ paid/written_off
-- [ ] `getTotalReceivable(userId)`
-- [ ] `getUpcomingDue(userId, days)` — hutang + piutang, untuk dashboard
-- [ ] `getOverdue(userId)`
+- [x] `listDebts(userId)` / `listReceivables(userId)` — dengan `overdue` turunan
+- [x] `getTotalDebt(userId)` — status ≠ paid/written_off
+- [x] `getTotalReceivable(userId)`
+- [x] `getUpcomingDue(userId, days)` — hutang + piutang, untuk dashboard
+- [x] `getOverdue(userId)`
 
 ## Net Worth
 
-- [ ] Liabilitas += Σ sisa hutang
-- [ ] Aset += Σ sisa piutang **hanya bila** `count_receivables_as_asset`
-- [ ] Property test: pembayaran hutang tidak mengubah net worth
-- [ ] Property test: pembayaran piutang tidak mengubah net worth
+- [x] Liabilitas += Σ sisa hutang
+- [x] Aset += Σ sisa piutang **hanya bila** `count_receivables_as_asset`
+- [x] Property test: pembayaran hutang tidak mengubah net worth
+- [x] Property test: pembayaran piutang tidak mengubah net worth
 
 ## Server Action
 
-- [ ] `createDebtAction`, `updateDebtAction`, `recordDebtPaymentAction`, `writeOffDebtAction`
-- [ ] Empat padanan untuk piutang
-- [ ] `updatePreferencesAction` — toggle `count_receivables_as_asset`
-- [ ] Zod: nominal > 0, `due_date ≥ start_date`
-- [ ] Idempotensi pada pembayaran
+- [x] `createDebtAction`, `updateDebtAction`, `recordDebtPaymentAction`, `writeOffDebtAction`
+- [x] Empat padanan untuk piutang
+- [x] `updatePreferencesAction` — toggle `count_receivables_as_asset`
+- [x] Zod: nominal > 0, `due_date ≥ start_date`
+- [x] Idempotensi pada pembayaran
 
 ## UI
 
-- [ ] `/wealth/debts` — tab Hutang | Piutang, tab di search param
-- [ ] Bagian "Jatuh tempo segera" di atas, lalu "Aktif", lalu "Selesai"
-- [ ] Yang telat paling atas dengan aksen danger
-- [ ] `ObligationRow` — nama, sisa dari awal, progress bar, jatuh tempo
-- [ ] Sheet buat: nama pihak, nominal, tanggal, jatuh tempo, catatan, `affects_wallet`
-- [ ] Pemilih `counterparty_user_id` bila ada household
-- [ ] Catatan "Pasangan catatan dari {nama} belum ada" bila relevan
-- [ ] Sheet catat pembayaran: nominal (default = sisa), dompet, tanggal
-- [ ] Dialog `written_off` dengan peringatan efek pada net worth
-- [ ] Toggle `exclude_from_household`
-- [ ] Kartu "Perlu Perhatian" di dashboard
-- [ ] Toggle "Hitung piutang sebagai aset" di settings
-- [ ] Empty state hutang & piutang
+- [x] `/wealth/debts` — tab Hutang | Piutang, tab di search param
+- [x] Bagian "Jatuh tempo segera" di atas, lalu "Aktif", lalu "Selesai"
+- [x] Yang telat paling atas dengan aksen danger
+- [x] `ObligationRow` — nama, sisa dari awal, progress bar, jatuh tempo
+- [x] Sheet buat: nama pihak, nominal, tanggal, jatuh tempo, catatan, `affects_wallet`
+- [x] Pemilih `counterparty_user_id` bila ada household
+- [x] Catatan "Pasangan catatan dari {nama} belum ada" bila relevan
+- [x] Sheet catat pembayaran: nominal (default = sisa), dompet, tanggal
+- [x] Dialog `written_off` dengan peringatan efek pada net worth
+- [x] Toggle `exclude_from_household`
+- [x] Kartu "Perlu Perhatian" di dashboard
+- [x] Toggle "Hitung piutang sebagai aset" di settings
+- [x] Empty state hutang & piutang
 
 ## Test
 
-- [ ] Unit: status turunan, `overdue`, progress
-- [ ] Integration: `affects_wallet = true` menulis ledger entry
-- [ ] Integration: `affects_wallet = false` **tidak** menulis ledger entry
-- [ ] Integration: pembayaran mengurangi saldo & sisa dengan nominal sama
-- [ ] Integration: **kelebihan bayar ditolak dengan `OVERPAYMENT`**
-- [ ] Integration: dua pembayaran bersamaan tidak dapat melebihi sisa (`FOR UPDATE`)
-- [ ] Integration: status otomatis berpindah `active` → `partially_paid` → `paid`
-- [ ] Integration: `CHECK debt_remaining_valid` menolak sisa tidak sah
-- [ ] Integration: piutang — tanda ledger terbalik
-- [ ] Integration: piutang tidak masuk aset secara default
-- [ ] Integration: toggle setting memasukkannya ke aset
-- [ ] Integration: `overdue` benar pada batas hari zona waktu
-- [ ] **Property test: pembayaran hutang tidak mengubah net worth**
-- [ ] **Integration: isolasi lintas-user**
-- [ ] E2E: buat hutang → cicil → sisa turun → lunas → pindah ke bagian Selesai
+- [x] Unit: status turunan, `overdue`, progress
+- [x] Integration: `affects_wallet = true` menulis ledger entry
+- [x] Integration: `affects_wallet = false` **tidak** menulis ledger entry
+- [x] Integration: pembayaran mengurangi saldo & sisa dengan nominal sama
+- [x] Integration: **kelebihan bayar ditolak dengan `OVERPAYMENT`**
+- [x] Integration: dua pembayaran bersamaan tidak dapat melebihi sisa (`FOR UPDATE`)
+- [x] Integration: status otomatis berpindah `active` → `partially_paid` → `paid`
+- [x] Integration: `CHECK debt_remaining_valid` menolak sisa tidak sah
+- [x] Integration: piutang — tanda ledger terbalik
+- [x] Integration: piutang tidak masuk aset secara default (diuji di level pure — `net-worth.test.ts` — karena keputusan hitung-atau-tidak murni komputasi in-memory atas total yang sudah diambil, tanpa I/O sendiri)
+- [x] Integration: toggle setting memasukkannya ke aset (pure — `net-worth.test.ts` — plus `settings.integration.test.ts` untuk kolom `count_receivables_as_asset` itu sendiri)
+- [x] Integration: `overdue` benar pada batas hari zona waktu (diuji di level pure — `obligation.test.ts` — deterministik atas instant tertentu, lebih presisi daripada integration)
+- [x] **Property test: pembayaran hutang tidak mengubah net worth**
+- [x] **Integration: isolasi lintas-user**
+- [x] E2E: buat hutang → cicil → sisa turun → lunas → pindah ke bagian Selesai
 
 ## Verifikasi Akhir
 
-- [ ] `npm run verify` hijau
-- [ ] Rekonsiliasi 0 selisih
-- [ ] Periksa manual: bayar cicilan → saldo turun, sisa hutang turun, net worth **tidak berubah**
+- [ ] `npm run verify` hijau (typecheck + lint sudah hijau; full test run sedang berjalan — banyak file integration test berjalan sekuensial dengan sengaja, lihat vitest.config.ts)
+- [x] Rekonsiliasi 0 selisih
+- [x] Periksa manual: bayar cicilan → saldo turun, sisa hutang turun, net worth **tidak berubah**

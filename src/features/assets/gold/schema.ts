@@ -26,12 +26,21 @@ export const gramsSchema = z
 
 export const priceAmountSchema = z.string().trim().min(1, 'Harga wajib diisi');
 
+/**
+ * `buyGoldAction` is called with a plain object, not `FormData` (this
+ * module's file header) — "no gold form specified" arrives as a literal
+ * `null`, not an absent key. A bare `.optional()` (which accepts
+ * `undefined` but rejects `null`) is exactly the pitfall
+ * src/features/savings/schema.ts's `contributionNoteSchema` documents at
+ * length; `.nullable().optional()` accepts both shapes.
+ */
 const goldFormSchema = z
   .string()
   .trim()
   .max(80, 'Bentuk emas terlalu panjang')
+  .nullable()
   .optional()
-  .transform((value) => (value === undefined || value === '' ? null : value));
+  .transform((value) => (value === undefined || value === null || value === '' ? null : value));
 
 export const buyGoldSchema = z.object({
   weightGrams: gramsSchema,

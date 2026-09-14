@@ -82,6 +82,6 @@
 
 ## Verifikasi Akhir
 
-- [ ] `npm run verify` hijau (typecheck + lint sudah hijau; full test run sedang berjalan — banyak file integration test berjalan sekuensial dengan sengaja, lihat vitest.config.ts)
+- [x] `npm run verify` hijau — typecheck bersih, lint bersih (0 warning), `vitest run`: 61 file test lulus, 735 test lulus, 0 gagal (durasi ~53 menit, sekuensial dengan sengaja lintas seluruh integration test — lihat vitest.config.ts)
 - [x] Rekonsiliasi 0 selisih
 - [x] Periksa manual: bayar cicilan → saldo turun, sisa hutang turun, net worth **tidak berubah**

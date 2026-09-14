@@ -10,7 +10,7 @@
  * proportional `remaining_grams` reduction, buyback-only valuation
  * (ADR-007), cross-user isolation, idempotency, and reconciliation.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { dbWrite } from '@/lib/db/write';
@@ -517,6 +517,87 @@ describe('gold service', () => {
       userIds.push(userId);
 
       await expect(new ManualPriceProvider(userId).fetch()).rejects.toThrow();
+    });
+  });
+
+  describe('fetchGoldPriceWithFallback — real external failure, real DB fallback', () => {
+    // src/lib/gold-price/__tests__/provider.test.ts already proves the
+    // fallback ORCHESTRATION with both providers mocked. This test proves
+    // the same guarantee end-to-end: a REAL failed network request (an
+    // RFC 2606 `.invalid` host, guaranteed to never resolve) falling back
+    // to a REAL `ManualPriceProvider` read against the real database —
+    // todo.md's "Integration: provider eksternal gagal -> memakai harga
+    // manual terakhir".
+    //
+    // `getEnv()` caches its parsed result at module scope, so this test
+    // resets the module registry and re-imports fresh after stubbing
+    // `GOLD_PRICE_PROVIDER`/`GOLD_PRICE_API_URL` — otherwise whichever
+    // value was cached first (from this file's own earlier imports) would
+    // stick for every subsequent test in the process.
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('falls back to the last manually-recorded price when the external fetch genuinely fails', async () => {
+      const userId = await createTestUser();
+      userIds.push(userId);
+      await recordGoldPrice(userId, {
+        priceDate: '2026-04-01',
+        sellPerGram: 1_300_000_00n,
+        buybackPerGram: 1_240_000_00n,
+        source: 'manual',
+      });
+
+      vi.resetModules();
+      vi.stubEnv('GOLD_PRICE_PROVIDER', 'external');
+      vi.stubEnv('GOLD_PRICE_API_URL', 'https://gold-price-provider.invalid/quote');
+
+      const { fetchGoldPriceWithFallback } = await import('@/lib/gold-price/provider');
+      const result = await fetchGoldPriceWithFallback(userId);
+
+      expect(result.fellBackToManual).toBe(true);
+      expect(result.usedProviderId).toBe('manual');
+      expect(result.quote.buybackPerGram).toBe(1_240_000_00n);
+    });
+  });
+
+  describe('net worth invariant (docs/03-domain-model.md §14.3 #3)', () => {
+    it('buying gold when a price already exists decreases net worth by EXACTLY the sell/buyback spread — never increases it', async () => {
+      const { userId, walletId } = await setupUserWithWallet();
+
+      // A price recorded BEFORE the purchase — spec.md's "Catatan": the
+      // spread-only dip is what happens once a price is known; the
+      // no-price-yet case dips by the full cost instead (cached_value is
+      // honestly 0 with nothing to value against yet — see
+      // src/lib/services/gold.ts's `recalculateCachedValue`), which is a
+      // DIFFERENT, deliberate state, not this invariant's subject.
+      await recordGoldPrice(userId, {
+        priceDate: '2026-01-01',
+        sellPerGram: 1_200_000_00n,
+        buybackPerGram: 1_100_000_00n,
+        source: 'manual',
+      });
+
+      const walletBefore = await getWalletBalance(walletId);
+      await buyGold(userId, {
+        weightGrams: '10',
+        pricePerGram: 1_200_000_00n,
+        walletId,
+        purchaseDate: new Date(),
+        goldForm: null,
+        idempotencyKey: uuidv7(),
+      });
+      const walletAfter = await getWalletBalance(walletId);
+      const walletDecrease = walletBefore - walletAfter;
+
+      const asset = await getAsset(userId);
+      const assetValueIncrease = asset!.cachedValue; // was 0 (no asset existed) before this purchase.
+
+      const netWorthChange = assetValueIncrease - walletDecrease;
+      const expectedSpread = gramsToMoney(parseGrams('10'), 1_200_000_00n - 1_100_000_00n);
+
+      expect(netWorthChange).toBeLessThan(0n);
+      expect(-netWorthChange).toBe(expectedSpread);
     });
   });
 

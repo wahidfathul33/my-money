@@ -131,13 +131,29 @@ async function assertWalletOwnedAndActive(tx: TransactionClient, userId: string,
   }
 }
 
-/** Finds the caller's one-and-only gold asset row, creating it (status
+/**
+ * Finds the caller's one-and-only gold asset row, creating it (status
  * `active`) if this is their first purchase ever — todo.md: "INSERT asset
  * (bila belum ada) + lot". Every subsequent purchase/sale reuses the SAME
  * asset row; `gold_lots`/`gold_sales` scope by `user_id` directly, so
  * nothing besides `cached_value` bookkeeping actually depends on there
  * being exactly one row, but keeping it singular is what makes "Emas" one
- * coherent section instead of an arbitrary list of assets. */
+ * coherent section instead of an arbitrary list of assets.
+ *
+ * Known limitation: this is a plain check-then-insert, not guarded by a
+ * unique constraint or advisory lock. Two literally-concurrent FIRST
+ * purchases for the same brand-new user (two tabs racing, not a single
+ * double-tap — the buy sheet's submit button self-disables via `Button`'s
+ * `loading` prop the moment one request is in flight) could each see "no
+ * asset yet" and insert two rows; `getGoldAsset`'s `.limit(1)` would then
+ * arbitrarily surface only one of them, leaving the other's lots
+ * technically intact but invisible to every read in ./queries.ts. Fixing
+ * this properly needs either a partial unique index on `assets (user_id)
+ * WHERE asset_type = 'gold'` (a schema change beyond this task's scope) or
+ * a `pg_advisory_xact_lock`. Left as a documented gap rather than either,
+ * given how narrow the race window is for a single-user personal finance
+ * app — flagged here so it isn't rediscovered as a mystery bug later.
+ */
 async function findOrCreateGoldAsset(tx: TransactionClient, userId: string): Promise<GoldAssetRow> {
   const [existing] = await tx
     .select()

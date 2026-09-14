@@ -45,7 +45,11 @@ export function parseGrams(value: string): Grams {
     throw new RangeError(`parseGrams: "${value}" is not a valid non-negative decimal (max 4 decimals)`);
   }
 
-  const [whole, frac = ''] = trimmed.split('.');
+  // Defaults mirror money.ts's `fromRupiah` destructuring exactly — `whole`
+  // is always actually present given `GRAMS_PATTERN` already matched, but
+  // the fallback keeps this safe under `noUncheckedIndexedAccess` without a
+  // non-null assertion.
+  const [whole = '0', frac = ''] = trimmed.split('.');
   const paddedFrac = (frac + '0000').slice(0, 4);
   return BigInt(whole) * GRAM_SCALE + BigInt(paddedFrac);
 }
@@ -110,8 +114,11 @@ export interface GoldLotInput {
 
 /** Σ remaining_grams across every lot passed in — callers decide which lots
  * qualify (e.g. "belongs to this user's gold asset"); this function has no
- * opinion on that, only on the arithmetic. */
-export function totalRemainingGrams(lots: GoldLotInput[]): Grams {
+ * opinion on that, only on the arithmetic. Only needs `remainingGrams`
+ * (not the full `GoldLotInput`), so a caller that's only recomputing a
+ * gram total — `assets.cached_value` refresh, e.g. — doesn't need to
+ * fabricate a `purchasePricePerGram` it has no use for. */
+export function totalRemainingGrams(lots: { remainingGrams: Grams }[]): Grams {
   return lots.reduce((sum, lot) => sum + lot.remainingGrams, 0n);
 }
 

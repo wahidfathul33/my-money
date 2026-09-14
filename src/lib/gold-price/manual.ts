@@ -14,7 +14,7 @@
  */
 import { desc } from 'drizzle-orm';
 import { dbRead } from '@/lib/db/read';
-import { goldPrices } from '@/lib/db/schema/assets';
+import { goldPrices } from '@/lib/db/schema';
 import { ownedBy } from '@/lib/db/scoped';
 import type { GoldPriceProvider, GoldPriceQuote } from './provider';
 

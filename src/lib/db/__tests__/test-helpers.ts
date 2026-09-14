@@ -15,6 +15,7 @@ import { categories } from '@/lib/db/schema/categories';
 import { ledgerEntries, transactions } from '@/lib/db/schema/transactions';
 import { households, householdMembers } from '@/lib/db/schema/households';
 import { savingsContributions, savingsGoals } from '@/lib/db/schema/savings';
+import { assets, goldLots, goldPrices, goldSales } from '@/lib/db/schema/assets';
 
 export async function createTestUser(overrides: Partial<typeof users.$inferInsert> = {}) {
   const id = uuidv7();
@@ -54,6 +55,38 @@ export async function createTestCategory(
     ...overrides,
   });
   return id;
+}
+
+/** Inserts an `assets` row directly — task 16 (gold). Tests that exercise
+ * `buyGold`/`sellGold` themselves don't need this (those services
+ * find-or-create the asset), but tests seeding `gold_lots`/`gold_prices`
+ * directly (bypassing the service, e.g. to test a raw CHECK constraint)
+ * need a parent asset row to satisfy `gold_lots.asset_id`'s FK first. */
+export async function createTestAsset(userId: string, overrides: Partial<typeof assets.$inferInsert> = {}) {
+  const id = uuidv7();
+  await dbWrite.insert(assets).values({
+    id,
+    userId,
+    name: 'Test Asset',
+    assetType: 'gold',
+    ...overrides,
+  });
+  return id;
+}
+
+/**
+ * Removes a gold asset and everything that structurally must go first —
+ * `gold_lots.asset_id` / `gold_sales.asset_id` are both `ON DELETE
+ * RESTRICT` (src/lib/db/schema/assets.ts), so the asset can't go before
+ * every lot/sale referencing it does. Needed separately from
+ * `deleteTestUser` for a test that creates the asset under one user while
+ * cleanup needs to happen mid-test (rare, but mirrors
+ * `deleteTestSavingsGoal`'s reason for existing).
+ */
+export async function deleteTestAsset(assetId: string) {
+  await dbWrite.delete(goldSales).where(eq(goldSales.assetId, assetId));
+  await dbWrite.delete(goldLots).where(eq(goldLots.assetId, assetId));
+  await dbWrite.delete(assets).where(eq(assets.id, assetId));
 }
 
 /** Inserts a household row directly (bypassing the service/guard) — used by
@@ -186,6 +219,20 @@ export async function deleteTestUser(userId: string) {
     await dbWrite.delete(ledgerEntries).where(inArray(ledgerEntries.transactionId, ids));
     await dbWrite.delete(transactions).where(inArray(transactions.id, ids));
   }
+
+  // Task 16 (gold): gold_sales/gold_lots.ledger_entry_id are ON DELETE
+  // RESTRICT, so both must go BEFORE the ledger_entries delete below — same
+  // ordering constraint savings_contributions has, for the same reason.
+  // gold_sales/gold_lots.asset_id are ALSO ON DELETE RESTRICT, so they must
+  // go before `assets` too; `assets.user_id` itself cascades from `users`,
+  // so no explicit `assets` delete is needed once its two dependents are
+  // clear. Gold purchases/sales are always self-funded (no cross-user gold
+  // buying), so — unlike transactions — a single `user_id`-scoped delete on
+  // each table is always complete; there's no "written by someone else"
+  // case to account for.
+  await dbWrite.delete(goldSales).where(eq(goldSales.userId, userId));
+  await dbWrite.delete(goldLots).where(eq(goldLots.userId, userId));
+  await dbWrite.delete(goldPrices).where(eq(goldPrices.userId, userId));
 
   await dbWrite.delete(householdMembers).where(eq(householdMembers.userId, userId));
   await dbWrite.delete(ledgerEntries).where(eq(ledgerEntries.userId, userId));

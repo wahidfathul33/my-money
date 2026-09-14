@@ -28,7 +28,7 @@ import { requireUser } from '@/lib/auth/require-user';
 import { createDeposit, updateDeposit, withdrawDeposit } from '@/lib/services/deposits';
 import { fromRupiah, serializeMoney } from '@/lib/finance/money';
 import { AppError, ValidationError } from '@/lib/api/errors';
-import { createDepositSchema, depositIdSchema, updateDepositSchema, withdrawDepositSchema } from './schema';
+import { createDepositSchema, updateDepositSchema, withdrawDepositSchema } from './schema';
 
 export interface ActionState {
   error: string | null;
@@ -161,10 +161,11 @@ export interface WithdrawDepositActionInput {
 export async function withdrawDepositAction(input: WithdrawDepositActionInput): Promise<WithdrawDepositActionResult> {
   const user = await requireUser();
 
-  const parsedId = depositIdSchema.safeParse({ depositId: input.depositId });
+  // `withdrawDepositSchema` already validates `depositId`'s shape as part
+  // of its own object — no separate `depositIdSchema` parse needed on top.
   const parsed = withdrawDepositSchema.safeParse(input);
-  if (!parsedId.success || !parsed.success) {
-    return { error: (parsed.error ?? parsedId.error)?.issues[0]?.message ?? 'Input tidak valid' };
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Input tidak valid' };
   }
 
   try {

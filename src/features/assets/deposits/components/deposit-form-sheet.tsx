@@ -109,7 +109,7 @@ function DepositFormSheetForm({ onOpenChange, deposit, wallets, defaultWalletId,
     }
     return shouldApplyTax(principal)
       ? 'PPh final 20% berlaku (pokok di atas Rp7.500.000).'
-      : 'Bebas PPh — pokok di angka atau di bawah Rp7.500.000.';
+      : 'Bebas PPh — pokok Rp7.500.000 atau di bawahnya.';
   }, [principalInput]);
 
   const walletOptions = [

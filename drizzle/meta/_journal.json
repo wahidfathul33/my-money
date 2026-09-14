@@ -15,6 +15,13 @@
       "when": 1788367235079,
       "tag": "0001_category_depth_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789353700577,
+      "tag": "0002_elite_gauntlet",
+      "breakpoints": true
     }
   ]
 }

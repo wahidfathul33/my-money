@@ -148,6 +148,24 @@ export const deposits = pgTable(
     rolledFromId: uuid('rolled_from_id').references((): AnyPgColumn => deposits.id, {
       onDelete: 'set null',
     }),
+    // task 17 additions — NOT in docs/04-database-schema.md §9.2's original
+    // sketch, added here because the acceptance criteria explicitly require
+    // both and neither has anywhere else to live:
+    //   - `idempotencyKey`: createDeposit's create-once guard, identical
+    //     shape to `savings_contributions.idempotency_key`
+    //     (src/lib/db/schema/savings.ts) — a unique (user_id, idempotency_key)
+    //     index below. `withdrawDeposit` deliberately does NOT get a second
+    //     idempotency-key column: a deposit can be withdrawn at most once
+    //     ever (status active → withdrawn), so the existing
+    //     `WHERE status = 'active'` guard already makes a repeat call
+    //     idempotent by construction — see src/lib/services/deposits.ts.
+    //   - `lastInterestPaymentDate`: cursor for `monthly` payout — where the
+    //     NEXT payment's accrual period starts, and the efficient
+    //     `WHERE last_interest_payment_date IS NULL OR < :periodStart` guard
+    //     `payMonthlyInterest` uses instead of scanning `ledger_entries` for
+    //     every monthly deposit on every cron run.
+    idempotencyKey: text('idempotency_key'),
+    lastInterestPaymentDate: date('last_interest_payment_date'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -156,6 +174,9 @@ export const deposits = pgTable(
     index('deposits_maturity_idx')
       .on(table.maturityDate)
       .where(sql`${table.status} = 'active'`),
+    uniqueIndex('deposits_idempotency_uniq')
+      .on(table.userId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
     check('deposit_principal_positive', sql`${table.principal} > 0`),
     check('deposit_dates_valid', sql`${table.maturityDate} > ${table.startDate}`),
     check('deposit_rate_sane', sql`${table.interestRateAnnual} BETWEEN 0 AND 100`),

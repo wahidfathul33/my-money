@@ -525,6 +525,9 @@ CREATE TABLE deposits (
   status               deposit_status NOT NULL DEFAULT 'active',
   wallet_id            UUID REFERENCES dompet(id) ON DELETE RESTRICT,
   rolled_from_id       UUID REFERENCES deposits(id) ON DELETE SET NULL,
+  -- task 17 additions:
+  idempotency_key             TEXT,  -- createDeposit's create-once guard
+  last_interest_payment_date  DATE,  -- cursor for `monthly` payout's next accrual period
   created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
 
@@ -536,7 +539,10 @@ CREATE TABLE deposits (
 
 CREATE INDEX deposits_user_status_idx ON deposits (user_id, status);
 CREATE INDEX deposits_maturity_idx    ON deposits (maturity_date) WHERE status = 'active';
+CREATE UNIQUE INDEX deposits_idempotency_uniq ON deposits (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 ```
+
+`withdrawDeposit` deliberately has no second idempotency-key column of its own: a deposit can be withdrawn at most once ever (`status` only ever moves `active` → `withdrawn`), so the same `WHERE status = 'active'` guard every other status-transition in this app uses already makes a repeat call idempotent — see src/lib/services/deposits.ts.
 
 ## 10. Hutang & Piutang
 

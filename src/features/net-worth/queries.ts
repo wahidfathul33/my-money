@@ -31,13 +31,14 @@
  * object literal combining the two real columns satisfies that shape
  * without hand-rolling a parallel join condition.
  */
-import { and, asc, eq, gte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import { dbRead } from '@/lib/db/read';
 import {
   assets,
   debts,
   deposits,
   goldLots,
+  goldPrices,
   householdMembers,
   netWorthSnapshots,
   householdNetWorthSnapshots,
@@ -273,13 +274,27 @@ async function goldGramsByMember(householdId: string): Promise<Map<string, Grams
  * exactly as the personal path does via `getGoldHoldingsSummary`. */
 async function latestGoldBuybackPriceByMember(userIds: string[]): Promise<Map<string, Money>> {
   if (userIds.length === 0) return new Map();
-  const result = await dbRead.execute<{ user_id: string; buyback_price_per_gram: string }>(sql`
-    SELECT DISTINCT ON (user_id) user_id, buyback_price_per_gram
-    FROM gold_prices
-    WHERE user_id = ANY(${userIds})
-    ORDER BY user_id, price_date DESC
-  `);
-  return new Map(result.rows.map((r) => [r.user_id, BigInt(r.buyback_price_per_gram)]));
+  // No `DISTINCT ON` support in this drizzle-orm version's pg-core query
+  // builder, and a raw-SQL `= ANY($1)` template doesn't bind a JS array as
+  // a valid Postgres array literal here (caused a real
+  // "malformed array literal" runtime error, caught by this task's own
+  // reconciliation test). Fetch every matching row ordered newest-first
+  // instead and keep only the first (most recent) occurrence per user —
+  // same result as `DISTINCT ON`, and household size keeps the row count
+  // small enough that this is cheap.
+  const rows = await dbRead
+    .select({ userId: goldPrices.userId, buybackPricePerGram: goldPrices.buybackPricePerGram })
+    .from(goldPrices)
+    .where(inArray(goldPrices.userId, userIds))
+    .orderBy(desc(goldPrices.priceDate));
+
+  const result = new Map<string, Money>();
+  for (const row of rows) {
+    if (!result.has(row.userId)) {
+      result.set(row.userId, row.buybackPricePerGram);
+    }
+  }
+  return result;
 }
 
 /** Σ principal of `active` deposits per OWNER, gated by the deposit's own

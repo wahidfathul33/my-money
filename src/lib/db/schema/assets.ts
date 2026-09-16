@@ -4,6 +4,16 @@
  * `assets` holds shared attributes; value is always DERIVED from the
  * type-specific table. `assets.cached_value` is a cache, refreshed by
  * whatever process writes the underlying source data.
+ *
+ * Deviation from docs/04 §9.1: `gold_lots.idempotency_key` and
+ * `gold_sales.idempotency_key` (both nullable, partial-unique per user) are
+ * NOT in that document's SQL listing, but tasks/16-assets-gold/spec.md
+ * requires buy/sell idempotency matching `savings_contributions`' pattern
+ * (src/lib/db/schema/savings.ts's `idempotencyKey` + `sc_idempotency_uniq`).
+ * Gold purchases/sales follow that exact same "ledger-entry-only, no
+ * `transactions` row" shape (see src/lib/services/gold.ts's file header for
+ * why), so they need their OWN idempotency column for the same reason
+ * savings needed one instead of relying on `transactions.idempotency_key`.
  */
 import { sql } from 'drizzle-orm';
 import {
@@ -65,12 +75,18 @@ export const goldLots = pgTable(
     ledgerEntryId: uuid('ledger_entry_id').references(() => ledgerEntries.id, {
       onDelete: 'restrict',
     }),
+    // See this file's header "Deviation" note — mirrors
+    // savings_contributions.idempotency_key exactly.
+    idempotencyKey: text('idempotency_key'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index('gold_lots_asset_idx')
       .on(table.assetId)
       .where(sql`${table.remainingGrams} > 0`),
+    uniqueIndex('gl_idempotency_uniq')
+      .on(table.userId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
     check('gold_weight_positive', sql`${table.weightGrams} > 0`),
     check(
       'gold_remaining_valid',
@@ -102,25 +118,36 @@ export const goldPrices = pgTable(
   ],
 );
 
-export const goldSales = pgTable('gold_sales', {
-  id: uuid('id').primaryKey(),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  assetId: uuid('asset_id')
-    .notNull()
-    .references(() => assets.id, { onDelete: 'restrict' }),
-  weightGrams: numeric('weight_grams', { precision: 18, scale: 4 }).notNull(),
-  pricePerGram: bigint('price_per_gram', { mode: 'bigint' }).notNull(),
-  proceeds: bigint('proceeds', { mode: 'bigint' }).notNull(),
-  costBasis: bigint('cost_basis', { mode: 'bigint' }).notNull(),
-  realizedGain: bigint('realized_gain', { mode: 'bigint' }).notNull(),
-  saleDate: date('sale_date').notNull(),
-  ledgerEntryId: uuid('ledger_entry_id')
-    .notNull()
-    .references(() => ledgerEntries.id, { onDelete: 'restrict' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const goldSales = pgTable(
+  'gold_sales',
+  {
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    assetId: uuid('asset_id')
+      .notNull()
+      .references(() => assets.id, { onDelete: 'restrict' }),
+    weightGrams: numeric('weight_grams', { precision: 18, scale: 4 }).notNull(),
+    pricePerGram: bigint('price_per_gram', { mode: 'bigint' }).notNull(),
+    proceeds: bigint('proceeds', { mode: 'bigint' }).notNull(),
+    costBasis: bigint('cost_basis', { mode: 'bigint' }).notNull(),
+    realizedGain: bigint('realized_gain', { mode: 'bigint' }).notNull(),
+    saleDate: date('sale_date').notNull(),
+    ledgerEntryId: uuid('ledger_entry_id')
+      .notNull()
+      .references(() => ledgerEntries.id, { onDelete: 'restrict' }),
+    // See this file's header "Deviation" note — mirrors
+    // savings_contributions.idempotency_key exactly.
+    idempotencyKey: text('idempotency_key'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('gs_idempotency_uniq')
+      .on(table.userId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
+  ],
+);
 
 // --- 9.2 Deposits -------------------------------------------------------
 

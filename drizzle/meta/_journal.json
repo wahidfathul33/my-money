@@ -36,6 +36,13 @@
       "when": 1789353857401,
       "tag": "0004_amazing_rogue",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789353176353,
+      "tag": "0005_old_stranger",
+      "breakpoints": true
     }
   ]
 }

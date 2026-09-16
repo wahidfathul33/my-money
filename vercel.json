@@ -13,6 +13,10 @@
     {
       "path": "/api/cron/deposit-maturity",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/gold-price",
+      "schedule": "0 19 * * *"
     }
   ]
 }

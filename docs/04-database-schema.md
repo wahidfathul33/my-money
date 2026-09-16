@@ -466,6 +466,7 @@ CREATE TABLE gold_lots (
   purchase_date           DATE NOT NULL,
   gold_form               TEXT,
   ledger_entry_id         UUID REFERENCES ledger_entries(id) ON DELETE RESTRICT,
+  idempotency_key         TEXT,              -- task 16: see note below
   created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
 
   CONSTRAINT gold_weight_positive CHECK (weight_grams > 0),
@@ -474,6 +475,8 @@ CREATE TABLE gold_lots (
 );
 
 CREATE INDEX gold_lots_asset_idx ON gold_lots (asset_id) WHERE remaining_grams > 0;
+CREATE UNIQUE INDEX gl_idempotency_uniq ON gold_lots (user_id, idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
 
 CREATE TABLE gold_prices (
   id                     UUID PRIMARY KEY,
@@ -502,9 +505,20 @@ CREATE TABLE gold_sales (
   realized_gain   BIGINT NOT NULL,
   sale_date       DATE NOT NULL,
   ledger_entry_id UUID NOT NULL REFERENCES ledger_entries(id) ON DELETE RESTRICT,
+  idempotency_key TEXT,              -- task 16: see note below
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE UNIQUE INDEX gs_idempotency_uniq ON gold_sales (user_id, idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
 ```
+
+**`idempotency_key` on `gold_lots`/`gold_sales` (task 16).** Not in this
+document's original listing above. Buying/selling gold follows the same
+"ledger-entry-only, no `transactions` row" shape as `savings_contributions`
+(§8) — there's no `transactions.idempotency_key` to lean on, so each table
+needed its own, mirroring `savings_contributions`' column and partial
+unique index exactly.
 
 ### 9.2 Deposito
 

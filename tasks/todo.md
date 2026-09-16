@@ -94,15 +94,15 @@ Rencana: [plan.md](plan.md) · Spesifikasi: [docs/](../docs/README.md)
 
 ## F4 — Kekayaan
 
-- [ ] **16 — [assets-gold](16-assets-gold/)**
+- [x] **16 — [assets-gold](16-assets-gold/)**
   Lot emas, cost basis rata-rata tertimbang, harga jual vs buyback, beli/jual, provider harga.
   *Verifikasi:* valuasi memakai harga buyback; `CHECK` menolak buyback > harga jual.
 
-- [ ] **17 — [assets-deposits](17-assets-deposits/)**
+- [x] **17 — [assets-deposits](17-assets-deposits/)**
   Deposito, bunga prorata + PPh 20%, ARO, pencairan, cron jatuh tempo.
   *Verifikasi:* bunga akrual tidak masuk total aset; perhitungan cocok dengan nilai yang dihitung tangan.
 
-- [ ] **18 — [debts-receivables](18-debts-receivables/)**
+- [x] **18 — [debts-receivables](18-debts-receivables/)**
   Hutang & piutang, `affects_wallet`, cicilan, jatuh tempo, `counterparty_user_id`.
   *Verifikasi:* pembayaran tidak mengubah net worth; kelebihan bayar ditolak dengan `FOR UPDATE`.
 
@@ -144,7 +144,7 @@ Rencana: [plan.md](plan.md) · Spesifikasi: [docs/](../docs/README.md)
 | F1 Ledger inti | 05–09 | 5 / 5 |
 | F2 Household | 10–13 | 4 / 4 |
 | F3 Perencanaan | 14–15 | 2 / 2 |
-| F4 Kekayaan | 16–18 | 0 / 3 |
+| F4 Kekayaan | 16–18 | 3 / 3 |
 | F5 Insight | 19–21 | 0 / 3 |
 | F6 Rilis | 22–23 | 0 / 2 |
-| **Total** | | **16 / 24** |
+| **Total** | | **19 / 24** |

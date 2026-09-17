@@ -291,4 +291,108 @@ test.describe('sharing & privacy — two-context flows', () => {
       await deleteTestUser(owner.userId);
     }
   });
+
+  /**
+   * tasks/22-settings-sharing-pwa — todo.md's "'Berhenti berbagi semuanya' +
+   * konfirmasi jumlah" and "E2E: 'berhenti berbagi semuanya' mencabut
+   * seluruh grant". The caller shares wealth to TWO households at once;
+   * one confirmed click revokes both, and the confirmation names the count
+   * (2) before it happens.
+   */
+  test('"Berhenti berbagi semuanya" confirms with the exact count and revokes share_wealth in every household at once', async ({
+    browser,
+    baseURL,
+  }) => {
+    test.setTimeout(90_000);
+
+    const member = await seedSessionUser({ onboarded: true, name: 'Member Berhenti' });
+    const ownerA = await seedSessionUser({ onboarded: true, name: 'Owner A' });
+    const ownerB = await seedSessionUser({ onboarded: true, name: 'Owner B' });
+
+    const memberContext = await browser.newContext({ baseURL });
+    const ownerAContext = await browser.newContext({ baseURL });
+    const ownerBContext = await browser.newContext({ baseURL });
+
+    try {
+      await setSessionCookie(memberContext, member.sessionToken);
+      await setSessionCookie(ownerAContext, ownerA.sessionToken);
+      await setSessionCookie(ownerBContext, ownerB.sessionToken);
+
+      const ownerAPage = await ownerAContext.newPage();
+      const ownerBPage = await ownerBContext.newPage();
+
+      await ownerAPage.goto('/household/new');
+      await ownerAPage.getByLabel('Nama keluarga').fill('Keluarga Alpha');
+      await ownerAPage.getByRole('button', { name: 'Buat Keluarga' }).click();
+      await expect(ownerAPage).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
+      const householdA = ownerAPage.url().split('/household/')[1]!.split(/[/?]/)[0]!;
+
+      await ownerBPage.goto('/household/new');
+      await ownerBPage.getByLabel('Nama keluarga').fill('Keluarga Beta');
+      await ownerBPage.getByRole('button', { name: 'Buat Keluarga' }).click();
+      await expect(ownerBPage).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
+      const householdB = ownerBPage.url().split('/household/')[1]!.split(/[/?]/)[0]!;
+
+      try {
+        // Member joins both, sharing wealth in both — seeded directly
+        // (already active + share_wealth true), same shortcut the other
+        // tests in this file use for the invite/accept step itself.
+        await dbWrite.insert(householdMembers).values([
+          {
+            id: uuidv7(),
+            householdId: householdA,
+            userId: member.userId,
+            role: 'member',
+            status: 'active',
+            shareWealth: true,
+            joinedAt: new Date(),
+          },
+          {
+            id: uuidv7(),
+            householdId: householdB,
+            userId: member.userId,
+            role: 'member',
+            status: 'active',
+            shareWealth: true,
+            joinedAt: new Date(),
+          },
+        ]);
+
+        const memberPage = await memberContext.newPage();
+        await memberPage.goto('/settings/sharing');
+        await expect(memberPage.getByText('Keluarga Alpha')).toBeVisible(DB_TIMEOUT);
+        await expect(memberPage.getByText('Keluarga Beta')).toBeVisible();
+
+        await memberPage.getByRole('button', { name: 'Berhenti berbagi semuanya' }).click();
+        const confirmDialog = memberPage.getByRole('dialog', { name: 'Berhenti berbagi semuanya?' });
+        await expect(confirmDialog).toBeVisible();
+        // States the exact number of households currently sharing.
+        await expect(confirmDialog.getByText('2 keluarga')).toBeVisible();
+        await confirmDialog.getByRole('button', { name: 'Berhenti berbagi' }).click();
+        await expect(confirmDialog).not.toBeVisible(DB_TIMEOUT);
+
+        // The button itself disappears once nothing is left to stop sharing.
+        await expect(memberPage.getByRole('button', { name: 'Berhenti berbagi semuanya' })).toHaveCount(0, DB_TIMEOUT);
+
+        const rows = await dbWrite
+          .select({ householdId: householdMembers.householdId, shareWealth: householdMembers.shareWealth })
+          .from(householdMembers)
+          .where(eq(householdMembers.userId, member.userId));
+        expect(rows).toHaveLength(2);
+        for (const row of rows) {
+          expect(row.shareWealth).toBe(false);
+        }
+      } finally {
+        await deleteTestHousehold(householdA);
+        await deleteTestHousehold(householdB);
+      }
+    } finally {
+      await memberContext.close();
+      await ownerAContext.close();
+      await ownerBContext.close();
+      await deleteTestUser(member.userId);
+      await deleteTestUser(ownerA.userId);
+      await deleteTestUser(ownerB.userId);
+    }
+  });
 });

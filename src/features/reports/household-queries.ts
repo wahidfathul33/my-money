@@ -410,3 +410,18 @@ export async function getHouseholdTrend(
     expense: byPeriod.get(period)!.expense,
   }));
 }
+
+// --- History depth (empty-state gate) ---------------------------------------
+
+/** Earliest non-void transaction TAGGED to this household, across every
+ * member — mirrors src/features/reports/queries.ts's
+ * `getEarliestTransactionDate`, household-scoped. Feeds `hasEnoughHistory`
+ * (src/lib/finance/report-aggregation.ts) for `/household/[id]/reports`'
+ * own empty state. */
+export async function getEarliestHouseholdTransactionDate(householdId: string): Promise<Date | null> {
+  const [row] = await dbRead
+    .select({ earliest: sql<Date | null>`MIN(${transactions.transactionDate})` })
+    .from(transactions)
+    .where(and(eq(transactions.householdId, householdId), isNull(transactions.voidedAt)));
+  return row?.earliest ?? null;
+}

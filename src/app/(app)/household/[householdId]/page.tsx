@@ -1,4 +1,6 @@
 import { notFound } from 'next/navigation';
+import Link from 'next/link';
+import { BarChart3, ChevronRight } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { requireUser } from '@/lib/auth/require-user';
 import { getHouseholdWithRole } from '@/features/household/queries';
@@ -77,6 +79,21 @@ export default async function HouseholdSummaryPage({
       <PageHeader title={household.name} />
       <div className="px-page-x flex flex-col gap-6 pb-8">
         <SetupSteps householdName={household.name} steps={steps} />
+
+        {/* tautan ke rincian — tasks/21-reports/todo.md: "Bagian household
+            di /household/[id] (tautan ke rincian)". Selalu tampil (bahkan
+            sebelum ada transaksi bertag) — halaman rincian sendiri yang
+            menampilkan empty state kalau datanya belum cukup. */}
+        <Link
+          href={`/household/${householdId}/reports`}
+          className="pressable-tint bg-surface border-border rounded-card flex items-center justify-between gap-3 border p-4"
+        >
+          <div className="flex items-center gap-3">
+            <BarChart3 className="text-text-muted size-5" aria-hidden="true" />
+            <span className="text-text text-sm font-medium">Laporan Keluarga</span>
+          </div>
+          <ChevronRight className="text-text-subtle size-4 shrink-0" aria-hidden="true" />
+        </Link>
       </div>
     </>
   );

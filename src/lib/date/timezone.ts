@@ -51,6 +51,23 @@ export function toLocalMonth(instant: Date, tz: string = DEFAULT_TIMEZONE): stri
   return toLocalDate(instant, tz).slice(0, 7);
 }
 
+const LOCAL_HOUR_FORMATTER_CACHE = new Map<string, Intl.DateTimeFormat>();
+
+function localHourFormatter(tz: string): Intl.DateTimeFormat {
+  let formatter = LOCAL_HOUR_FORMATTER_CACHE.get(tz);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', hour: '2-digit' });
+    LOCAL_HOUR_FORMATTER_CACHE.set(tz, formatter);
+  }
+  return formatter;
+}
+
+/** The wall-clock hour (0-23) `instant` falls on, in `tz` — feeds the
+ * dashboard's time-of-day greeting (src/features/dashboard/greeting.ts). */
+export function toLocalHour(instant: Date, tz: string = DEFAULT_TIMEZONE): number {
+  return Number(localHourFormatter(tz).format(instant));
+}
+
 /** `YYYY-MM` for "now", in `tz` — the period a fresh `PeriodPicker` defaults to. */
 export function currentLocalPeriod(now: Date = new Date(), tz: string = DEFAULT_TIMEZONE): string {
   return toLocalMonth(now, tz);

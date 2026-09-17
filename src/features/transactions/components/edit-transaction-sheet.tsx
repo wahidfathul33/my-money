@@ -115,6 +115,13 @@ function EditTransactionForm({ transaction, sheetData, onDone }: EditTransaction
 
   function handleSave() {
     if (saveDisabled || categoryId === null) return;
+
+    // ADR-012: no offline write queue — see add-transaction-sheet.tsx's
+    // identical guard for the full reasoning.
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setError('Butuh koneksi untuk menyimpan');
+      return;
+    }
     setError(null);
 
     startTransition(async () => {

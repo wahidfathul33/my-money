@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/toast';
+import { ServiceWorkerRegistration } from '@/components/layout/service-worker-registration';
 import './globals.css';
 
 // Inter Variable — subset latin, hanya varian variable, dimuat lewat
@@ -26,11 +27,13 @@ export const metadata: Metadata = {
 };
 
 // viewport-fit=cover wajib — tanpanya env(safe-area-inset-*) selalu 0
-// (docs/07-design-system.md §11.1).
+// (docs/07-design-system.md §11.1). themeColor matches src/app/manifest.ts's
+// theme_color (the actual --color-brand token, not a placeholder).
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  themeColor: '#008f90',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
@@ -51,6 +54,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
             AppShell, so signin/onboarding could use it too if they ever
             need to. */}
         <ToastProvider>{children}</ToastProvider>
+        <ServiceWorkerRegistration />
       </body>
     </html>
   );

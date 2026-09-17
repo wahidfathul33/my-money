@@ -239,6 +239,17 @@ function AddTransactionSheetForm({
     if (saveDisabled) return;
     if (type !== 'transfer' && categoryId === null) return;
 
+    // ADR-012: no offline write queue — refuse to submit outright rather
+    // than let the Server Action attempt (and fail confusingly, or worse,
+    // appear to hang) with no network. Read directly at click time, not
+    // from a `useOnlineStatus()` subscription: this is the one instant that
+    // actually matters, and a direct read can never be stale the way a
+    // React state value updated by an event listener briefly could be.
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setError('Butuh koneksi untuk menyimpan');
+      return;
+    }
+
     // A member transfer confirms first — docs/10-ux-states.md §5.2, spec.md:
     // its effect lands on someone ELSE's ledger. Everything else (self-
     // transfer, income, expense) saves immediately, matching every other

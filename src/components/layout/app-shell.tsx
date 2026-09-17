@@ -4,6 +4,7 @@ import type { HouseholdSummary } from '@/features/household/queries';
 import { ContextSwitcher } from '@/features/household/components/context-switcher';
 import { BottomNav } from './bottom-nav';
 import { Sidebar } from './sidebar';
+import { OfflineBanner } from './offline-banner';
 
 /**
  * Kerangka aplikasi terautentikasi — dipakai `app/(app)/layout.tsx`.
@@ -50,6 +51,7 @@ export function AppShell({ children, addTransactionSheetData, households, unackn
         </header>
       )}
       <main className="page-content-bottom-nav-padding flex flex-1 flex-col lg:mx-auto lg:w-full lg:max-w-5xl">
+        <OfflineBanner />
         {children}
       </main>
       <BottomNav

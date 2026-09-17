@@ -21,6 +21,7 @@ import { listCategories } from '@/features/transactions/queries';
 import { PeriodPicker, formatPeriodLabel } from '@/features/transactions/components/period-picker';
 import { FilterBar, type FilterBarCategoryOption } from '@/features/transactions/components/filter-bar';
 import { TransactionList, TransactionSearchButton } from '@/features/transactions/components/transaction-list';
+import { getUserPreferences } from '@/features/settings/queries';
 
 /**
  * `/transactions` — the checkpoint tasks/09-transaction-history/spec.md
@@ -44,21 +45,26 @@ interface TransactionsPageProps {
 export default async function TransactionsPage({ searchParams }: TransactionsPageProps) {
   const user = await requireUser();
   const rawParams = await searchParams;
-  const filters = parseHistoryFilters(rawParams);
+  // tasks/22-settings-sharing-pwa: the caller's own timezone
+  // (`/settings/preferences`) drives every date grouping on this page —
+  // fetched first since it feeds the default-period fallback below.
+  const preferences = await getUserPreferences(user.id);
+  const tz = preferences.timezone;
+  const filters = parseHistoryFilters(rawParams, tz);
   const apiFilters = toApiFilters(filters);
 
   const [{ items, nextCursor }, periodSummary, mostRecentPeriod, sheetData, expenseCategories, incomeCategories] =
     await Promise.all([
-      listTransactionsPage(user.id, { filters: apiFilters }),
-      getPeriodSummary(user.id, filters.period),
-      getMostRecentTransactionPeriod(user.id),
+      listTransactionsPage(user.id, { filters: apiFilters, tz }),
+      getPeriodSummary(user.id, filters.period, tz),
+      getMostRecentTransactionPeriod(user.id, tz),
       getAddTransactionSheetData(user.id),
       listCategories(user.id, 'expense'),
       listCategories(user.id, 'income'),
     ]);
 
-  const range = dayTotalsRangeForItems(items);
-  const dayTotalsRaw = range ? await getDayTotals(user.id, range, apiFilters) : {};
+  const range = dayTotalsRangeForItems(items, tz);
+  const dayTotalsRaw = range ? await getDayTotals(user.id, range, apiFilters, tz) : {};
   const dayTotals = Object.fromEntries(
     Object.entries(dayTotalsRaw).map(([date, total]) => [
       date,
@@ -153,6 +159,7 @@ export default async function TransactionsPage({ searchParams }: TransactionsPag
           initialNextCursor={nextCursor}
           initialDayTotals={dayTotals}
           sheetData={sheetData}
+          tz={tz}
         />
       )}
     </>

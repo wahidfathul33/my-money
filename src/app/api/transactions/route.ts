@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/auth/require-user';
 import { UnauthenticatedError } from '@/lib/api/errors';
 import { checkRateLimit } from '@/lib/api/rate-limit';
 import { serializeMoney } from '@/lib/finance/money';
+import { DEFAULT_TIMEZONE, isValidTimeZone } from '@/lib/date/timezone';
 import {
   dayTotalsRangeForItems,
   getDayTotals,
@@ -38,6 +39,11 @@ const querySchema = z.object({
   from: z.string().regex(DATE_RE, 'Tanggal tidak valid').optional(),
   to: z.string().regex(DATE_RE, 'Tanggal tidak valid').optional(),
   q: z.string().trim().max(280).optional(),
+  // tasks/22-settings-sharing-pwa: the caller's own timezone
+  // (`/settings/preferences`) — `<TransactionList>` sends its own resolved
+  // `tz` prop on every "load more" request so paginated day-grouping stays
+  // consistent with the first (Server Component) page.
+  tz: z.string().trim().min(1).optional(),
 });
 
 function errorResponse(code: string, message: string, status: number) {
@@ -78,6 +84,7 @@ export async function GET(request: NextRequest) {
     return errorResponse('VALIDATION', 'Parameter tidak valid', 400);
   }
   const { cursor, limit, walletId, categoryId, type, from, to, q } = parsed.data;
+  const tz = parsed.data.tz && isValidTimeZone(parsed.data.tz) ? parsed.data.tz : DEFAULT_TIMEZONE;
 
   const searchActive = Boolean(q && q.length >= MIN_SEARCH_LENGTH);
   if (searchActive) {
@@ -90,12 +97,12 @@ export async function GET(request: NextRequest) {
   const filters: TransactionHistoryFilters = { walletId, categoryId, type, from, to, q };
 
   try {
-    const { items, nextCursor } = await listTransactionsPage(userId, { cursor, limit, filters });
+    const { items, nextCursor } = await listTransactionsPage(userId, { cursor, limit, filters, tz });
 
     const dayTotals: Record<string, { income: string; expense: string }> = {};
-    const range = dayTotalsRangeForItems(items);
+    const range = dayTotalsRangeForItems(items, tz);
     if (range) {
-      const totals = await getDayTotals(userId, range, filters);
+      const totals = await getDayTotals(userId, range, filters, tz);
       for (const [date, total] of Object.entries(totals)) {
         dayTotals[date] = { income: serializeMoney(total.income), expense: serializeMoney(total.expense) };
       }

@@ -9,7 +9,6 @@
  * section itself, goes to `/transactions` — there's no per-row detail sheet
  * here.
  */
-import Link from 'next/link';
 import { ArrowLeftRight } from 'lucide-react';
 import { MoneyText } from '@/components/finance/money-text';
 import { CategoryIcon } from '@/features/categories/components/category-icon';

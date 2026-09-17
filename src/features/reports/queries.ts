@@ -386,8 +386,12 @@ export { periodDateRange };
  * todo.md's "Empty state: data < 7 hari". */
 export async function getEarliestTransactionDate(userId: string): Promise<Date | null> {
   const [row] = await dbRead
-    .select({ earliest: sql<Date | null>`MIN(${transactions.transactionDate})` })
+    .select({ earliest: sql<string | null>`MIN(${transactions.transactionDate})` })
     .from(transactions)
     .where(and(ownedBy(transactions, userId), isNull(transactions.voidedAt)));
-  return row?.earliest ?? null;
+  // neon-http returns raw driver values for a bare `sql\`...\`` selection —
+  // an aggregate timestamptz comes back as an ISO string, not a `Date`
+  // instance, regardless of the `sql<...>` type annotation (that's a
+  // compile-time hint only, not a runtime cast).
+  return row?.earliest ? new Date(row.earliest) : null;
 }

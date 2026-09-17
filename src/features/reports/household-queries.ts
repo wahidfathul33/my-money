@@ -420,8 +420,11 @@ export async function getHouseholdTrend(
  * own empty state. */
 export async function getEarliestHouseholdTransactionDate(householdId: string): Promise<Date | null> {
   const [row] = await dbRead
-    .select({ earliest: sql<Date | null>`MIN(${transactions.transactionDate})` })
+    .select({ earliest: sql<string | null>`MIN(${transactions.transactionDate})` })
     .from(transactions)
     .where(and(eq(transactions.householdId, householdId), isNull(transactions.voidedAt)));
-  return row?.earliest ?? null;
+  // See src/features/reports/queries.ts's `getEarliestTransactionDate` for
+  // why this needs an explicit `new Date(...)` — neon-http doesn't cast a
+  // raw `sql\`...\`` aggregate result to `Date` at runtime.
+  return row?.earliest ? new Date(row.earliest) : null;
 }

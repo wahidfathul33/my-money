@@ -110,7 +110,7 @@ Rencana: [plan.md](plan.md) · Spesifikasi: [docs/](../docs/README.md)
 
 ## F5 — Insight
 
-- [ ] **19 — [net-worth](19-net-worth/)**
+- [x] **19 — [net-worth](19-net-worth/)**
   Net worth pribadi & kekayaan keluarga **per anggota**, `CoverageNote`, snapshot harian keduanya, tren.
   *Verifikasi:* rincian menjumlah tepat ke total; seluruh invarian anti-double-count hijau.
 
@@ -145,6 +145,6 @@ Rencana: [plan.md](plan.md) · Spesifikasi: [docs/](../docs/README.md)
 | F2 Household | 10–13 | 4 / 4 |
 | F3 Perencanaan | 14–15 | 2 / 2 |
 | F4 Kekayaan | 16–18 | 3 / 3 |
-| F5 Insight | 19–21 | 0 / 3 |
+| F5 Insight | 19–21 | 1 / 3 |
 | F6 Rilis | 22–23 | 0 / 2 |
-| **Total** | | **19 / 24** |
+| **Total** | | **20 / 24** |

@@ -138,6 +138,15 @@ export interface SavingsGoalDetail {
    * personal goal. Used for `suggestedMonthlyPerMember`
    * (src/lib/finance/savings.ts). */
   activeMemberCount: number | null;
+  /** tasks/22-settings-sharing-pwa: only meaningful for a PERSONAL goal
+   * (`householdId === null`) — it's the same `share_wealth`-aggregation
+   * escape hatch wallets/assets/debts/receivables use
+   * (src/lib/services/sharing.ts's `HOUSEHOLD_WEALTH_ENTITY_TYPES`). A goal
+   * that's already explicitly SHARED (`householdId` set) is visible to its
+   * household directly, not via that aggregation, so this flag has no
+   * effect on one — the detail page only renders the toggle for personal
+   * goals accordingly. */
+  excludeFromHousehold: boolean;
 }
 
 /**
@@ -160,6 +169,7 @@ export async function getGoal(userId: string, goalId: string): Promise<SavingsGo
       color: savingsGoals.color,
       householdId: savingsGoals.householdId,
       householdName: households.name,
+      excludeFromHousehold: savingsGoals.excludeFromHousehold,
       activeMemberCount: sql<number | null>`(
         CASE WHEN ${savingsGoals.householdId} IS NULL THEN NULL
         ELSE (

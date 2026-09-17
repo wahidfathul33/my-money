@@ -48,6 +48,7 @@ export interface SavingsGoalDetailClientData {
   householdId: string | null;
   householdName: string | null;
   activeMemberCount: number | null;
+  excludeFromHousehold: boolean;
 }
 
 export function toGoalDetailClientData(goal: SavingsGoalDetail): SavingsGoalDetailClientData {

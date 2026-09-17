@@ -8,9 +8,9 @@
  *
  * Ringkasan and Pengaturan got real routes in task 10; Anggota's landed in
  * task 11; Anggaran's, Tabungan's, and Pengeluaran's landed together in
- * tasks 12/14/15. Only Kekayaan (task 19) is still a reserved, `href`-less
- * slot — the same "reserve now, activate later" pattern task 02 used for
- * Keluarga itself, now applied one level down.
+ * tasks 12/14/15; Kekayaan's landed in task 19
+ * (`/household/[id]/net-worth`) — the last of the "reserve now, activate
+ * later" slots task 02 set aside is now filled.
  */
 import type { LucideIcon } from 'lucide-react';
 import { Gem, Home, PiggyBank, Receipt, Settings, Target, Users } from 'lucide-react';
@@ -33,7 +33,7 @@ export function getHouseholdMenuItems(householdId: string): HouseholdMenuItem[] 
     { label: 'Anggaran', icon: PiggyBank, href: `/household/${householdId}/budgets` },
     { label: 'Tabungan', icon: Target, href: `/household/${householdId}/savings` },
     { label: 'Anggota', icon: Users, href: `/household/${householdId}/members` },
-    { label: 'Kekayaan', icon: Gem },
+    { label: 'Kekayaan', icon: Gem, href: `/household/${householdId}/net-worth` },
     { label: 'Pengaturan', icon: Settings, href: `/household/${householdId}/settings` },
   ];
 }

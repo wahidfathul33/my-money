@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Gem, HandCoins, Landmark, Target } from 'lucide-react';
+import { Gem, HandCoins, Landmark, Target, TrendingUp } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/layout/page-header';
 import { MoneyText } from '@/components/finance/money-text';
@@ -8,18 +8,24 @@ import { getTotalSavings, listGoals } from '@/features/savings/queries';
 import { getTotalDebt, getTotalReceivable } from '@/features/obligations/queries';
 import { getUserPreferences } from '@/features/settings/queries';
 import { getTotalDepositValue, listDeposits } from '@/features/assets/deposits/queries';
+import { getNetWorth } from '@/features/net-worth/queries';
 
 // Hub kekayaan — tumbuh per task. Task 15 (savings-goals) menambah kartu
 // "Tabungan"; task 17 (assets-deposits) menambah kartu "Deposito"; task 18
-// (debts-receivables) menambah kartu "Hutang & Piutang". Net worth penuh
-// dan emas menyusul di task-task berikutnya (docs/02-IA §5). Setiap kartu
-// berdiri sendiri dan tidak saling bergantung, supaya task lain yang juga
-// menambah entry point di halaman ini bisa menambah kartunya sendiri tanpa
-// menyentuh baris punya task lain.
+// (debts-receivables) menambah kartu "Hutang & Piutang"; task 19 (net-worth)
+// menambah kartu "Kekayaan Bersih" di paling atas, satu-satunya baris di
+// sini yang menautkan ke ANGKA GABUNGAN — setiap kartu lain menautkan ke
+// modul sumbernya sendiri (docs/02-IA §5: "Setiap baris dapat ditap untuk
+// menuju modul terkait"). Emas belum punya kartunya sendiri di sini
+// (menyusul di task-task berikutnya). Setiap kartu berdiri sendiri dan
+// tidak saling bergantung, supaya task lain yang juga menambah entry point
+// di halaman ini bisa menambah kartunya sendiri tanpa menyentuh baris
+// punya task lain.
 export default async function WealthPage() {
   const user = await requireUser();
-  const [goals, totalSaved, totalDebt, totalReceivable, preferences, deposits, totalDepositPrincipal] =
+  const [netWorth, goals, totalSaved, totalDebt, totalReceivable, preferences, deposits, totalDepositPrincipal] =
     await Promise.all([
+      getNetWorth(user.id),
       listGoals(user.id),
       getTotalSavings(user.id),
       getTotalDebt(user.id),
@@ -37,6 +43,20 @@ export default async function WealthPage() {
     <>
       <PageHeader title="Kekayaan" />
       <div className="px-page-x flex flex-col gap-6 pb-8">
+        <Link
+          href="/wealth/net-worth"
+          className="pressable-tint bg-surface rounded-card flex items-center gap-3 p-4"
+        >
+          <span className="bg-brand-subtle text-brand-readable flex size-11 shrink-0 items-center justify-center rounded-full">
+            <TrendingUp className="size-5" aria-hidden="true" />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-text text-body font-medium">Kekayaan Bersih</span>
+            <span className="text-text-muted text-sm">Lihat rincian</span>
+          </span>
+          <MoneyText amount={netWorth.netWorth} tone="plain" size="md" />
+        </Link>
+
         <Link href="/wealth/savings" className="pressable-tint bg-surface rounded-card flex items-center gap-3 p-4">
           <span className="bg-brand-subtle text-brand-readable flex size-11 shrink-0 items-center justify-center rounded-full">
             <Target className="size-5" aria-hidden="true" />

@@ -118,8 +118,10 @@ test.describe('Reports — personal', () => {
     await expect(page.getByText(/^Didominasi/)).toBeVisible();
 
     // spec.md: "Maksimal 6 seri; sisanya digabung" — 8 expense categories
-    // seeded, so the chart's Y-axis must show a "Lainnya" tick.
-    await expect(page.getByText('Lainnya')).toBeVisible();
+    // seeded, so the chart's Y-axis must show a "Lainnya" tick. Scoped to
+    // `main` — the bottom nav ALSO has an unrelated "Lainnya" ("More") tab
+    // outside the main landmark, which an unscoped text query matches too.
+    await expect(page.getByRole('main').getByText('Lainnya')).toBeVisible();
   });
 
   test('empty state shows "Belum cukup data" for a brand new account', async ({ page }) => {

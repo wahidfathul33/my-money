@@ -112,3 +112,15 @@ describe('currentLocalPeriod', () => {
     expect(currentLocalPeriod(fixed, DEFAULT_TIMEZONE)).toBe('2026-09');
   });
 });
+
+// src/features/dashboard/greeting.ts's time-of-day greeting depends on this
+// resolving the WIB wall-clock hour, not the server's raw UTC hour.
+describe('toLocalHour', () => {
+  it('resolves the WIB wall-clock hour, crossing the UTC date boundary', async () => {
+    const { toLocalHour } = await import('../timezone');
+    // 20:00 UTC == 03:00 WIB the next day.
+    expect(toLocalHour(new Date('2026-09-02T20:00:00Z'), DEFAULT_TIMEZONE)).toBe(3);
+    // 01:00 UTC == 08:00 WIB the same day.
+    expect(toLocalHour(new Date('2026-09-02T01:00:00Z'), DEFAULT_TIMEZONE)).toBe(8);
+  });
+});

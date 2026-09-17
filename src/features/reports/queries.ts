@@ -378,3 +378,16 @@ function localMonthRangeAnchor(period: string): Date {
 }
 
 export { periodDateRange };
+
+// --- History depth (empty-state gate) ---------------------------------------
+
+/** Earliest non-void transaction date for `userId`, or `null` for a brand
+ * new account — feeds `hasEnoughHistory` (src/lib/finance/report-aggregation.ts),
+ * todo.md's "Empty state: data < 7 hari". */
+export async function getEarliestTransactionDate(userId: string): Promise<Date | null> {
+  const [row] = await dbRead
+    .select({ earliest: sql<Date | null>`MIN(${transactions.transactionDate})` })
+    .from(transactions)
+    .where(and(ownedBy(transactions, userId), isNull(transactions.voidedAt)));
+  return row?.earliest ?? null;
+}

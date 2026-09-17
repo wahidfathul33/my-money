@@ -106,3 +106,17 @@ export function shortMonthLabel(period: string): string {
   const [year, month] = period.split('-').map(Number);
   return SHORT_MONTH_FORMAT.format(new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, 1)));
 }
+
+const MIN_HISTORY_DAYS = 7;
+
+/**
+ * spec.md/todo.md: "Empty state: data < 7 hari → 'Belum cukup data'."
+ * `earliestRecordDate` is `null` when there's no qualifying record at all
+ * (brand new account) — treated the same as "not enough history" rather
+ * than a separate case, since both mean "nothing meaningful to chart yet".
+ */
+export function hasEnoughHistory(earliestRecordDate: Date | null, now: Date = new Date()): boolean {
+  if (!earliestRecordDate) return false;
+  const ageDays = (now.getTime() - earliestRecordDate.getTime()) / 86_400_000;
+  return ageDays >= MIN_HISTORY_DAYS;
+}

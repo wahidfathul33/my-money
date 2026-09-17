@@ -53,6 +53,7 @@
     "nodemailer": "^7.0.13",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "recharts": "^2.15.4",
     "tailwind-merge": "^3.6.0",
     "uuidv7": "1.2.1",
     "ws": "8.21.3",

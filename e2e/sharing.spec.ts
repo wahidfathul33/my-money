@@ -4,7 +4,7 @@ import { dbWrite } from '../src/lib/db/write';
 import { householdMembers, transactions, wallets } from '../src/lib/db/schema';
 import { deleteTestHousehold, deleteTestUser } from '../src/lib/db/__tests__/test-helpers';
 import { seedSessionUser, setSessionCookie } from './helpers/auth-session';
-import { test, expect } from './fixtures/base';
+import { test, expect, waitForDomToSettle } from './fixtures/base';
 
 /**
  * tasks/12-sharing-and-privacy — the two-context flows spec.md's
@@ -116,14 +116,24 @@ test.describe('sharing & privacy — two-context flows', () => {
         await expect(confirmDialog).not.toBeVisible(DB_TIMEOUT);
         await expect(shareSwitch).toHaveAttribute('aria-checked', 'true', DB_TIMEOUT);
 
-        expect(await isWalletVisibleToHousehold()).toBe(true);
+        // `expect.poll`, not a one-shot query: `aria-checked` flips
+        // OPTIMISTICALLY, synchronously, the instant the dialog's "Bagikan"
+        // is clicked (src/features/sharing/components/share-wealth-toggle.tsx's
+        // `confirmShare` sets local state before its `startTransition` async
+        // call even begins) — so by the time this line runs, the real
+        // `setShareWealthAction` write may genuinely still be in flight.
+        // Confirmed by instrumenting this exact spot: a bare one-shot query
+        // here loses that race under real (non-instant) Server Action
+        // round-trip latency, independent of anything else in the test.
+        await expect.poll(isWalletVisibleToHousehold, DB_TIMEOUT).toBe(true);
 
-        // Turning OFF — frictionless, no dialog at all.
+        // Turning OFF — frictionless, no dialog at all. Same optimistic-
+        // flip-before-write shape, same reasoning for polling here too.
         await shareSwitch.click();
         await expect(shareSwitch).toHaveAttribute('aria-checked', 'false', DB_TIMEOUT);
         await expect(memberPage.getByRole('dialog')).toHaveCount(0);
 
-        expect(await isWalletVisibleToHousehold()).toBe(false);
+        await expect.poll(isWalletVisibleToHousehold, DB_TIMEOUT).toBe(false);
       } finally {
         await deleteTestHousehold(householdId);
       }
@@ -360,6 +370,12 @@ test.describe('sharing & privacy — two-context flows', () => {
 
         const memberPage = await memberContext.newPage();
         await memberPage.goto('/settings/sharing');
+        // A manually-created page bypasses fixtures/base.ts's own
+        // auto-`waitForDomToSettle` wrapping (only applied to the `page`
+        // fixture Playwright injects into the test callback) — see that
+        // file's header comment for the transient double-render this
+        // absorbs, and e2e/settings-data-pwa.spec.ts for the identical fix.
+        await waitForDomToSettle(memberPage);
         await expect(memberPage.getByText('Keluarga Alpha')).toBeVisible(DB_TIMEOUT);
         await expect(memberPage.getByText('Keluarga Beta')).toBeVisible();
 

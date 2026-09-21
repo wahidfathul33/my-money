@@ -6,14 +6,36 @@
  * `online`/`offline` events (the same signal `navigator.onLine` exposes);
  * `lastOnlineAt` persists across reloads in `localStorage` so the offline
  * banner's "data per {waktu}" survives a page refresh taken while offline.
- * `isSlow` is a generic heuristic — ANY in-flight `fetch()` (Server Actions
- * included, which use `fetch` under the hood) still pending past 3s flips it
- * on, no per-call-site opt-in needed.
+ *
+ * `isSlow` reads the Network Information API (`navigator.connection`) —
+ * `effectiveType` of `'slow-2g'`/`'2g'`, or a reported `downlink` under
+ * 0.5 Mbps. An EARLIER version of this hook instead globally wrapped
+ * `window.fetch` to time every in-flight request past 3s; that was reverted
+ * after it measurably slowed down (and in one real run, broke the timing
+ * of) Server Action round-trips elsewhere in the app — e2e/sharing.spec.ts's
+ * `share_wealth` test started losing a pre-existing optimistic-UI-vs-DB-
+ * commit race that had reliably passed before. A passive `navigator.connection`
+ * READ can't add latency to anything, at the cost of Safari/iOS (which
+ * doesn't implement the API) simply never showing this one message —
+ * an acceptable trade for a nice-to-have hint, not the offline guarantee
+ * itself.
  */
 import { useEffect, useState } from 'react';
 
 const LAST_ONLINE_KEY = 'mymoney:lastOnlineAt';
-const SLOW_THRESHOLD_MS = 3000;
+
+interface NetworkInformation extends EventTarget {
+  effectiveType?: '2g' | '3g' | '4g' | 'slow-2g';
+  downlink?: number;
+}
+
+function readIsSlow(): boolean {
+  const connection = (navigator as Navigator & { connection?: NetworkInformation }).connection;
+  if (!connection) return false;
+  if (connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g') return true;
+  if (typeof connection.downlink === 'number' && connection.downlink < 0.5) return true;
+  return false;
+}
 
 export interface NetworkStatus {
   isOnline: boolean;
@@ -23,15 +45,17 @@ export interface NetworkStatus {
   isSlow: boolean;
 }
 
-function readStoredLastOnlineAt(): number | null {
-  if (typeof window === 'undefined') return null;
-  const stored = window.localStorage.getItem(LAST_ONLINE_KEY);
-  return stored ? Number(stored) : null;
-}
-
 export function useNetworkStatus(): NetworkStatus {
-  const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
-  const [lastOnlineAt, setLastOnlineAt] = useState<number | null>(readStoredLastOnlineAt);
+  // Both start at the SAME value the server would produce (`true` / `null`)
+  // — reading `navigator.onLine` or `localStorage` directly in a `useState`
+  // initializer runs on the client's FIRST render too, not just effects, so
+  // it can diverge from the server's render and trip a hydration mismatch
+  // (confirmed against a real `next dev` run while building this hook).
+  // The real values are synced in the effect below instead, which only
+  // ever runs AFTER hydration completes — any resulting state flip is a
+  // normal post-hydration re-render, never a mismatch.
+  const [isOnline, setIsOnline] = useState(true);
+  const [lastOnlineAt, setLastOnlineAt] = useState<number | null>(null);
   const [isSlow, setIsSlow] = useState(false);
 
   useEffect(() => {
@@ -50,6 +74,14 @@ export function useNetworkStatus(): NetworkStatus {
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // Initial sync, post-hydration: read the REAL current state once,
+    // restoring any previously-persisted `lastOnlineAt` even if the
+    // browser happens to be offline right now (so a reload taken while
+    // offline still shows a meaningful "data per {waktu}" instead of "—").
+    setIsOnline(navigator.onLine);
+    const stored = window.localStorage.getItem(LAST_ONLINE_KEY);
+    if (stored) setLastOnlineAt(Number(stored));
     if (navigator.onLine) persistOnline();
 
     return () => {
@@ -59,38 +91,15 @@ export function useNetworkStatus(): NetworkStatus {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.fetch !== 'function') return;
-    const originalFetch = window.fetch.bind(window);
-    let pending = 0;
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    const connection = (navigator as Navigator & { connection?: NetworkInformation }).connection;
+    setIsSlow(readIsSlow());
+    if (!connection) return;
 
-    function startTimer() {
-      if (timer) return;
-      timer = setTimeout(() => setIsSlow(true), SLOW_THRESHOLD_MS);
+    function handleChange() {
+      setIsSlow(readIsSlow());
     }
-    function clearTimer() {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-    }
-
-    window.fetch = ((...args: Parameters<typeof fetch>) => {
-      pending += 1;
-      startTimer();
-      return originalFetch(...args).finally(() => {
-        pending = Math.max(0, pending - 1);
-        if (pending === 0) {
-          clearTimer();
-          setIsSlow(false);
-        }
-      });
-    }) as typeof fetch;
-
-    return () => {
-      window.fetch = originalFetch;
-      clearTimer();
-    };
+    connection.addEventListener('change', handleChange);
+    return () => connection.removeEventListener('change', handleChange);
   }, []);
 
   return { isOnline, lastOnlineAt, isSlow };

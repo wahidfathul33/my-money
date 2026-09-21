@@ -5,7 +5,7 @@ import { dbWrite } from '../src/lib/db/write';
 import { households, householdMembers, users } from '../src/lib/db/schema';
 import { deleteTestHousehold, deleteTestUser } from '../src/lib/db/__tests__/test-helpers';
 import { seedSessionUser, setSessionCookie } from './helpers/auth-session';
-import { test as base, expect as baseExpect } from './fixtures/base';
+import { test as base, expect as baseExpect, waitForDomToSettle } from './fixtures/base';
 import { test, expect } from './fixtures/authenticated';
 
 const DB_TIMEOUT = { timeout: 20_000 };
@@ -116,7 +116,7 @@ test.describe('account deletion — confirm-by-email dialog', () => {
  * doesn't expose a hook to do before first navigation.
  */
 base.describe('account deletion — owner block (real household)', () => {
-  base('blocked screen names the household and links to its settings; deletion succeeds once ownership is no longer held', async ({
+  base('blocked screen replaces the delete button, naming the household with a working link to its settings', async ({
     browser,
     baseURL,
   }) => {
@@ -140,8 +140,15 @@ base.describe('account deletion — owner block (real household)', () => {
 
     try {
       await page.goto('/settings/data');
+      // A manually-created page (needed here to set the session cookie
+      // before first navigation) bypasses fixtures/base.ts's own
+      // auto-`waitForDomToSettle` wrapping — see that file's header comment
+      // for the transient double-render this absorbs.
+      await waitForDomToSettle(page);
       await baseExpect(page.getByText('Akun belum bisa dihapus')).toBeVisible(DB_TIMEOUT);
-      await baseExpect(page.getByText('Keluarga Penghalang')).toBeVisible();
+      // "Keluarga Penghalang" appears twice — once as plain text in the
+      // explanation, once inside the link's own accessible name below.
+      await baseExpect(page.getByText('Keluarga Penghalang').first()).toBeVisible();
       const link = page.getByRole('link', { name: /Keluarga Penghalang/ });
       await baseExpect(link).toHaveAttribute('href', `/household/${householdId}/settings`);
       // The destructive "Hapus akun" button is never rendered in this state.

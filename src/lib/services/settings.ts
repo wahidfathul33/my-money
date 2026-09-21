@@ -185,53 +185,70 @@ export async function deleteAccount(userId: string): Promise<void> {
       throw new OwnerBlockedDeletionError(blockingHousehold.id, blockingHousehold.name);
     }
 
-    // households.created_by -> the household's current active owner.
+    // Successor per affected household: another ACTIVE member (any role),
+    // never the departing user themselves. Preferring an owner if one
+    // exists is a nicety, not a requirement — for an ARCHIVED household the
+    // role hierarchy no longer grants any live permission, so `created_by`
+    // there is purely historical bookkeeping. Earlier versions of the four
+    // UPDATEs below joined on `hm.role = 'owner' AND hm.status = 'active'`
+    // WITHOUT excluding the departing user's own membership row — for an
+    // archived household (never blocked by the owner-check above, which
+    // only looks at `is_archived = false`) where this user was still its
+    // sole active owner, that join matched their OWN row and "reassigned"
+    // `created_by` to themselves, a no-op that left the FK pointing at a
+    // user about to be deleted — caught by
+    // settings.integration.test.ts's "is NOT blocked by an ARCHIVED
+    // household" test via the `households_created_by_users_id_fk` RESTRICT
+    // violation on the final `DELETE FROM users` below.
+    const successors = sql`(
+      SELECT DISTINCT ON (household_id) household_id, user_id
+      FROM household_members
+      WHERE status = 'active' AND user_id <> ${userId}
+      ORDER BY household_id, (role = 'owner') DESC, joined_at ASC NULLS LAST
+    )`;
+
+    // households.created_by -> the successor above, if one exists.
     await tx.execute(sql`
       UPDATE households h
-      SET created_by = hm.user_id, updated_at = now()
-      FROM household_members hm
-      WHERE h.created_by = ${userId}
-        AND hm.household_id = h.id
-        AND hm.role = 'owner'
-        AND hm.status = 'active'
+      SET created_by = s.user_id, updated_at = now()
+      FROM ${successors} s
+      WHERE h.created_by = ${userId} AND s.household_id = h.id
     `);
 
-    // household_invitations.invited_by -> same target.
+    // household_invitations.invited_by -> same successor.
     await tx.execute(sql`
       UPDATE household_invitations hi
-      SET invited_by = hm.user_id
-      FROM household_members hm
-      WHERE hi.invited_by = ${userId}
-        AND hm.household_id = hi.household_id
-        AND hm.role = 'owner'
-        AND hm.status = 'active'
+      SET invited_by = s.user_id
+      FROM ${successors} s
+      WHERE hi.invited_by = ${userId} AND s.household_id = hi.household_id
     `);
 
-    // budgets.created_by -> same target, household budgets only (personal
+    // budgets.created_by -> same successor, household budgets only (personal
     // budgets cascade away with their own user_id, untouched here).
     await tx.execute(sql`
       UPDATE budgets b
-      SET created_by = hm.user_id, updated_at = now()
-      FROM household_members hm
-      WHERE b.created_by = ${userId}
-        AND b.household_id IS NOT NULL
-        AND hm.household_id = b.household_id
-        AND hm.role = 'owner'
-        AND hm.status = 'active'
+      SET created_by = s.user_id, updated_at = now()
+      FROM ${successors} s
+      WHERE b.created_by = ${userId} AND b.household_id IS NOT NULL AND s.household_id = b.household_id
     `);
 
-    // savings_goals.user_id (creator) -> same target, SHARED goals only —
+    // savings_goals.user_id (creator) -> same successor, SHARED goals only —
     // preserves the goal and every OTHER member's contributions.
     await tx.execute(sql`
       UPDATE savings_goals sg
-      SET user_id = hm.user_id, updated_at = now()
-      FROM household_members hm
-      WHERE sg.user_id = ${userId}
-        AND sg.household_id IS NOT NULL
-        AND hm.household_id = sg.household_id
-        AND hm.role = 'owner'
-        AND hm.status = 'active'
+      SET user_id = s.user_id, updated_at = now()
+      FROM ${successors} s
+      WHERE sg.user_id = ${userId} AND sg.household_id IS NOT NULL AND s.household_id = sg.household_id
     `);
+
+    // Any household where NO successor existed (this user was its only
+    // remaining active member — always true for a solo archived household,
+    // and never true for a still-active one thanks to the owner-block
+    // above) is now entirely orphaned by this deletion. Deleting it outright
+    // cascades household_members/household_invitations/budgets, and
+    // SET NULLs savings_goals.household_id / transactions.household_id
+    // (schema-level ON DELETE behavior) — nothing left with a stake in it.
+    await tx.execute(sql`DELETE FROM households WHERE created_by = ${userId}`);
 
     // current_amount cache: subtract this user's own net contribution from
     // every goal it appears in (whether they created it or not) BEFORE the

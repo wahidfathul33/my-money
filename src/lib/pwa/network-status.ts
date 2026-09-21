@@ -2,10 +2,28 @@
 
 /**
  * PWA offline/slow-connection detection — docs/10-ux-states.md §7,
- * tasks/22-settings-sharing-pwa. `isOnline` tracks the browser's own
- * `online`/`offline` events (the same signal `navigator.onLine` exposes);
+ * tasks/22-settings-sharing-pwa. `isOnline`/`isSlow` are both read via
+ * `useSyncExternalStore` — the React-blessed pattern for subscribing to
+ * external, mutable browser state (`navigator.onLine`,
+ * `navigator.connection`) — rather than a manual `useEffect` + `setState`.
+ * Two real bugs in an earlier manual-effect version motivated the switch:
+ * (1) reading `navigator.onLine` in a `useState` initializer runs on the
+ * client's FIRST render too, not just the server, and diverged from the
+ * server's render enough to trip a real hydration mismatch (confirmed
+ * against a `next dev` run); (2) syncing the real value via a plain
+ * `setState` call in the effect BODY (not inside an event callback) trips
+ * `eslint-plugin-react-hooks`'s `set-state-in-effect` rule — caught by
+ * `npm run verify`, not by `typecheck` alone.
+ * `useSyncExternalStore` sidesteps both: its server-snapshot argument
+ * handles SSR correctly by construction, and subscribing is the intended
+ * shape for exactly this kind of external store.
+ *
  * `lastOnlineAt` persists across reloads in `localStorage` so the offline
- * banner's "data per {waktu}" survives a page refresh taken while offline.
+ * banner's "data per {waktu}" survives a page refresh taken while offline —
+ * it's a plain `useState` + a listener effect (permitted: the `setState`
+ * calls there run INSIDE the 'online' event callback, not synchronously in
+ * the effect body), not an external-store subscription, since nothing else
+ * ever mutates it out from under this hook.
  *
  * `isSlow` reads the Network Information API (`navigator.connection`) —
  * `effectiveType` of `'slow-2g'`/`'2g'`, or a reported `downlink` under
@@ -20,7 +38,7 @@
  * an acceptable trade for a nice-to-have hint, not the offline guarantee
  * itself.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 const LAST_ONLINE_KEY = 'mymoney:lastOnlineAt';
 
@@ -29,11 +47,39 @@ interface NetworkInformation extends EventTarget {
   downlink?: number;
 }
 
-function readIsSlow(): boolean {
-  const connection = (navigator as Navigator & { connection?: NetworkInformation }).connection;
+function getConnection(): NetworkInformation | undefined {
+  return (navigator as Navigator & { connection?: NetworkInformation }).connection;
+}
+
+function subscribeOnline(callback: () => void): () => void {
+  window.addEventListener('online', callback);
+  window.addEventListener('offline', callback);
+  return () => {
+    window.removeEventListener('online', callback);
+    window.removeEventListener('offline', callback);
+  };
+}
+function getOnlineSnapshot(): boolean {
+  return navigator.onLine;
+}
+function getOnlineServerSnapshot(): boolean {
+  return true; // no signal server-side — assume online, matches every other tz/DEFAULT_TIMEZONE-style fallback in this codebase
+}
+
+function subscribeConnection(callback: () => void): () => void {
+  const connection = getConnection();
+  if (!connection) return () => {};
+  connection.addEventListener('change', callback);
+  return () => connection.removeEventListener('change', callback);
+}
+function getIsSlowSnapshot(): boolean {
+  const connection = getConnection();
   if (!connection) return false;
   if (connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g') return true;
   if (typeof connection.downlink === 'number' && connection.downlink < 0.5) return true;
+  return false;
+}
+function getIsSlowServerSnapshot(): boolean {
   return false;
 }
 
@@ -45,61 +91,35 @@ export interface NetworkStatus {
   isSlow: boolean;
 }
 
+function readStoredLastOnlineAt(): number | null {
+  if (typeof window === 'undefined') return null; // SSR guard — no localStorage server-side
+  const stored = window.localStorage.getItem(LAST_ONLINE_KEY);
+  return stored ? Number(stored) : null;
+}
+
 export function useNetworkStatus(): NetworkStatus {
-  // Both start at the SAME value the server would produce (`true` / `null`)
-  // — reading `navigator.onLine` or `localStorage` directly in a `useState`
-  // initializer runs on the client's FIRST render too, not just effects, so
-  // it can diverge from the server's render and trip a hydration mismatch
-  // (confirmed against a real `next dev` run while building this hook).
-  // The real values are synced in the effect below instead, which only
-  // ever runs AFTER hydration completes — any resulting state flip is a
-  // normal post-hydration re-render, never a mismatch.
-  const [isOnline, setIsOnline] = useState(true);
-  const [lastOnlineAt, setLastOnlineAt] = useState<number | null>(null);
-  const [isSlow, setIsSlow] = useState(false);
+  const isOnline = useSyncExternalStore(subscribeOnline, getOnlineSnapshot, getOnlineServerSnapshot);
+  const isSlow = useSyncExternalStore(subscribeConnection, getIsSlowSnapshot, getIsSlowServerSnapshot);
+
+  // A LAZY INITIALIZER, not a value read inside an effect body — the
+  // `set-state-in-effect` hazard this whole hook was rewritten to avoid
+  // only applies to `setState` calls made FROM an effect; an initializer
+  // function passed to `useState` isn't an effect at all. Hydration-safe
+  // for the same reason `isOnline`'s value is: `<OfflineBanner>` only ever
+  // reads `lastOnlineAt` inside the `!isOnline` branch, and `isOnline` is
+  // guaranteed to equal the server snapshot (`true`) on the render pass
+  // that must match server output — so whatever this returns can never
+  // actually reach the DOM during that window either way.
+  const [lastOnlineAt, setLastOnlineAt] = useState<number | null>(readStoredLastOnlineAt);
 
   useEffect(() => {
-    function persistOnline() {
+    function handleOnline() {
       const now = Date.now();
       setLastOnlineAt(now);
       window.localStorage.setItem(LAST_ONLINE_KEY, String(now));
     }
-    function handleOnline() {
-      setIsOnline(true);
-      persistOnline();
-    }
-    function handleOffline() {
-      setIsOnline(false);
-    }
-
     window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    // Initial sync, post-hydration: read the REAL current state once,
-    // restoring any previously-persisted `lastOnlineAt` even if the
-    // browser happens to be offline right now (so a reload taken while
-    // offline still shows a meaningful "data per {waktu}" instead of "—").
-    setIsOnline(navigator.onLine);
-    const stored = window.localStorage.getItem(LAST_ONLINE_KEY);
-    if (stored) setLastOnlineAt(Number(stored));
-    if (navigator.onLine) persistOnline();
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  useEffect(() => {
-    const connection = (navigator as Navigator & { connection?: NetworkInformation }).connection;
-    setIsSlow(readIsSlow());
-    if (!connection) return;
-
-    function handleChange() {
-      setIsSlow(readIsSlow());
-    }
-    connection.addEventListener('change', handleChange);
-    return () => connection.removeEventListener('change', handleChange);
+    return () => window.removeEventListener('online', handleOnline);
   }, []);
 
   return { isOnline, lastOnlineAt, isSlow };

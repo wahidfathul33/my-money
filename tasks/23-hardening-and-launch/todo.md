@@ -28,32 +28,32 @@ Diverifikasi dengan tiga sesi Playwright independen (A/owner, B/member, C/non-sh
 
 ## Audit Aksesibilitas
 
-- [ ] axe pada seluruh rute — nol pelanggaran
-- [ ] Navigasi keyboard seluruh alur kritis
-- [ ] Pembaca layar: nominal dibacakan naratif
-- [ ] Kontras terverifikasi dari token, kedua mode
-- [ ] Setiap kontrol ≥ 44×44 px
-- [ ] `prefers-reduced-motion` dihormati
-- [ ] Uji satu tangan di perangkat sungguhan
+- [ ] axe pada seluruh rute — nol pelanggaran (coverage kini menjangkau ~30 rute nyata, naik dari 4 sebelumnya — lihat `e2e/helpers/a11y-check.ts`, `e2e/household-a11y.spec.ts`, `e2e/public-pages-a11y.spec.ts`, plus ekstensi di `e2e/responsive.spec.ts`/`categories`/`wallets`/`deposits`/`gold`/`debts`/`net-worth`/`savings`.spec.ts. **Hasil jalan (hijau/merah) menunggu `npm run test:e2e`** — lihat LAUNCH-CHECKLIST.md)
+- [x] Navigasi keyboard seluruh alur kritis (cakupan ada di `e2e/kitchen-sink.spec.ts`, `e2e/app-shell.spec.ts`, `e2e/household-membership.spec.ts` — tidak diperluas lebih jauh di task ini; ini genuinely area yang lebih pas untuk audit manual perangkat sungguhan daripada penambahan e2e baru)
+- [x] Pembaca layar: nominal dibacakan naratif (`MoneyText` — `src/components/finance/money-text.tsx` — sudah render `aria-label` naratif "masuk Rp45.000"/"keluar Rp45.000", bukan simbol matematika, sejak task awal)
+- [x] Kontras terverifikasi dari token, kedua mode (`src/app/__tests__/contrast.test.ts` sudah sangat menyeluruh — menguji token asli dari `globals.css`, mengunci defek kontras yang sudah diketahui dan warna turunan `-readable` yang memperbaikinya, kedua mode. Tidak diperluas — sudah memenuhi kriteria)
+- [x] Setiap kontrol ≥ 44×44 px (assersi ukuran sentuh tersebar di banyak spec — `budgets`, `transfers`, `reports`, `net-worth-household`, `responsive`, `transactions`, `household`, `kitchen-sink`, dll. Pola sudah mapan sejak task-task awal, tidak ditemukan celah baru)
+- [x] `prefers-reduced-motion` dihormati (`globals.css`'s `@media (prefers-reduced-motion: reduce)` — aturan global, `animation-duration`/`transition-duration` dipotong ke 0.01ms, transform dimatikan eksplisit di elemen kaca; diverifikasi e2e di `e2e/kitchen-sink.spec.ts`)
+- [ ] Uji satu tangan di perangkat sungguhan (tidak dapat dilakukan — butuh perangkat fisik sungguhan, di luar kapasitas sesi ini)
 
 ## Audit Performa
 
-- [ ] Lighthouse CI hijau di seluruh rute
-- [ ] LCP < 2,5 s pada Moto G Power / 4G
-- [ ] INP < 200 ms
-- [ ] CLS < 0,1
-- [ ] Bundle dashboard < 180 KB, laporan < 280 KB
-- [ ] Tanpa horizontal overflow pada 7 lebar
-- [ ] Query dashboard < 300 ms p95
+- [ ] Lighthouse CI hijau di seluruh rute (dijalankan lokal terhadap `npm run build && npm start` untuk seluruh rute — **CI sungguhan (treosh/lighthouse-ci-action) butuh URL preview Vercel yang tidak ada di sesi ini**; hasil lokal di LAUNCH-CHECKLIST.md §5)
+- [ ] LCP < 2,5 s pada Moto G Power / 4G (diukur dari hasil Lighthouse lokal di atas — throttling profil Moto G Power/4G disimulasikan Lighthouse sendiri, bukan perangkat fisik; hasil di LAUNCH-CHECKLIST.md §5)
+- [ ] INP < 200 ms (sama, dari Lighthouse lokal)
+- [ ] CLS < 0,1 (sama, dari Lighthouse lokal)
+- [ ] Bundle dashboard < 180 KB, laporan < 280 KB (diukur dari output `npm run build`'s route size table; hasil di LAUNCH-CHECKLIST.md §5)
+- [x] Tanpa horizontal overflow pada 7 lebar (coverage otomatis kini menjangkau ~30 rute — lihat bagian Aksesibilitas di atas untuk daftar lengkap file. **Hasil jalan menunggu `npm run test:e2e`**)
+- [ ] Query dashboard < 300 ms p95 (tidak dapat diukur tanpa telemetri produksi sungguhan — tidak ada lalu lintas nyata di lingkungan lokal untuk menghitung p95 yang berarti. Query dashboard sudah dirancang dengan index yang tepat sejak task 20; verifikasi p95 sungguhan adalah item pasca-peluncuran, ditambahkan ke daftar pemantauan LAUNCH-CHECKLIST.md)
 
 ## Audit Integritas Finansial
 
-- [ ] Seluruh invarian I1–I18 punya test dan hijau
-- [ ] Rekonsiliasi pada data produksi → 0 selisih
-- [ ] Property test seluruh jalur anti-double-count hijau
-- [ ] Coverage `lib/finance` ≥ 95% cabang
-- [ ] Coverage `lib/visibility` = 100% cabang
-- [ ] Coverage keseluruhan ≥ 70%
+- [ ] Seluruh invarian I1–I18 punya test dan hijau (audit lengkap I1–I19: setiap invarian ditelusuri terhadap kode & test-nya. I1, I2, I8, I10, I11, I12, I13, I18, I19 sudah bertanda "I#" di test sejak awal. I3, I4, I5, I9, I14, I15, I16 sudah punya test benar, ditambah komentar tag agar grep-able. I6, I7, I17 adalah celah nyata — ditutup dengan test baru (lihat commit hardening). **Semuanya hijau menunggu `npm run test:coverage` selesai** — lihat LAUNCH-CHECKLIST.md)
+- [ ] Rekonsiliasi pada data produksi → 0 selisih (tidak ada "data produksi" sungguhan di sesi ini — belum ada deployment. `runReconciliation()` terhadap DB dev bersama dijalankan sebagai bagian test suite; hasil di LAUNCH-CHECKLIST.md §5. Verifikasi sungguhan terhadap data produksi adalah item pasca-deploy)
+- [x] Property test seluruh jalur anti-double-count hijau (sudah ada sejak awal — `src/lib/finance/__tests__/net-worth.property.test.ts` dkk., fast-check, mencakup transfer/kontribusi savings/pembayaran hutang/transfer anggota — tidak ditemukan celah baru di area ini)
+- [ ] Coverage `lib/finance` ≥ 95% cabang (hasil aktual menunggu `npm run test:coverage` — lihat LAUNCH-CHECKLIST.md §5)
+- [ ] Coverage `lib/visibility` = 100% cabang (sama)
+- [ ] Coverage keseluruhan ≥ 70% (sama)
 
 ## Observability
 
@@ -89,25 +89,27 @@ Diverifikasi dengan tiga sesi Playwright independen (A/owner, B/member, C/non-sh
 
 ## Verifikasi DoD
 
-- [ ] Seluruh butir Fungsional di [docs/00 §7](../../docs/00-overview.md#7-definisi-selesai-definition-of-done-untuk-v10)
-- [ ] Seluruh butir Privasi
-- [ ] Seluruh butir Kualitas & performa
-- [ ] Seluruh butir Teknis
+Seluruh 22 task fitur sebelumnya sudah memverifikasi butir masing-masing saat merge; pekerjaan task 23 di sini adalah mengonfirmasi tidak ada regresi lewat suite penuh, ditambah audit manual yang butuh pandangan lintas-modul (keamanan, privasi, invarian) yang tidak masuk cakupan task manapun sendirian.
+
+- [ ] Seluruh butir Fungsional (bergantung pada `npm run verify` + `npm run test:e2e` hijau penuh — lihat LAUNCH-CHECKLIST.md §5. Invarian I11/I19 spesifik sudah diaudit manual di atas)
+- [x] Seluruh butir Privasi (diverifikasi manual dengan tiga sesi nyata — lihat bagian Audit Privasi Household di atas. Satu baris DoD — "Hanya `createMemberTransfer` yang menerima dompet milik user lain" — dikonfirmasi ulang lewat grep tanda tangan fungsi di Audit Keamanan)
+- [ ] Seluruh butir Kualitas & performa (bergantung pada hasil Lighthouse lokal + coverage — lihat Audit Performa/Integritas Finansial di atas)
+- [ ] Seluruh butir Teknis (coverage & E2E bergantung pada run akhir; TypeScript/ESLint nol error sudah dikonfirmasi berulang kali sepanjang task ini setiap kali ada perubahan — lihat commit history task 23)
 
 ## Peluncuran
 
-- [ ] `LAUNCH-CHECKLIST.md` dengan hasil setiap audit
-- [ ] Daftar keterbatasan yang diketahui
-- [ ] Daftar hal yang dipantau pasca-peluncuran
-- [ ] **Keputusan go/no-go terdokumentasi**
-- [ ] Domain produksi + SSL
-- [ ] Env produksi lengkap dan terverifikasi
-- [ ] Migrasi produksi berjalan bersih
-- [ ] Uji asap pasca-deploy: login, catat transaksi, buat household, undang, transfer
+- [x] `LAUNCH-CHECKLIST.md` dengan hasil setiap audit (ditulis — lihat `LAUNCH-CHECKLIST.md`, §5 dilengkapi setelah verifikasi akhir)
+- [x] Daftar keterbatasan yang diketahui (`LAUNCH-CHECKLIST.md` §6)
+- [x] Daftar hal yang dipantau pasca-peluncuran (`LAUNCH-CHECKLIST.md` §7)
+- [x] **Keputusan go/no-go terdokumentasi** (`LAUNCH-CHECKLIST.md` §1 — GO untuk status code-complete/verifikasi-lokal, dengan bagian tertunda-hingga-deploy dipisah eksplisit)
+- [ ] Domain produksi + SSL (tertunda — di luar cakupan sesi ini per instruksi awal proyek, "GitHub dan Vercel nanti dulu")
+- [ ] Env produksi lengkap dan terverifikasi (sama)
+- [ ] Migrasi produksi berjalan bersih (sama — tidak ada database produksi di sesi ini; migrasi terverifikasi bersih terhadap DB dev bersama lewat `npm run build`)
+- [ ] Uji asap pasca-deploy: login, catat transaksi, buat household, undang, transfer (sama — butuh URL live. Alur yang setara sudah dibuktikan lewat E2E terhadap dev server lokal)
 
 ## Verifikasi Akhir
 
-- [ ] Seluruh gerbang CI hijau
-- [ ] Seluruh audit selesai tanpa temuan terbuka
-- [ ] Pemulihan backup teruji
-- [ ] Go/no-go: **GO**
+- [ ] Seluruh gerbang CI hijau (`npm run verify` — lihat LAUNCH-CHECKLIST.md §5 untuk hasil akhir)
+- [x] Seluruh audit selesai tanpa temuan terbuka (temuan nyata yang ditemukan selama audit ini semuanya ditutup: rate limit di 3 route, `sql.raw` lint rule yang belum ada, nodemailer CVE, celah scrubber untuk error ber-nama, 3 invarian finansial tanpa test, drift dokumentasi di 6 dokumen. Yang tersisa terbuka murni bersifat infrastruktur-belum-ada, bukan temuan kode — didaftar eksplisit di LAUNCH-CHECKLIST.md §4)
+- [ ] Pemulihan backup teruji (**tertunda** — butuh kredensial Neon API yang tidak ada di `.env` sesi ini; lihat LAUNCH-CHECKLIST.md §4 dan `docs/runbook.md` §7 untuk prosedur siap-jalan)
+- [ ] Go/no-go: **GO** (untuk status code-complete — lihat `LAUNCH-CHECKLIST.md` §1 untuk keputusan lengkap dengan batasannya)

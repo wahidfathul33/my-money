@@ -24,6 +24,7 @@ import { ownedBy } from '@/lib/db/scoped';
 import type { Money } from '@/lib/finance/money';
 import {
   DEFAULT_TIMEZONE,
+  isValidTimeZone,
   localDayRange,
   localMonthRange,
   toLocalDate,
@@ -99,9 +100,19 @@ const DEFAULT_LIMIT = 30;
 const MAX_LIMIT = 100;
 const MIN_SEARCH_LENGTH = 2;
 
-/** Only Asia/Jakarta is supported for MVP — see src/lib/date/timezone.ts's own header. */
+/**
+ * tasks/22-settings-sharing-pwa lifted the MVP-only "must be exactly
+ * Asia/Jakarta" restriction this used to enforce — any real IANA zone
+ * (`users.timezone`, set from `/settings/preferences`) is accepted now.
+ * Still asserted, not skipped: `getDayTotals` below inlines `tz` as a raw
+ * SQL string literal (see that function's own comment for why), so this
+ * remains the one gate standing between that interpolation and a value that
+ * isn't actually a safe identifier — `isValidTimeZone`'s `Intl` check can
+ * only ever accept genuine zone names (letters/digits/`/`/`_`/`+`/`-`),
+ * never quotes or statement separators.
+ */
 function assertSupportedTimezone(tz: string): void {
-  if (tz !== DEFAULT_TIMEZONE) {
+  if (!isValidTimeZone(tz)) {
     throw new RangeError(`Unsupported timezone for aggregation: "${tz}"`);
   }
 }
@@ -408,10 +419,15 @@ export async function getDayTotals(
   // two Param nodes with different placeholder numbers are NOT recognized
   // as the same expression even though they'd bind to the same value at
   // runtime (confirmed against the real DB: 42803 "must appear in the GROUP
-  // BY clause"). `assertSupportedTimezone` above guarantees `tz` is exactly
-  // `DEFAULT_TIMEZONE`, so inlining it as a literal is safe — and it also
-  // makes this expression byte-identical to `tx_user_local_date_idx`'s own
-  // `(transaction_date AT TIME ZONE 'Asia/Jakarta')::date` (src/lib/db/schema/transactions.ts).
+  // BY clause"). `assertSupportedTimezone` above guarantees `tz` passed
+  // `isValidTimeZone` — a genuine IANA zone name, never quotes or a
+  // statement separator — so inlining it as a literal stays injection-safe
+  // even though `tz` is no longer restricted to exactly `DEFAULT_TIMEZONE`.
+  // For the one zone most rows actually use, this expression is also
+  // byte-identical to `tx_user_local_date_idx`'s own
+  // `(transaction_date AT TIME ZONE 'Asia/Jakarta')::date` (src/lib/db/schema/transactions.ts),
+  // so that index still accelerates the common case; other zones fall back
+  // to a full scan of the (already userId/date-range-filtered) row set.
   const localDateExpr = sql<string>`(${transactions.transactionDate} AT TIME ZONE ${sql.raw(`'${tz}'`)})::date`;
 
   const rows = await dbRead

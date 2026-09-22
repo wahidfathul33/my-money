@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { deserializeMoney } from '@/lib/finance/money';
 import { calculateGoalProgress, suggestedMonthlyPerMember } from '@/lib/finance/savings';
 import { categoryColorClasses } from '@/features/categories/category-colors';
+import { ExclusionToggle } from '@/features/sharing/components/exclusion-toggle';
 import type { WalletOption } from '@/features/transactions/sheet-data';
 import { archiveGoalAction } from '../actions';
 import type {
@@ -161,6 +162,28 @@ export function GoalDetailClient({
 
       {isShared && (
         <MemberContributions members={memberTotals} currentAmount={goal.currentAmount} targetAmount={goal.targetAmount} />
+      )}
+
+      {/* Only a PERSONAL goal is reached through the share_wealth
+          aggregation this flag gates — see SavingsGoalDetail's own doc
+          comment (src/features/savings/queries.ts). A SHARED goal is
+          already explicitly visible to its household, so the toggle would
+          have no effect there. */}
+      {!isShared && goal.status !== 'archived' && (
+        <div className="bg-surface rounded-card flex flex-col gap-1 p-4">
+          <span className="text-text text-sm font-medium">Berbagi kekayaan</span>
+          <span className="text-text-muted text-xs">
+            Tidak ikut dihitung di kekayaan keluarga bila Anda membagikannya.
+          </span>
+          <div className="pt-1">
+            <ExclusionToggle
+              entityType="savings_goal"
+              entityId={goal.id}
+              label={goal.name}
+              excluded={goal.excludeFromHousehold}
+            />
+          </div>
+        </div>
       )}
 
       <section className="flex flex-col gap-2">

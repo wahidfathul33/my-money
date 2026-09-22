@@ -36,7 +36,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
 import { deserializeMoney, serializeMoney } from '@/lib/finance/money';
-import { toLocalDate } from '@/lib/date/timezone';
+import { DEFAULT_TIMEZONE, toLocalDate } from '@/lib/date/timezone';
 import type { HistoryCategoryInfo, HistoryWalletInfo } from '../history-queries';
 import {
   historyItemAmount,
@@ -74,6 +74,11 @@ interface TransactionListProps {
   initialNextCursor: string | null;
   initialDayTotals: DayTotalsBySerialized;
   sheetData: AddTransactionSheetData;
+  /** The caller's own timezone (`/settings/preferences`) — drives every
+   * "which calendar day does this belong to" computation in this component.
+   * Defaults to `DEFAULT_TIMEZONE` for any caller that hasn't been updated
+   * to pass it yet, matching every other `tz` param in this codebase. */
+  tz?: string;
 }
 
 const LOAD_LIMIT = 30;
@@ -83,6 +88,7 @@ export function TransactionList({
   initialNextCursor,
   initialDayTotals,
   sheetData,
+  tz = DEFAULT_TIMEZONE,
 }: TransactionListProps) {
   const router = useRouter();
   const toast = useToast();
@@ -112,19 +118,19 @@ export function TransactionList({
   // date (`useState<Date>(() => new Date())`). A `useMemo` factory calling
   // `new Date()`/`Date.now()` directly in the render body is flagged by
   // `react-hooks/purity` as an impure read that could tear across renders.
-  const [today] = useState(() => toLocalDate(new Date()));
-  const [yesterday] = useState(() => toLocalDate(new Date(Date.now() - 24 * 60 * 60 * 1000)));
+  const [today] = useState(() => toLocalDate(new Date(), tz));
+  const [yesterday] = useState(() => toLocalDate(new Date(Date.now() - 24 * 60 * 60 * 1000), tz));
 
   const grouped = useMemo(() => {
     const map = new Map<string, TransactionHistoryClientItem[]>();
     for (const item of items) {
-      const date = toLocalDate(item.transactionDate);
+      const date = toLocalDate(item.transactionDate, tz);
       const list = map.get(date);
       if (list) list.push(item);
       else map.set(date, [item]);
     }
     return [...map.entries()];
-  }, [items]);
+  }, [items, tz]);
 
   const loadMore = useCallback(async () => {
     if (!nextCursor || loadingMore) return;
@@ -134,6 +140,7 @@ export function TransactionList({
       const params = apiFiltersToSearchParams(toApiFilters(filters));
       params.set('cursor', nextCursor);
       params.set('limit', String(LOAD_LIMIT));
+      params.set('tz', tz);
       const res = await fetch(`/api/transactions?${params.toString()}`);
       if (!res.ok) throw new Error(`request failed: ${res.status}`);
       const data = (await res.json()) as {
@@ -149,7 +156,7 @@ export function TransactionList({
     } finally {
       setLoadingMore(false);
     }
-  }, [nextCursor, loadingMore, filters]);
+  }, [nextCursor, loadingMore, filters, tz]);
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -209,7 +216,7 @@ export function TransactionList({
 
   function adjustDayTotal(item: TransactionHistoryClientItem, sign: 1 | -1) {
     if (item.type === 'transfer') return; // never part of the income/expense subtotal
-    const date = toLocalDate(item.transactionDate);
+    const date = toLocalDate(item.transactionDate, tz);
     setDayTotals((prev) => {
       const current = prev[date] ?? { income: '0', expense: '0' };
       const amount = historyItemAmount(item) * BigInt(sign);
@@ -287,7 +294,7 @@ export function TransactionList({
     setDayTotals((prev) => {
       const next = { ...prev };
       if (oldItem && oldItem.type !== 'transfer') {
-        const oldDate = toLocalDate(oldItem.transactionDate);
+        const oldDate = toLocalDate(oldItem.transactionDate, tz);
         const cur = next[oldDate] ?? { income: '0', expense: '0' };
         const oldAmount = historyItemAmount(oldItem);
         next[oldDate] = {
@@ -295,7 +302,7 @@ export function TransactionList({
           expense: serializeMoney(deserializeMoney(cur.expense) - (oldItem.type === 'expense' ? oldAmount : 0n)),
         };
       }
-      const newDate = toLocalDate(saved.transactionDate);
+      const newDate = toLocalDate(saved.transactionDate, tz);
       const cur = next[newDate] ?? { income: '0', expense: '0' };
       const newAmount = deserializeMoney(saved.amount);
       next[newDate] = {

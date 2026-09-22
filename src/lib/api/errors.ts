@@ -146,3 +146,26 @@ export class OverpaymentError extends AppError {
     super(`Pembayaran melebihi sisa ${kind}. Sisa ${formatIDR(remainingAmount)}.`);
   }
 }
+
+/**
+ * tasks/22-settings-sharing-pwa — `OWNER_BLOCKED_DELETION`. Thrown by
+ * `deleteAccount` (src/lib/services/settings.ts) when the caller is still
+ * `owner` of at least one ACTIVE, non-archived household —
+ * docs/12-security-and-auth.md §11: "memerlukan pengalihan kepemilikan atau
+ * pengarsipan household lebih dulu. Aplikasi menyatakannya jelas dengan
+ * tautan tindakan, bukan sekadar penolakan." Carries the blocking
+ * household's id/name so the UI can name it and link straight to
+ * `/household/{id}/settings` (transfer ownership / archive) — same
+ * "name the specific thing, don't just refuse" discipline as
+ * `WalletNotEligibleError`.
+ */
+export class OwnerBlockedDeletionError extends AppError {
+  readonly householdId: string;
+  readonly householdName: string;
+
+  constructor(householdId: string, householdName: string) {
+    super(`Alihkan kepemilikan atau arsipkan "${householdName}" sebelum menghapus akun`);
+    this.householdId = householdId;
+    this.householdName = householdName;
+  }
+}

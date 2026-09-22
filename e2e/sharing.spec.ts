@@ -4,7 +4,7 @@ import { dbWrite } from '../src/lib/db/write';
 import { householdMembers, transactions, wallets } from '../src/lib/db/schema';
 import { deleteTestHousehold, deleteTestUser } from '../src/lib/db/__tests__/test-helpers';
 import { seedSessionUser, setSessionCookie } from './helpers/auth-session';
-import { test, expect } from './fixtures/base';
+import { test, expect, waitForDomToSettle } from './fixtures/base';
 
 /**
  * tasks/12-sharing-and-privacy — the two-context flows spec.md's
@@ -116,14 +116,24 @@ test.describe('sharing & privacy — two-context flows', () => {
         await expect(confirmDialog).not.toBeVisible(DB_TIMEOUT);
         await expect(shareSwitch).toHaveAttribute('aria-checked', 'true', DB_TIMEOUT);
 
-        expect(await isWalletVisibleToHousehold()).toBe(true);
+        // `expect.poll`, not a one-shot query: `aria-checked` flips
+        // OPTIMISTICALLY, synchronously, the instant the dialog's "Bagikan"
+        // is clicked (src/features/sharing/components/share-wealth-toggle.tsx's
+        // `confirmShare` sets local state before its `startTransition` async
+        // call even begins) — so by the time this line runs, the real
+        // `setShareWealthAction` write may genuinely still be in flight.
+        // Confirmed by instrumenting this exact spot: a bare one-shot query
+        // here loses that race under real (non-instant) Server Action
+        // round-trip latency, independent of anything else in the test.
+        await expect.poll(isWalletVisibleToHousehold, DB_TIMEOUT).toBe(true);
 
-        // Turning OFF — frictionless, no dialog at all.
+        // Turning OFF — frictionless, no dialog at all. Same optimistic-
+        // flip-before-write shape, same reasoning for polling here too.
         await shareSwitch.click();
         await expect(shareSwitch).toHaveAttribute('aria-checked', 'false', DB_TIMEOUT);
         await expect(memberPage.getByRole('dialog')).toHaveCount(0);
 
-        expect(await isWalletVisibleToHousehold()).toBe(false);
+        await expect.poll(isWalletVisibleToHousehold, DB_TIMEOUT).toBe(false);
       } finally {
         await deleteTestHousehold(householdId);
       }
@@ -289,6 +299,116 @@ test.describe('sharing & privacy — two-context flows', () => {
     } finally {
       await ownerContext.close();
       await deleteTestUser(owner.userId);
+    }
+  });
+
+  /**
+   * tasks/22-settings-sharing-pwa — todo.md's "'Berhenti berbagi semuanya' +
+   * konfirmasi jumlah" and "E2E: 'berhenti berbagi semuanya' mencabut
+   * seluruh grant". The caller shares wealth to TWO households at once;
+   * one confirmed click revokes both, and the confirmation names the count
+   * (2) before it happens.
+   */
+  test('"Berhenti berbagi semuanya" confirms with the exact count and revokes share_wealth in every household at once', async ({
+    browser,
+    baseURL,
+  }) => {
+    test.setTimeout(90_000);
+
+    const member = await seedSessionUser({ onboarded: true, name: 'Member Berhenti' });
+    const ownerA = await seedSessionUser({ onboarded: true, name: 'Owner A' });
+    const ownerB = await seedSessionUser({ onboarded: true, name: 'Owner B' });
+
+    const memberContext = await browser.newContext({ baseURL });
+    const ownerAContext = await browser.newContext({ baseURL });
+    const ownerBContext = await browser.newContext({ baseURL });
+
+    try {
+      await setSessionCookie(memberContext, member.sessionToken);
+      await setSessionCookie(ownerAContext, ownerA.sessionToken);
+      await setSessionCookie(ownerBContext, ownerB.sessionToken);
+
+      const ownerAPage = await ownerAContext.newPage();
+      const ownerBPage = await ownerBContext.newPage();
+
+      await ownerAPage.goto('/household/new');
+      await ownerAPage.getByLabel('Nama keluarga').fill('Keluarga Alpha');
+      await ownerAPage.getByRole('button', { name: 'Buat Keluarga' }).click();
+      await expect(ownerAPage).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
+      const householdA = ownerAPage.url().split('/household/')[1]!.split(/[/?]/)[0]!;
+
+      await ownerBPage.goto('/household/new');
+      await ownerBPage.getByLabel('Nama keluarga').fill('Keluarga Beta');
+      await ownerBPage.getByRole('button', { name: 'Buat Keluarga' }).click();
+      await expect(ownerBPage).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
+      const householdB = ownerBPage.url().split('/household/')[1]!.split(/[/?]/)[0]!;
+
+      try {
+        // Member joins both, sharing wealth in both — seeded directly
+        // (already active + share_wealth true), same shortcut the other
+        // tests in this file use for the invite/accept step itself.
+        await dbWrite.insert(householdMembers).values([
+          {
+            id: uuidv7(),
+            householdId: householdA,
+            userId: member.userId,
+            role: 'member',
+            status: 'active',
+            shareWealth: true,
+            joinedAt: new Date(),
+          },
+          {
+            id: uuidv7(),
+            householdId: householdB,
+            userId: member.userId,
+            role: 'member',
+            status: 'active',
+            shareWealth: true,
+            joinedAt: new Date(),
+          },
+        ]);
+
+        const memberPage = await memberContext.newPage();
+        await memberPage.goto('/settings/sharing');
+        // A manually-created page bypasses fixtures/base.ts's own
+        // auto-`waitForDomToSettle` wrapping (only applied to the `page`
+        // fixture Playwright injects into the test callback) — see that
+        // file's header comment for the transient double-render this
+        // absorbs, and e2e/settings-data-pwa.spec.ts for the identical fix.
+        await waitForDomToSettle(memberPage);
+        await expect(memberPage.getByText('Keluarga Alpha')).toBeVisible(DB_TIMEOUT);
+        await expect(memberPage.getByText('Keluarga Beta')).toBeVisible();
+
+        await memberPage.getByRole('button', { name: 'Berhenti berbagi semuanya' }).click();
+        const confirmDialog = memberPage.getByRole('dialog', { name: 'Berhenti berbagi semuanya?' });
+        await expect(confirmDialog).toBeVisible();
+        // States the exact number of households currently sharing.
+        await expect(confirmDialog.getByText('2 keluarga')).toBeVisible();
+        await confirmDialog.getByRole('button', { name: 'Berhenti berbagi' }).click();
+        await expect(confirmDialog).not.toBeVisible(DB_TIMEOUT);
+
+        // The button itself disappears once nothing is left to stop sharing.
+        await expect(memberPage.getByRole('button', { name: 'Berhenti berbagi semuanya' })).toHaveCount(0, DB_TIMEOUT);
+
+        const rows = await dbWrite
+          .select({ householdId: householdMembers.householdId, shareWealth: householdMembers.shareWealth })
+          .from(householdMembers)
+          .where(eq(householdMembers.userId, member.userId));
+        expect(rows).toHaveLength(2);
+        for (const row of rows) {
+          expect(row.shareWealth).toBe(false);
+        }
+      } finally {
+        await deleteTestHousehold(householdA);
+        await deleteTestHousehold(householdB);
+      }
+    } finally {
+      await memberContext.close();
+      await ownerAContext.close();
+      await ownerBContext.close();
+      await deleteTestUser(member.userId);
+      await deleteTestUser(ownerA.userId);
+      await deleteTestUser(ownerB.userId);
     }
   });
 });

@@ -5,6 +5,7 @@
  * same split as src/features/wallets/schema.ts.
  */
 import { z } from 'zod';
+import { isValidTimeZone } from '@/lib/date/timezone';
 
 /** docs/12-security-and-auth.md §6: "Nama household berisi markup — panjang
  * dibatasi 60 karakter." Matches `households_name_not_blank`
@@ -14,16 +15,6 @@ export const householdNameSchema = z
   .trim()
   .min(1, 'Nama keluarga wajib diisi')
   .max(60, 'Nama keluarga terlalu panjang');
-
-function isValidTimeZone(tz: string): boolean {
-  try {
-    // Throws RangeError for anything that isn't a real IANA zone name.
-    Intl.DateTimeFormat(undefined, { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export const timezoneSchema = z
   .string()

@@ -147,6 +147,42 @@ describe('history-queries', () => {
     });
   });
 
+  describe('changing the caller\'s timezone changes date grouping (tasks/22-settings-sharing-pwa)', () => {
+    it('the same instant groups under a different calendar day depending on tz', async () => {
+      const { userId, walletId, expenseCategory } = await setupUser();
+      // 2026-09-02T00:01:00+07:00 == 2026-09-01T17:01:00Z — the exact same
+      // fixture the WIB-grouping test above uses, proving the DB-level
+      // mechanism (not just that Jakarta happens to work).
+      const earlyMorningWib = new Date('2026-09-02T00:01:00+07:00');
+      await recordAt(userId, walletId, expenseCategory, 'expense', 30_000_00n, earlyMorningWib);
+
+      const range = {
+        start: new Date('2026-09-01T00:00:00Z'),
+        end: new Date('2026-09-03T00:00:00Z'),
+      };
+
+      // In the user's default Asia/Jakarta timezone, this falls on 09-02.
+      const wibTotals = await getDayTotals(userId, range, {}, 'Asia/Jakarta');
+      expect(wibTotals['2026-09-02']).toEqual({ income: 0n, expense: 30_000_00n });
+      expect(wibTotals['2026-09-01']).toBeUndefined();
+
+      // Regraded in a DIFFERENT (now-valid, previously-rejected) IANA zone —
+      // Etc/UTC, 7 hours behind — the exact same row falls on 09-01 instead.
+      // This is the mechanism `updatePreferencesAction` ->
+      // `updateUserPreferences` -> `users.timezone` actually drives end to
+      // end; the UI change is just persisting a different string here.
+      const utcTotals = await getDayTotals(userId, range, {}, 'Etc/UTC');
+      expect(utcTotals['2026-09-01']).toEqual({ income: 0n, expense: 30_000_00n });
+      expect(utcTotals['2026-09-02']).toBeUndefined();
+    });
+
+    it('an invalid timezone string is still rejected', async () => {
+      const { userId } = await setupUser();
+      const range = { start: new Date('2026-09-01T00:00:00Z'), end: new Date('2026-09-03T00:00:00Z') };
+      await expect(getDayTotals(userId, range, {}, 'Not/AZone')).rejects.toThrow(RangeError);
+    });
+  });
+
   describe('day subtotals exclude transfers and voided transactions', () => {
     it('sums income and expense independently, excluding a same-day transfer and a voided expense', async () => {
       const { userId, walletId, expenseCategory, incomeCategory } = await setupUser();

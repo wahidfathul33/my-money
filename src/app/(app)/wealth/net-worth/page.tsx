@@ -31,12 +31,15 @@ const HERO_WINDOW_DAYS = 31;
 export default async function NetWorthPage() {
   const user = await requireUser();
   const now = new Date();
-  const tz = 'Asia/Jakarta'; // MVP-wide assumption, same as src/lib/date/timezone.ts's DEFAULT_TIMEZONE
+  // tasks/22-settings-sharing-pwa: the caller's own timezone preference
+  // (`/settings/preferences`), not a hardcoded MVP-wide assumption — fetched
+  // first since getNetWorthHistory's cutoff math needs it.
+  const preferences = await getUserPreferences(user.id);
+  const tz = preferences.timezone;
 
-  const [result, history, preferences] = await Promise.all([
+  const [result, history] = await Promise.all([
     getNetWorth(user.id),
     getNetWorthHistory(user.id, '3m', now, tz),
-    getUserPreferences(user.id),
   ]);
 
   const heroCutoff = new Date(now.getTime() - HERO_WINDOW_DAYS * 86_400_000);

@@ -9,7 +9,7 @@
  * Filters live ENTIRELY in the URL (docs/02-information-architecture.md §6) —
  * this file has no state of its own, just parse/serialize.
  */
-import { currentLocalPeriod, periodDateRange } from '@/lib/date/timezone';
+import { currentLocalPeriod, DEFAULT_TIMEZONE, periodDateRange } from '@/lib/date/timezone';
 import type { HistoryTransactionType, TransactionHistoryFilters } from './history-queries';
 
 export interface HistoryUrlFilters {
@@ -41,16 +41,27 @@ function firstValue(v: string | string[] | undefined | null): string | null {
   return v ?? null;
 }
 
-/** Parses filters from either source: the browser's `URLSearchParams`, or Next's server `searchParams` record (`{ [key: string]: string | string[] | undefined }`). */
+/**
+ * Parses filters from either source: the browser's `URLSearchParams`, or
+ * Next's server `searchParams` record (`{ [key: string]: string | string[] |
+ * undefined }`). `tz` only matters when no `period` is in the URL — it
+ * resolves "the current month" in the CALLER's own timezone
+ * (tasks/22-settings-sharing-pwa's `/settings/preferences`) rather than the
+ * MVP-wide default; the client-side hook (`./use-history-filters.ts`) has no
+ * cheap way to know that, so it's fine to leave that one call site on the
+ * default — a client-side navigation only ever changes an ALREADY-resolved
+ * `period` in the URL, never re-derives "now".
+ */
 export function parseHistoryFilters(
   source: URLSearchParams | Record<string, string | string[] | undefined>,
+  tz: string = DEFAULT_TIMEZONE,
 ): HistoryUrlFilters {
   const get = (key: string): string | null =>
     source instanceof URLSearchParams ? source.get(key) : firstValue(source[key]);
 
   const rawType = get(FILTER_PARAM.type);
   return {
-    period: get(FILTER_PARAM.period) ?? currentLocalPeriod(),
+    period: get(FILTER_PARAM.period) ?? currentLocalPeriod(new Date(), tz),
     walletId: get(FILTER_PARAM.walletId),
     categoryId: get(FILTER_PARAM.categoryId),
     type: rawType && VALID_TYPES.has(rawType) ? (rawType as HistoryTransactionType) : null,

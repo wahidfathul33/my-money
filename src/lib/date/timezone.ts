@@ -4,12 +4,16 @@
  * dibuat di sini dan dipakai setiap agregasi berbasis tanggal sesudahnya —
  * termasuk budget dan laporan household."
  *
- * MVP treats every user/household as Asia/Jakarta (WIB, UTC+7, no DST) —
- * same assumption src/lib/db/schema/transactions.ts's `tx_user_local_date_idx`
- * expression index already hardcodes ("For MVP every user/household is
- * treated as Asia/Jakarta"). This module exists so that assumption lives in
- * exactly one place in application code, matching the one place it lives in
- * the schema.
+ * MVP defaulted every user/household to Asia/Jakarta (WIB, UTC+7, no DST) —
+ * `DEFAULT_TIMEZONE` below is that fallback, still the schema column
+ * default (`users.timezone`, `households.timezone`) for anyone who's never
+ * changed it. tasks/22-settings-sharing-pwa lifts the *hard* restriction
+ * `src/features/transactions/history-queries.ts` used to have (rejecting
+ * anything other than this exact string) — `isValidTimeZone` below is the
+ * real validity check both that module and
+ * src/features/household/schema.ts's `timezoneSchema` now share, so any
+ * genuine IANA zone works end to end, not just Jakarta. This module exists
+ * so that logic lives in exactly one place in application code.
  *
  * **The bug this file exists to prevent:** a transaction recorded at 00:01
  * WIB is stored as 17:01 UTC the PREVIOUS calendar day. Grouping by
@@ -23,6 +27,23 @@
  */
 
 export const DEFAULT_TIMEZONE = 'Asia/Jakarta';
+
+/**
+ * True for any string `Intl` recognizes as a real IANA zone name — the
+ * single validity check every caller in this codebase should use instead of
+ * hand-rolling their own (src/features/household/schema.ts's
+ * `timezoneSchema` and src/features/transactions/history-queries.ts's
+ * `assertSupportedTimezone` both delegate here).
+ */
+export function isValidTimeZone(tz: string): boolean {
+  try {
+    // Throws RangeError for anything that isn't a real IANA zone name.
+    new Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const LOCAL_DATE_FORMATTER_CACHE = new Map<string, Intl.DateTimeFormat>();
 

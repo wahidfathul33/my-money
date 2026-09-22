@@ -8,10 +8,24 @@
  */
 import { and, asc, eq } from 'drizzle-orm';
 import { dbRead } from '@/lib/db/read';
-import { households, householdMembers, wallets } from '@/lib/db/schema';
+import { assets, debts, households, householdMembers, receivables, savingsGoals, wallets } from '@/lib/db/schema';
 import { ownedBy } from '@/lib/db/scoped';
 import { countHouseholdTaggedTransactions } from '@/features/household/queries';
 import type { HouseholdWealthEntityType } from '@/lib/services/sharing';
+
+type AssetType = (typeof assets.$inferSelect)['assetType'];
+
+/** One icon per `assets.asset_type` — the table itself carries no `icon`
+ * column (unlike wallets/savings_goals), so this is the exclusion list's
+ * own mapping, every name drawn from the curated set (src/lib/icons.ts) so
+ * `<Icon>` always resolves it. */
+const ASSET_TYPE_ICON: Record<AssetType, string> = {
+  gold: 'coins',
+  deposit: 'landmark',
+  property: 'building',
+  vehicle: 'car',
+  other: 'package',
+};
 
 export interface SharingSummaryHousehold {
   householdId: string;
@@ -35,10 +49,11 @@ export interface SharingSummary {
   households: SharingSummaryHousehold[];
   /** Global, not per-household — docs/03-domain-model.md §5.1's known
    * limitation ("exclude_from_household bersifat global, bukan per
-   * household"). Only `wallet` is populated today; assets/debts/
-   * receivables/savings_goals join in here once tasks 16-18 give them a
-   * real UI (the seam is `HOUSEHOLD_WEALTH_ENTITY_TYPES`,
-   * src/lib/services/sharing.ts). */
+   * household"). Covers every `HOUSEHOLD_WEALTH_ENTITY_TYPES` entry
+   * (src/lib/services/sharing.ts): wallets, assets (gold/deposit/property/
+   * vehicle/other — a gold or deposit shows as ONE row here, the parent
+   * `assets` row, not the underlying `gold_lots`/`deposits` detail), debts,
+   * receivables, and savings goals. */
   exclusions: SharingExclusionItem[];
 }
 
@@ -75,20 +90,68 @@ export async function getSharingSummary(userId: string): Promise<SharingSummary>
     })),
   );
 
-  const excludedWallets = await dbRead
-    .select({ id: wallets.id, name: wallets.name, icon: wallets.icon })
-    .from(wallets)
-    .where(and(ownedBy(wallets, userId), eq(wallets.excludeFromHousehold, true)))
-    .orderBy(asc(wallets.sortOrder));
+  const [excludedWallets, excludedAssets, excludedDebts, excludedReceivables, excludedGoals] = await Promise.all([
+    dbRead
+      .select({ id: wallets.id, name: wallets.name, icon: wallets.icon })
+      .from(wallets)
+      .where(and(ownedBy(wallets, userId), eq(wallets.excludeFromHousehold, true)))
+      .orderBy(asc(wallets.sortOrder)),
+    dbRead
+      .select({ id: assets.id, name: assets.name, assetType: assets.assetType })
+      .from(assets)
+      .where(and(ownedBy(assets, userId), eq(assets.excludeFromHousehold, true)))
+      .orderBy(asc(assets.createdAt)),
+    dbRead
+      .select({ id: debts.id, name: debts.creditorName })
+      .from(debts)
+      .where(and(ownedBy(debts, userId), eq(debts.excludeFromHousehold, true)))
+      .orderBy(asc(debts.createdAt)),
+    dbRead
+      .select({ id: receivables.id, name: receivables.debtorName })
+      .from(receivables)
+      .where(and(ownedBy(receivables, userId), eq(receivables.excludeFromHousehold, true)))
+      .orderBy(asc(receivables.createdAt)),
+    dbRead
+      .select({ id: savingsGoals.id, name: savingsGoals.name, icon: savingsGoals.icon })
+      .from(savingsGoals)
+      .where(and(ownedBy(savingsGoals, userId), eq(savingsGoals.excludeFromHousehold, true)))
+      .orderBy(asc(savingsGoals.createdAt)),
+  ]);
 
   return {
     households: householdSummaries,
-    exclusions: excludedWallets.map((w) => ({
-      entityType: 'wallet' as const,
-      entityId: w.id,
-      name: w.name,
-      icon: w.icon,
-    })),
+    exclusions: [
+      ...excludedWallets.map((w) => ({
+        entityType: 'wallet' as const,
+        entityId: w.id,
+        name: w.name,
+        icon: w.icon,
+      })),
+      ...excludedAssets.map((a) => ({
+        entityType: 'asset' as const,
+        entityId: a.id,
+        name: a.name,
+        icon: ASSET_TYPE_ICON[a.assetType],
+      })),
+      ...excludedDebts.map((d) => ({
+        entityType: 'debt' as const,
+        entityId: d.id,
+        name: d.name,
+        icon: 'credit-card',
+      })),
+      ...excludedReceivables.map((r) => ({
+        entityType: 'receivable' as const,
+        entityId: r.id,
+        name: r.name,
+        icon: 'banknote',
+      })),
+      ...excludedGoals.map((g) => ({
+        entityType: 'savings_goal' as const,
+        entityId: g.id,
+        name: g.name,
+        icon: g.icon,
+      })),
+    ],
   };
 }
 

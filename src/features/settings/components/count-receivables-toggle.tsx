@@ -8,19 +8,26 @@
  * setting only ever changes how the CALLER'S OWN net worth number is
  * computed for themselves. Same optimistic-update shape as
  * src/features/sharing/components/exclusion-toggle.tsx.
+ *
+ * `updatePreferencesAction` (tasks/22-settings-sharing-pwa) takes the WHOLE
+ * preferences object, not a single field — this component sends the
+ * CURRENT `timezone`/`defaultWalletId` back unchanged alongside the one
+ * field it actually owns, same "send the full current state, override one
+ * field" shape `TimezoneSelect`/`DefaultWalletSelect` use for theirs.
  */
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Switch } from '@/components/ui/switch';
 import { updatePreferencesAction } from '../actions';
+import type { UserPreferences } from '../queries';
 
 interface CountReceivablesToggleProps {
-  countReceivablesAsAsset: boolean;
+  preferences: UserPreferences;
 }
 
-export function CountReceivablesToggle({ countReceivablesAsAsset }: CountReceivablesToggleProps) {
+export function CountReceivablesToggle({ preferences }: CountReceivablesToggleProps) {
   const router = useRouter();
-  const [value, setValue] = useState(countReceivablesAsAsset);
+  const [value, setValue] = useState(preferences.countReceivablesAsAsset);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
@@ -28,7 +35,11 @@ export function CountReceivablesToggle({ countReceivablesAsAsset }: CountReceiva
     setValue(next); // optimistic — no confirmation, no loading flicker
     setError(null);
     startTransition(async () => {
-      const result = await updatePreferencesAction({ countReceivablesAsAsset: next });
+      const result = await updatePreferencesAction({
+        countReceivablesAsAsset: next,
+        timezone: preferences.timezone,
+        defaultWalletId: preferences.defaultWalletId,
+      });
       if (result.error) {
         setValue(!next); // roll back
         setError(result.error);

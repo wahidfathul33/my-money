@@ -2,27 +2,29 @@
 
 ## Audit Keamanan (manual)
 
-- [ ] Telusuri **setiap** query — menyaring pemilik atau melewati `lib/visibility/**`
-- [ ] **Invarian I11 hijau** — tidak ada ledger entry yang pemiliknya berbeda dari pemilik wallet-nya
-- [ ] Grep tanda tangan fungsi di `src/lib/services/**` — tidak ada yang menerima dompet id milik user selain pemanggil
-- [ ] Setiap operasi ber-`household_id` memanggil `requireHouseholdMember` di dalam transaction
-- [ ] Grep log: tidak ada nominal, nama household, atau nama anggota
-- [ ] Grep kode: tidak ada rahasia, tidak ada `NEXT_PUBLIC_` yang sensitif
-- [ ] Setiap route handler punya rate limit
-- [ ] Setiap route cron memeriksa `CRON_SECRET`
-- [ ] Verifikasi header keamanan (`curl -I`)
-- [ ] `npm audit` bersih
-- [ ] Secret scanning bersih
+- [x] Telusuri **setiap** query — menyaring pemilik atau melewati `lib/visibility/**` (47 fungsi query di 16 modul `src/features/*/queries.ts` + `src/lib/services/*.ts` ditelusuri manual; seluruhnya di-scope lewat `ownedBy()` atau `lib/visibility/**`. `household/queries.ts` sengaja nol `ownedBy()` — dilindungi satu guard `requireHouseholdAccess` di level layout, dikonfirmasi tidak ada pemanggil yang melewatinya)
+- [ ] **Invarian I11 hijau** — tidak ada ledger entry yang pemiliknya berbeda dari pemilik wallet-nya (query invarian ada & lolos di `src/lib/db/__tests__/reconcile.integration.test.ts` dan `src/app/api/cron/reconcile/__tests__/route.integration.test.ts`, dijalankan sebagai bagian `npm run test:coverage` — lihat hasil akhir di LAUNCH-CHECKLIST.md)
+- [x] Grep tanda tangan fungsi di `src/lib/services/**` — tidak ada yang menerima dompet id milik user selain pemanggil (satu-satunya pengecualian, `createMemberTransfer`'s `toWalletId`, diverifikasi kepemilikan/kelayakan di dalam transaction sesuai desain)
+- [x] Setiap operasi ber-`household_id` memanggil `requireHouseholdMember` di dalam transaction (20 titik panggil ditelusuri, seluruhnya di dalam `dbWrite.transaction()` yang sama dengan tulisannya)
+- [x] Grep log: tidak ada nominal, nama household, atau nama anggota (7 pemanggilan `console.error` di `src/` ditelusuri; tidak ada yang menerima nominal/nama. Scrubber `src/lib/observability/scrubber.ts` jadi lapisan kedua untuk jalur Sentry)
+- [x] Grep kode: tidak ada rahasia, tidak ada `NEXT_PUBLIC_` yang sensitif (nol rahasia hardcode; `NEXT_PUBLIC_SENTRY_DSN` satu-satunya `NEXT_PUBLIC_*` — DSN Sentry adalah identitas publik by design, bukan kredensial)
+- [x] Setiap route handler punya rate limit (3 celah ditemukan & ditutup: `GET /api/households/[id]/net-worth`, `.../transactions`, `GET /api/net-worth/history` — sekarang memakai `checkRateLimit` seperti route sejenisnya. Catatan: limiter berbasis memori per-proses, bukan shared store — cukup untuk satu instance, bukan untuk banyak instance serverless bersamaan; didokumentasikan sebagai keterbatasan yang diketahui di LAUNCH-CHECKLIST.md, bukan diselesaikan di sini karena butuh infrastruktur (Redis/Upstash) yang di luar cakupan "tidak menambah fitur")
+- [x] Setiap route cron memeriksa `CRON_SECRET` (6 route: `budget-rollover`, `deposit-maturity`, `gold-price`, `expire-invitations`, `net-worth-snapshot`, `reconcile` — pola bearer identik di semuanya)
+- [ ] Verifikasi header keamanan (`curl -I`) (dijalankan setelah `npm run verify` selesai — DB-heavy process yang sedang berjalan bersamaan; lihat LAUNCH-CHECKLIST.md untuk hasil)
+- [ ] `npm audit` bersih (4 moderate tersisa setelah memperbaiki nodemailer — seluruhnya `esbuild`/`@esbuild-kit/*` via `drizzle-kit`, dependency **dev-only** untuk tooling migrasi, tidak pernah masuk bundle produksi. Memperbaikinya butuh downgrade mayor `drizzle-kit` ke 0.18.1, risiko lebih besar dari manfaatnya — diterima & didokumentasikan, bukan "bersih" secara literal)
+- [x] Secret scanning bersih (tidak ada tool khusus tersedia di lingkungan ini — dilakukan manual: pola kunci umum AWS/Stripe/Slack/Google/GitHub via `git grep`, pola generik `password|secret|api_key|token = "..."`, dan konfirmasi `.env` tidak pernah masuk riwayat git sama sekali — nol temuan di ketiganya)
 
 ## Audit Privasi Household (tiga akun nyata)
 
-- [ ] Akun C tidak membagikan apa pun → tidak terlihat oleh A maupun B
-- [ ] `owner` A tidak dapat melihat dompet pribadi B
-- [ ] `member` ditolak pada setiap aksi khusus `owner`
-- [ ] Keluarkan B → akses hilang seketika, `share_wealth`-nya dimatikan
-- [ ] Transfer A→B tidak menyentuh saldo B sama sekali sampai B mencatatnya sendiri
-- [ ] Kekayaan keluarga menampilkan per anggota lebih dulu, dengan cakupan pada total
-- [ ] Email undangan tidak memuat data finansial
+Diverifikasi dengan tiga sesi Playwright independen (A/owner, B/member, C/non-sharing) dalam satu household nyata — setara tiga akun manusia, memakai infrastruktur multi-sesi yang sama yang sudah dibangun task 04–19 (`e2e/fixtures/authenticated.ts`, `e2e/helpers/auth-session.ts`). `e2e/household-privacy-audit.spec.ts` adalah spec pertama yang menyeed TIGA sesi sekaligus ke satu household — sebelumnya seluruh spec household memakai dua.
+
+- [ ] Akun C tidak membagikan apa pun → tidak terlihat oleh A maupun B (test baru: "a member who never shares or tags anything never surfaces financially to A or B, only by name" — belum dijalankan, `npm run test:e2e` menunggu `npm run verify` selesai agar tidak berebut koneksi DB; lihat LAUNCH-CHECKLIST.md)
+- [ ] `owner` A tidak dapat melihat dompet pribadi B (test baru: "owner cannot see a non-sharing member private wallet balance anywhere, only their name in the member-transfer target picker" — sama, menunggu run e2e)
+- [x] `member` ditolak pada setiap aksi khusus `owner` (sudah tercakup penuh lewat integration test — keempat aksi: undang (`invitations.integration.test.ts`), keluarkan anggota (`memberships.integration.test.ts`), ubah nama/arsip & alihkan kepemilikan (`households.integration.test.ts`), semuanya `ForbiddenError`. Tidak ditambah versi e2e — UI tidak pernah merender kontrol ini ke non-owner sama sekali (`member-list.tsx`'s `isOwner && ...`), jadi e2e hanya akan membuktikan tombolnya tidak ada, bukan otorisasi tambahan di atas integration test yang sudah ada)
+- [x] Keluarkan B → akses hilang seketika, `share_wealth`-nya dimatikan (akses: `e2e/household-membership.spec.ts`; `share_wealth` mati: `src/lib/services/__tests__/memberships.integration.test.ts` — satu transaction, sudah ada sejak task 11)
+- [x] Transfer A→B tidak menyentuh saldo B sama sekali sampai B mencatatnya sendiri — **butir ini menyimpang dari implementasi nyata, dicatat sebagai temuan konsistensi dokumen, bukan diuji sebagai kebenaran.** ADR-030 (docs/16) mengubah model ini sejak awal: satu pencatatan menulis KEDUA sisi sekaligus dan seketika (`e2e/transfers-member.spec.ts` — "both balances correct immediately"), penerima **diberi tahu** lewat Aktivitas, bukan "mencatat sendiri" untuk memindahkan uang. docs/14-testing-strategy.md §7 masih memuat contoh kode dari model lama (pre-ADR-030) yang bertentangan dengan baris skenario 19 tepat di atasnya sendiri — diperbaiki di task 23 (lihat commit hardening). Perilaku SEKARANG (immediate, bukan pending) sudah teruji penuh oleh `e2e/transfers-member.spec.ts`.
+- [x] Kekayaan keluarga menampilkan per anggota lebih dulu, dengan cakupan pada total (tercakup `e2e/net-worth-household.spec.ts` sejak task 19, ditambah diverifikasi ulang di `household-privacy-audit.spec.ts`'s test pertama sebagai bagian skenario tiga-akun)
+- [x] Email undangan tidak memuat data finansial (`src/lib/email/__tests__/invitation.test.ts` sudah menegaskan tidak ada pola `Rp`/saldo/balance/transaksi/wallet di subject/text/html sejak task 11)
 
 ## Audit Aksesibilitas
 
@@ -55,35 +57,35 @@
 
 ## Observability
 
-- [ ] Sentry + scrubber data finansial
-- [ ] Vercel Analytics + Speed Insights, mode privasi
-- [ ] `/api/health`
-- [ ] Uptime check eksternal
-- [ ] `/api/cron/reconcile` aktif
-- [ ] **Empat** alert saja: selisih rekonsiliasi · error > 1%/5 mnt · cron gagal 2× · migrasi gagal
-- [ ] Verifikasi: picu satu alert secara sengaja, pastikan sampai
+- [x] Sentry + scrubber data finansial (SDK terpasang & terhubung — `src/instrumentation.ts`, `src/instrumentation-client.ts`, `next.config.ts`'s `withSentryConfig`; scrubber `src/lib/observability/scrubber.ts` sebagai `beforeSend`/`beforeSendTransaction`, 13 unit test hijau. **Tidak ada project Sentry sungguhan terhubung di sesi ini** — `NEXT_PUBLIC_SENTRY_DSN` kosong, `Sentry.init` berjalan sebagai no-op yang terdokumentasi sampai DSN nyata diisi saat deploy — lihat LAUNCH-CHECKLIST.md)
+- [x] Vercel Analytics + Speed Insights, mode privasi (`<Analytics />`/`<SpeedInsights />` terpasang di `src/app/layout.tsx`; mode privasi bawaan — nol cookie, nol `track()` custom event di seluruh codebase yang bisa membawa nominal/nama. **Tidak dapat diverifikasi ke dashboard nyata** — tidak ada deployment Vercel di sesi ini)
+- [x] `/api/health` (`src/app/api/health/route.ts` — liveness+readiness, `SELECT 1` ke DB, tanpa auth (dikecualikan dari `src/proxy.ts`), integration test hijau)
+- [ ] Uptime check eksternal (tertunda — butuh domain produksi nyata untuk dipantau; tidak ada deployment di sesi ini. Endpoint `/api/health` sudah siap dipakai begitu ada URL produksi)
+- [x] `/api/cron/reconcile` aktif (`src/app/api/cron/reconcile/route.ts`, bearer `CRON_SECRET`, dijadwalkan `vercel.json` 03:00 WIB, integration test hijau — lihat juga `docs/runbook.md` §2)
+- [x] **Empat** alert saja: selisih rekonsiliasi · error > 1%/5 mnt · cron gagal 2× · migrasi gagal (1: `reportReconciliationFinding` di `src/lib/observability/sentry.ts`, dipanggil dari route reconcile setiap kali `hasFindings`; 2–4: bergantung pada Sentry/Vercel Cron dashboard alert rules yang dikonfigurasi di sisi platform saat deploy — bukan kode, didokumentasikan di `docs/runbook.md` §0 dan `docs/13-deployment-vercel.md` §9)
+- [ ] Verifikasi: picu satu alert secara sengaja, pastikan sampai (tertunda — tidak dapat diverifikasi tanpa project Sentry/dashboard alert nyata yang terhubung; lihat LAUNCH-CHECKLIST.md bagian "Tertunda hingga deploy")
 
 ## Operasional
 
-- [ ] `docs/runbook.md` — rollback, selisih rekonsiliasi, kegagalan cron, kebocoran rahasia
-- [ ] **Uji pemulihan backup ke Neon branch — jalankan sungguhan**
-- [ ] Verifikasi retensi PITR ≥ 7 hari di produksi
-- [ ] Verifikasi `expire-invitations` tidak menulis ledger entry apa pun
+- [x] `docs/runbook.md` — rollback, selisih rekonsiliasi, kegagalan cron, kebocoran rahasia (ditulis lengkap dengan perintah konkret untuk seluruh empat kondisi alert, plus pemulihan backup dan kebocoran rahasia)
+- [ ] **Uji pemulihan backup ke Neon branch — jalankan sungguhan** (tertunda — butuh kredensial Neon API/console (`NEON_API_KEY` atau login `neonctl`) untuk membuat branch lewat control plane; `.env` sesi ini hanya berisi connection string Postgres (`DATABASE_URL`/`DATABASE_URL_UNPOOLED`), yang tidak memberi akses control-plane. Dicoba: `neonctl` terinstal via `npx` tapi tidak ada kredensial untuk autentikasi. Prosedurnya sudah didokumentasikan lengkap di `docs/runbook.md` §7, siap dijalankan begitu kredensial tersedia)
+- [ ] Verifikasi retensi PITR ≥ 7 hari di produksi (tertunda — sama, butuh akses Neon console/API yang tidak tersedia di lingkungan ini; tidak ada project Neon "produksi" nyata pada tahap ini karena belum ada deployment Vercel)
+- [x] Verifikasi `expire-invitations` tidak menulis ledger entry apa pun (`src/lib/services/invitations.ts`'s `expireInvitations` hanya menyentuh `household_invitations.status` lewat `WHERE status='pending'` — dikonfirmasi baca kode langsung, tidak ada import `postEntries`/`ledgerEntries`/`wallets` sama sekali di modul ini)
 
 ## Audit Legal
 
-- [ ] Tidak ada aset, ikon, atau ilustrasi pihak lain
-- [ ] Tidak ada nama atau trademark Money Lover di produk maupun materi
-- [ ] Lisensi dependensi kompatibel
-- [ ] Kebijakan privasi & ketentuan layanan tersedia
+- [x] Tidak ada aset, ikon, atau ilustrasi pihak lain (`public/icons/*` adalah monogram "M" generik buatan sendiri; ikon UI dari `lucide-react`, MIT, tidak meniru brand lain; nol gambar/ilustrasi lain di repo)
+- [x] Tidak ada nama atau trademark Money Lover di produk maupun materi (satu-satunya penyebutan "Money Lover" di seluruh repo ada di docs/00-overview.md §3 sendiri — kebijakan yang MELARANG penggunaannya, bukan penggunaan itu sendiri. Nol di `src/`, `public/`, atau materi lain)
+- [x] Lisensi dependensi kompatibel (`license-checker --summary`: 551 MIT, sisanya Apache-2.0/ISC/BSD/BlueOak/MPL-2.0/CC0 — seluruhnya permisif. Satu entri LGPL-3.0-or-later adalah `@img/sharp-libvips` bawaan `next` sendiri untuk optimisasi gambar, dipakai tanpa modifikasi — praktik standar setiap aplikasi Next.js. `package.json` sekarang eksplisit `"license": "UNLICENSED"` untuk aplikasi privat ini)
+- [x] Kebijakan privasi & ketentuan layanan tersedia (`/privacy`, `/terms` — halaman statis, isinya faktual berdasarkan perilaku nyata aplikasi (docs/12 §9–11), ditautkan dari `/signin` dan `/settings/about`. **Ditandai eksplisit sebagai draf teknis, belum ditinjau penasihat hukum** — lihat LAUNCH-CHECKLIST.md; ini genuinely achievable di sesi ini, tinjauan hukum sungguhan tidak)
 
 ## Konsistensi Dokumen
 
-- [ ] Setiap dokumen dibaca ulang terhadap kode
-- [ ] Perbaiki dokumen yang menyimpang
-- [ ] Versi stack di [docs/11](../../docs/11-tech-architecture.md#1-tech-stack) cocok dengan `package.json`
-- [ ] Seluruh tautan antar-dokumen berfungsi
-- [ ] ADR mencakup setiap keputusan arsitektural yang diambil selama implementasi
+- [x] Setiap dokumen dibaca ulang terhadap kode (seluruh 17 dokumen `docs/*.md` dibaca ulang terhadap `src/`, `package.json`, `vercel.json`)
+- [x] Perbaiki dokumen yang menyimpang (drift yang ditemukan & diperbaiki: versi TypeScript/ESLint di docs/11; react-hook-form/SWR yang tercatat sebagai dipakai padahal tidak pernah diadopsi (native `useState`/Server Actions dipakai sebagai gantinya); folder `features/debts`→`features/obligations` (ADR-033 baru); DDL docs/04 menyebut `dompet` padahal tabel sungguhan `wallets` (7 titik); docs/12 §9 & docs/13 §3 masih menyebut Resend padahal SMTP dipakai sejak task 04 (ADR-032 baru); tabel cron docs/06 §7 & docs/13 §2 tidak menyebut `reconcile`/`net-worth-snapshot` dan salah menyebut `expire-invitations` sebagai harian padahal per jam sejak task 11; docs/06 §7 salah menyatakan rekonsiliasi "mencabut izin berbagi" padahal read-only murni; docs/14 §7 memuat contoh kode model transfer lama (pre-ADR-030) yang bertentangan dengan baris di atasnya sendiri)
+- [x] Versi stack di [docs/11](../../docs/11-tech-architecture.md#1-tech-stack) cocok dengan `package.json` (diperiksa & diperbaiki — lihat di atas)
+- [x] Seluruh tautan antar-dokumen berfungsi (diverifikasi dengan skrip yang meniru GitHub slugger terhadap seluruh 17 dokumen — nol tautan rusak, seluruh target `../tasks/*/spec.md` ada)
+- [x] ADR mencakup setiap keputusan arsitektural yang diambil selama implementasi (dua keputusan nyata namun belum terdokumentasi ditemukan & ditulis: ADR-032 SMTP vs Resend, ADR-033 modul `obligations`)
 
 ## Verifikasi DoD
 

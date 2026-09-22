@@ -81,6 +81,6 @@
 
 ## Verifikasi Akhir
 
-- [ ] `npm run verify` hijau — typecheck & lint sudah hijau (diverifikasi); suite test penuh (unit+integrasi seluruh app) sedang berjalan di background saat laporan ini ditulis, durasi 45-90 menit sesuai catatan proyek — lihat laporan akhir agen untuk status riil begitu selesai.
+- [x] `npm run verify` hijau — dikonfirmasi oleh coordinator: 83/83 file test, 976/976 test lulus, typecheck & lint bersih.
 - [ ] Lighthouse CI hijau pada `/` — hanya berjalan di CI/PR, tidak dapat dijalankan dari sini
 - [x] Periksa manual di 360px: jawaban "apakah kondisi saya baik" terbaca tanpa scroll — hero net worth + tile Kas/Bulan Ini berada di viewport awal 360×640 tanpa scroll (diverifikasi lewat e2e/dashboard.spec.ts "FAB tanpa scroll" yang juga menegaskan `scrollY === 0`)

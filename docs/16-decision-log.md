@@ -576,3 +576,34 @@ Daftar ini pendek, dan itu disengaja: semua yang hilang bersifat tambahan. Tidak
 Keputusan ini layak ditinjau ulang bila aplikasi kelak dibungkus native — di sana material sistem dan haptik tersedia sungguhan, dan perhitungannya berubah.
 
 ---
+
+## ADR-032 — SMTP (bukan Resend) untuk seluruh email transaksional
+
+**Status:** diterima · 2026-09-02 (task 04) · didokumentasikan retroaktif task 23
+
+**Konteks.** docs/12-security-and-auth.md §9 dan docs/13-deployment-vercel.md §3 aslinya menetapkan Resend sebagai penyedia email, dengan `RESEND_API_KEY` sebagai variabel wajib. Saat task 04 (autentikasi) diimplementasikan, kredensial yang sungguh-sungguh tersedia adalah akun Gmail sungguhan lewat SMTP, bukan akun Resend — dan `next-auth`'s `Nodemailer` provider sudah menerima konfigurasi SMTP langsung tanpa lapisan tambahan.
+
+**Keputusan.** Seluruh email transaksional (magic link masuk, task 04; undangan household, task 11) memakai satu transport SMTP/nodemailer yang sama (`src/lib/email/magic-link.ts`, `src/lib/email/invitation.ts`), dikonfigurasi lewat `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_SECURE` di `src/lib/env.ts`. `RESEND_API_KEY` tetap ada di skema sebagai variabel opsional yang tidak dipakai — bukan dihapus, supaya migrasi ke Resend kelak (kalau volume email tumbuh melewati batas wajar akun Gmail pribadi) tidak butuh perubahan skema env.
+
+**Alternatif yang ditolak:**
+- *Menunggu kredensial Resend sebelum melanjutkan task 04.* Ditolak karena memblokir seluruh alur autentikasi pada dependensi eksternal yang tidak esensial — SMTP sudah memenuhi kebutuhan fungsional yang sama (kirim email transaksional sederhana) tanpa akun pihak ketiga baru.
+- *Dua penyedia sekaligus (SMTP untuk auth, Resend untuk undangan).* Task 11 secara eksplisit menolak ini — satu transport lebih sedikit yang perlu diaudit untuk kebocoran data finansial (docs/12 §10), dan undangan bukan volume tinggi yang butuh infrastruktur pengiriman khusus.
+
+**Konsekuensi.** docs yang menyebut Resend sebagai penyedia aktif (docs/12 §9, docs/13 §3) menyimpang dari implementasi sejak task 04 — diperbaiki di task 23 (lihat commit hardening task 23). Kalau volume email tumbuh sampai akun Gmail pribadi jadi tidak wajar (rate limit, deliverability), migrasi ke Resend atau penyedia transaksional lain adalah pekerjaan yang terisolasi ke `src/lib/email/**` dan `src/lib/env.ts` — tidak menyentuh domain logic.
+
+---
+
+## ADR-033 — Modul `obligations` menaungi hutang dan piutang
+
+**Status:** diterima · 2026-09-02 (task 18) · didokumentasikan retroaktif task 23
+
+**Konteks.** docs/11-tech-architecture.md's daftar folder awal menuliskan `features/debts` sebagai lokasi fitur hutang-piutang. Saat task 18 diimplementasikan, hutang (`debts`) dan piutang (`receivables`) ternyata berbagi hampir seluruh bentuk: kedua-duanya adalah kewajiban/pokok berkurang lewat pembayaran bertahap, kedua-duanya punya `remaining_amount` ter-cache yang direkonsiliasi lewat pola yang identik (`src/lib/db/reconcile.ts`'s `findDebtRemainingDrift`/`findReceivableRemainingDrift`), dan kedua-duanya butuh query visibilitas household yang sama bentuknya.
+
+**Keputusan.** Satu modul `src/features/obligations/` (bukan dua modul `debts`/`receivables` terpisah) menaungi kedua entitas, dengan sub-bagian per jenis di dalamnya. `src/lib/finance/obligation.ts` menjadi satu tempat untuk kalkulasi sisa pokok yang dipakai kedua arah. `src/features/debts/` ditinggalkan sebagai folder `.gitkeep` kosong, bukan dihapus, sebagai penanda bahwa lokasi itu sengaja tidak dipakai — bukan terlewat.
+
+**Alternatif yang ditolak:**
+- *Dua modul terpisah, `features/debts` dan `features/receivables`.* Sesuai penamaan skema DB (`debts`, `receivables` adalah dua tabel terpisah, sengaja — lihat docs/04). Ditolak karena hampir seluruh logika UI dan service akan terduplikasi baris demi baris antara dua modul yang berbeda hanya pada satu bit arah (aku berutang vs orang berutang padaku).
+
+**Konsekuensi.** docs/11-tech-architecture.md's daftar folder (dan referensi lain ke "modul debts") menyimpang dari struktur sungguhan sejak task 18 — diperbaiki di task 23. Skema DB tetap dua tabel terpisah (`debts`, `receivables`) — ADR ini hanya tentang pengelompokan di lapisan `features/`, bukan penggabungan skema.
+
+---

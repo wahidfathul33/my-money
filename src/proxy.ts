@@ -31,5 +31,11 @@ export const config = {
   // the same reason as `api/cron`: an external uptime checker carries no
   // user session and can't be made to. It reports only `{ status, db }`
   // regardless — see src/app/api/health/route.ts's own doc comment.
-  matcher: ['/((?!api/auth|api/cron|api/health|signin|invite|kitchen-sink|_next|favicon.ico).*)'],
+  //
+  // `privacy`/`terms` (task 23, "Audit Legal") must be readable before
+  // sign-in — src/app/(auth)/signin/page.tsx links both from its own
+  // unauthenticated screen.
+  matcher: [
+    '/((?!api/auth|api/cron|api/health|signin|invite|privacy|terms|kitchen-sink|_next|favicon.ico).*)',
+  ],
 };

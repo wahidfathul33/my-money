@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
 import packageJson from '../../../../../package.json';
 
@@ -27,6 +28,18 @@ export default function AboutSettingsPage() {
             >
               Buka
             </a>
+          </div>
+          <div className="border-border flex items-center justify-between border-t pt-4">
+            <span className="text-text text-sm font-medium">Ketentuan Layanan</span>
+            <Link href="/terms" className="text-brand-readable text-sm font-medium">
+              Buka
+            </Link>
+          </div>
+          <div className="border-border flex items-center justify-between border-t pt-4">
+            <span className="text-text text-sm font-medium">Kebijakan Privasi</span>
+            <Link href="/privacy" className="text-brand-readable text-sm font-medium">
+              Buka
+            </Link>
           </div>
         </div>
 

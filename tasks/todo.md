@@ -118,7 +118,7 @@ Rencana: [plan.md](plan.md) · Spesifikasi: [docs/](../docs/README.md)
   Dashboard pribadi (hero net worth, arus kas, budget bermasalah, jatuh tempo) & ringkasan keluarga.
   *Verifikasi:* LCP < 2,5 s; bagian kosong tersembunyi; household baru menampilkan daftar langkah.
 
-- [ ] **21 — [reports](21-reports/)**
+- [x] **21 — [reports](21-reports/)**
   Laporan pribadi & household, chart tanpa horizontal scroll, tabel data pendamping, ekspor CSV.
   *Verifikasi:* tidak ada overflow di 360px; Recharts hanya dimuat di rute laporan.
 
@@ -145,6 +145,6 @@ Rencana: [plan.md](plan.md) · Spesifikasi: [docs/](../docs/README.md)
 | F2 Household | 10–13 | 4 / 4 |
 | F3 Perencanaan | 14–15 | 2 / 2 |
 | F4 Kekayaan | 16–18 | 3 / 3 |
-| F5 Insight | 19–21 | 2 / 3 |
+| F5 Insight | 19–21 | 3 / 3 |
 | F6 Rilis | 22–23 | 0 / 2 |
-| **Total** | | **21 / 24** |
+| **Total** | | **22 / 24** |

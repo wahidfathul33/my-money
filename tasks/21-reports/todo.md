@@ -78,6 +78,6 @@
 
 ## Verifikasi Akhir
 
-- [ ] `npm run verify` hijau — typecheck and lint both pass; full `npm run test` (the real DB integration suite) is running and will be confirmed in the final report.
+- [x] `npm run verify` hijau — dikonfirmasi oleh coordinator: 81/81 file test, 994/994 test lulus, typecheck & lint bersih.
 - [x] Bundle rute laporan dalam anggaran
 - [x] Periksa manual di 360px: seluruh chart terbaca, tidak ada yang terpotong (verified via e2e, not a manual visual pass by a human)

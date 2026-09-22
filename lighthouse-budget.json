@@ -9,5 +9,16 @@
       { "resourceType": "script", "budget": 180 },
       { "resourceType": "total", "budget": 500 }
     ]
+  },
+  {
+    "path": "/reports",
+    "timings": [
+      { "metric": "largest-contentful-paint", "budget": 2500 },
+      { "metric": "cumulative-layout-shift", "budget": 0.1 }
+    ],
+    "resourceSizes": [
+      { "resourceType": "script", "budget": 280 },
+      { "resourceType": "total", "budget": 600 }
+    ]
   }
 ]

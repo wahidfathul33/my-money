@@ -65,6 +65,21 @@ const envSchema = z.object({
   GOLD_PRICE_PROVIDER: z.enum(['manual', 'external']).optional(),
   GOLD_PRICE_API_URL: z.string().url().optional(),
   GOLD_PRICE_API_KEY: z.string().optional(),
+
+  // Task 23 — docs/13-deployment-vercel.md §9. All optional: this
+  // environment has no live Sentry project, so `Sentry.init` runs as a
+  // documented no-op until a real value is set at deploy time (see
+  // src/lib/observability/sentry.ts). `NEXT_PUBLIC_SENTRY_DSN` is read
+  // directly from `process.env` by src/instrumentation-client.ts, not
+  // through this module (this module is server-only) — listed here anyway
+  // so `getEnv()`'s schema documents every env var this app uses in one
+  // place, and so a stray non-URL value fails fast in server contexts too.
+  NEXT_PUBLIC_SENTRY_DSN: z.string().url().optional(),
+  // Build-time only (source map upload in next.config.ts's
+  // `withSentryConfig`) — never bundled to the client, never logged.
+  SENTRY_ORG: z.string().optional(),
+  SENTRY_PROJECT: z.string().optional(),
+  SENTRY_AUTH_TOKEN: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

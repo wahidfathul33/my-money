@@ -158,7 +158,7 @@ CREATE INDEX hi_email_pending_idx
 ## 5. Dompet
 
 ```sql
-CREATE TABLE dompet (
+CREATE TABLE wallets (
   id          UUID PRIMARY KEY,
   user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,   -- kepemilikan, tetap
   name        TEXT NOT NULL,
@@ -180,11 +180,11 @@ CREATE TABLE dompet (
   CONSTRAINT wallets_cc_non_positive CHECK (type <> 'credit_card' OR balance <= 0)
 );
 
-CREATE INDEX wallets_user_active_idx ON dompet (user_id, is_archived, sort_order);
+CREATE INDEX wallets_user_active_idx ON wallets (user_id, is_archived, sort_order);
 
 ALTER TABLE users
   ADD CONSTRAINT users_default_wallet_fk
-  FOREIGN KEY (default_wallet_id) REFERENCES dompet(id) ON DELETE SET NULL;
+  FOREIGN KEY (default_wallet_id) REFERENCES wallets(id) ON DELETE SET NULL;
 ```
 
 > Tidak ada `household_id`, dan **tidak ada tabel izin yang menempel pada dompet**. Dompet dimiliki tepat satu user selamanya, dan tidak ada mekanisme memberi orang lain akses baca ke isinya.
@@ -344,7 +344,7 @@ CREATE INDEX tx_note_trgm_idx ON transactions USING gin (note gin_trgm_ops);
 CREATE TABLE ledger_entries (
   id             UUID PRIMARY KEY,
   user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  wallet_id      UUID NOT NULL REFERENCES dompet(id) ON DELETE RESTRICT,
+  wallet_id      UUID NOT NULL REFERENCES wallets(id) ON DELETE RESTRICT,
   amount         BIGINT NOT NULL,   -- BERTANDA: negatif = keluar, positif = masuk
   source         entry_source NOT NULL,
   transaction_id UUID REFERENCES transactions(id) ON DELETE RESTRICT,
@@ -408,7 +408,7 @@ CREATE TABLE savings_contributions (
   id                UUID PRIMARY KEY,
   savings_goal_id   UUID NOT NULL REFERENCES savings_goals(id) ON DELETE RESTRICT,
   user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,  -- kontributor
-  wallet_id         UUID NOT NULL REFERENCES dompet(id) ON DELETE RESTRICT,
+  wallet_id         UUID NOT NULL REFERENCES wallets(id) ON DELETE RESTRICT,
 
   -- NOT NULL: inilah yang membuat penghitungan ganda mustahil secara struktural
   ledger_entry_id   UUID NOT NULL REFERENCES ledger_entries(id) ON DELETE RESTRICT,
@@ -537,7 +537,7 @@ CREATE TABLE deposits (
   aro_enabled          BOOLEAN NOT NULL DEFAULT false,
   aro_include_interest BOOLEAN NOT NULL DEFAULT false,
   status               deposit_status NOT NULL DEFAULT 'active',
-  wallet_id            UUID REFERENCES dompet(id) ON DELETE RESTRICT,
+  wallet_id            UUID REFERENCES wallets(id) ON DELETE RESTRICT,
   rolled_from_id       UUID REFERENCES deposits(id) ON DELETE SET NULL,
   -- task 17 additions:
   idempotency_key             TEXT,  -- createDeposit's create-once guard
@@ -575,7 +575,7 @@ CREATE TABLE debts (
   due_date         DATE,
   status           obligation_status NOT NULL DEFAULT 'active',
   affects_wallet   BOOLEAN NOT NULL DEFAULT true,
-  wallet_id        UUID REFERENCES dompet(id) ON DELETE RESTRICT,
+  wallet_id        UUID REFERENCES wallets(id) ON DELETE RESTRICT,
   exclude_from_household BOOLEAN NOT NULL DEFAULT false,
   note             TEXT,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -594,7 +594,7 @@ CREATE TABLE debt_payments (
   id              UUID PRIMARY KEY,
   debt_id         UUID NOT NULL REFERENCES debts(id) ON DELETE RESTRICT,
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  wallet_id       UUID NOT NULL REFERENCES dompet(id) ON DELETE RESTRICT,
+  wallet_id       UUID NOT NULL REFERENCES wallets(id) ON DELETE RESTRICT,
   ledger_entry_id UUID NOT NULL REFERENCES ledger_entries(id) ON DELETE RESTRICT,
   amount          BIGINT NOT NULL,
   payment_date    DATE NOT NULL,
@@ -608,6 +608,8 @@ CREATE TABLE debt_payments (
 
 CREATE INDEX debt_payments_debt_idx ON debt_payments (debt_id, payment_date DESC)
   WHERE voided_at IS NULL;
+CREATE UNIQUE INDEX dp_idempotency_uniq ON debt_payments (user_id, idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
 ```
 
 `receivables` dan `receivable_payments` identik strukturnya, dengan `debtor_name` menggantikan `creditor_name` dan tanda ledger entry terbalik.
@@ -715,7 +717,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;   -- pencarian catatan transaksi
 
 | Tahap | Tabel |
 |-------|-------|
-| 1 | `users`, Auth.js, `dompet`, `categories` (+ seeder katalog) |
+| 1 | `users`, Auth.js, `wallets`, `categories` (+ seeder katalog) |
 | 2 | `ledger_entries`, `transactions` |
 | 3 | `households`, `household_members`, `household_invitations` |
 | 4 | Kolom `household_id`, `share_wealth`, `exclude_from_household`, `counterparty_user_id` |

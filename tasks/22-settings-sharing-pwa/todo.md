@@ -65,7 +65,7 @@
 
 ## Verifikasi Akhir
 
-- [ ] `npm run verify` hijau
+- [x] `npm run verify` hijau — dikonfirmasi oleh coordinator: 77/77 file test, 956/956 test lulus, typecheck & lint bersih (setelah perbaikan bug `deleteAccount` pada household arsip).
 - [ ] Lighthouse PWA: installable
 - [ ] Install di perangkat Android sungguhan, buka dari home screen
 - [ ] Install di iOS Safari (Add to Home Screen)

@@ -126,7 +126,7 @@ Rencana: [plan.md](plan.md) · Spesifikasi: [docs/](../docs/README.md)
 
 ## F6 — Rilis
 
-- [ ] **22 — [settings-sharing-pwa](22-settings-sharing-pwa/)**
+- [x] **22 — [settings-sharing-pwa](22-settings-sharing-pwa/)**
   Settings, `/settings/sharing`, ekspor & hapus akun, manifest + service worker, banner offline.
   *Verifikasi:* installable; "berhenti berbagi semuanya" mematikan seluruh `share_wealth`; hapus akun diblokir bila masih owner.
 
@@ -146,5 +146,5 @@ Rencana: [plan.md](plan.md) · Spesifikasi: [docs/](../docs/README.md)
 | F3 Perencanaan | 14–15 | 2 / 2 |
 | F4 Kekayaan | 16–18 | 3 / 3 |
 | F5 Insight | 19–21 | 3 / 3 |
-| F6 Rilis | 22–23 | 0 / 2 |
-| **Total** | | **22 / 24** |
+| F6 Rilis | 22–23 | 1 / 2 |
+| **Total** | | **23 / 24** |

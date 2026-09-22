@@ -98,4 +98,49 @@ describe('scrubSentryEvent', () => {
     const event = { event_id: 'xyz', level: 'warning' } as Sentry.Event;
     expect(scrubSentryEvent(event)).toEqual(event);
   });
+
+  it('fully redacts a WalletNotEligibleError message — it embeds a counterparty name the currency regex cannot catch', () => {
+    const event = {
+      exception: {
+        values: [
+          { type: 'WalletNotEligibleError', value: 'Dompet ini tidak dapat dipakai untuk mengirim ke Istri E2E' },
+        ],
+      },
+    } as Sentry.Event;
+
+    const scrubbed = scrubSentryEvent(event);
+    expect(scrubbed.exception?.values?.[0]?.value).toBe('[Redacted: WalletNotEligibleError]');
+    expect(JSON.stringify(scrubbed)).not.toContain('Istri E2E');
+  });
+
+  it('fully redacts an OwnerBlockedDeletionError message — it embeds a household name', () => {
+    const event = {
+      exception: {
+        values: [
+          {
+            type: 'OwnerBlockedDeletionError',
+            value: 'Alihkan kepemilikan atau arsipkan "Keluarga Wahid" sebelum menghapus akun',
+          },
+        ],
+      },
+    } as Sentry.Event;
+
+    const scrubbed = scrubSentryEvent(event);
+    expect(scrubbed.exception?.values?.[0]?.value).toBe('[Redacted: OwnerBlockedDeletionError]');
+    expect(JSON.stringify(scrubbed)).not.toContain('Keluarga Wahid');
+  });
+
+  it('still scrubs OverpaymentError via the currency pattern (not name-bearing, so not on the type denylist)', () => {
+    const event = {
+      exception: {
+        values: [{ type: 'OverpaymentError', value: 'Pembayaran melebihi sisa hutang. Sisa Rp2.500.000.' }],
+      },
+    } as Sentry.Event;
+
+    const scrubbed = scrubSentryEvent(event);
+    // The trailing "." is swallowed into the Rp match (`[\d.,]+` is greedy)
+    // — harmless (this string never reaches a user, only Sentry's UI), and
+    // the amount itself is gone either way.
+    expect(scrubbed.exception?.values?.[0]?.value).toBe('Pembayaran melebihi sisa hutang. Sisa Rp[REDACTED]');
+  });
 });

@@ -826,6 +826,7 @@ describe('obligations service', () => {
   });
 
   describe('reconciliation', () => {
+    // I4: debt.remaining_amount = initial_amount − SUM(debt_payments.amount WHERE voided_at IS NULL).
     it('shows zero wallet balance drift and zero debt-remaining drift after a sequence of create/pay/void', async () => {
       const userId = await createTestUser();
       userIds.push(userId);

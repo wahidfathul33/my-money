@@ -18,7 +18,7 @@ import { assets, goldLots, goldPrices, goldSales } from '@/lib/db/schema/assets'
 import { wallets } from '@/lib/db/schema/wallets';
 import { ValidationError } from '@/lib/api/errors';
 import { findWalletBalanceDrift } from '@/lib/db/reconcile';
-import { createTestUser, createTestWallet, deleteTestUser } from '@/lib/db/__tests__/test-helpers';
+import { createTestGoldAsset, createTestUser, createTestWallet, deleteTestUser } from '@/lib/db/__tests__/test-helpers';
 import { gramsToMoney, parseGrams } from '@/lib/finance/gold';
 import { ManualPriceProvider } from '@/lib/gold-price/manual';
 import { buyGold, recordGoldPrice, sellGold } from '../gold';
@@ -486,6 +486,49 @@ describe('gold service', () => {
           sellPricePerGram: 1_000_000_00n,
           buybackPricePerGram: 1_100_000_00n, // > sell — must be rejected by the DB itself
           source: 'manual',
+        }),
+      ).rejects.toThrow();
+    });
+  });
+
+  // I7: gold_lots.remaining_grams stays within [0, weight_grams] — enforced
+  // by the gold_remaining_valid CHECK, independent of application code
+  // (reduceLotsProportionally et al. in src/lib/finance/gold.ts are unit
+  // tested to never violate this, but that only proves the app's OWN math —
+  // this proves the DB itself refuses a malformed row regardless of source).
+  describe('the gold_remaining_valid CHECK constraint itself', () => {
+    it('rejects remaining_grams greater than weight_grams, independent of application code', async () => {
+      const userId = await createTestUser();
+      userIds.push(userId);
+      const assetId = await createTestGoldAsset(userId);
+
+      await expect(
+        dbWrite.insert(goldLots).values({
+          id: uuidv7(),
+          assetId,
+          userId,
+          weightGrams: '5.0000',
+          remainingGrams: '5.0001', // > weight_grams — must be rejected by the DB itself
+          purchasePricePerGram: 1_000_000_00n,
+          purchaseDate: '2026-01-01',
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('rejects a negative remaining_grams, independent of application code', async () => {
+      const userId = await createTestUser();
+      userIds.push(userId);
+      const assetId = await createTestGoldAsset(userId);
+
+      await expect(
+        dbWrite.insert(goldLots).values({
+          id: uuidv7(),
+          assetId,
+          userId,
+          weightGrams: '5.0000',
+          remainingGrams: '-0.0001', // negative — must be rejected by the DB itself
+          purchasePricePerGram: 1_000_000_00n,
+          purchaseDate: '2026-01-01',
         }),
       ).rejects.toThrow();
     });

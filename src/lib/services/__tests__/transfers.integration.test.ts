@@ -989,6 +989,63 @@ describe('transfers service', () => {
     });
   });
 
+  // I17: a transaction can only ever be linked once (tx_link_uniq — a
+  // partial unique index on linked_transaction_id WHERE NOT NULL).
+  describe('the DB unique index itself (tx_link_uniq)', () => {
+    it('rejects a second transaction linking to a target that is already linked, independent of application code', async () => {
+      const sender = await createTestUser();
+      const receiver1 = await createTestUser();
+      const receiver2 = await createTestUser();
+      userIds.push(sender, receiver1, receiver2);
+      const targetTxId = crypto.randomUUID();
+      const firstLinkTxId = crypto.randomUUID();
+      const secondLinkTxId = crypto.randomUUID();
+
+      // The target side, plus its ONE legitimate link — mirrors the legal
+      // shape from the tx_created_by_rule test above.
+      await dbWrite.insert(transactions).values([
+        {
+          id: targetTxId,
+          userId: sender,
+          type: 'transfer',
+          categoryId: null,
+          amount: 1000n,
+          transactionDate: new Date(),
+          counterpartyUserId: receiver1,
+          createdBy: sender,
+        },
+        {
+          id: firstLinkTxId,
+          userId: receiver1,
+          type: 'transfer',
+          categoryId: null,
+          amount: 1000n,
+          transactionDate: new Date(),
+          counterpartyUserId: sender,
+          linkedTransactionId: targetTxId,
+          createdBy: sender,
+        },
+      ]);
+
+      // A second, unrelated transaction attempting to ALSO link to
+      // targetTxId — the DB must refuse it even though every OTHER
+      // constraint on this row is satisfied.
+      await expect(
+        dbWrite.insert(transactions).values({
+          id: secondLinkTxId,
+          userId: receiver2,
+          type: 'transfer',
+          categoryId: null,
+          amount: 500n,
+          transactionDate: new Date(),
+          counterpartyUserId: sender,
+          linkedTransactionId: targetTxId, // already claimed by firstLinkTxId
+          createdBy: sender,
+        }),
+      ).rejects.toThrow();
+    });
+  });
+
   describe('acknowledgeTransaction', () => {
     it("sets acknowledged_at on the RECEIVER's own row", async () => {
       const { sender, receiver, household, senderWallet, receiverWallet } = await setupHouseholdPair();

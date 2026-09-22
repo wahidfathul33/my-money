@@ -34,6 +34,25 @@ function scrubCurrencyLikeStrings(input: string): string {
     .replace(/\b\d{1,3}(?:[.,]\d{3}){2,}\b/g, '[REDACTED]'); // e.g. 10.000.000 / 1,234,567
 }
 
+/**
+ * `AppError` subclasses (src/lib/api/errors.ts) whose `.message` is built
+ * from a household/member/counterparty NAME, not just a number —
+ * `scrubCurrencyLikeStrings`'s regexes only catch amount-shaped substrings,
+ * so a name-bearing message needs the WHOLE value dropped instead. These
+ * messages are meant for the user who already knows the name (docs/12 §5
+ * H9's exception, spelled out in each class's own doc comment) — the
+ * problem is only if the same string leaves the process toward Sentry via
+ * `src/instrumentation.ts`'s `onRequestError`, which captures every
+ * uncaught Server Action/Route Handler error, not just ones written with
+ * observability in mind.
+ *
+ * `AppError` sets `.name = new.target.name` (its own constructor), which
+ * Sentry serializes as `exception.values[].type` — matching on that is
+ * more reliable than pattern-matching the message text, since a name can't
+ * be told apart from any other word by regex.
+ */
+const NAME_BEARING_ERROR_TYPES = new Set(['WalletNotEligibleError', 'OwnerBlockedDeletionError']);
+
 /** Recursively redacts sensitive keys and currency-shaped values in any JSON-like structure. */
 export function scrubFinancialData<T>(value: T, keyHint?: string): T {
   if (keyHint && SENSITIVE_KEY_PATTERN.test(keyHint)) {
@@ -98,9 +117,13 @@ export function scrubSentryEvent<E extends Sentry.Event>(event: E): E {
   if (e.exception?.values) {
     e.exception = {
       ...e.exception,
-      values: e.exception.values.map((value) =>
-        value.value ? { ...value, value: scrubCurrencyLikeStrings(value.value) } : value,
-      ),
+      values: e.exception.values.map((value) => {
+        if (!value.value) return value;
+        if (value.type && NAME_BEARING_ERROR_TYPES.has(value.type)) {
+          return { ...value, value: `[Redacted: ${value.type}]` };
+        }
+        return { ...value, value: scrubCurrencyLikeStrings(value.value) };
+      }),
     };
   }
   if (e.message) {

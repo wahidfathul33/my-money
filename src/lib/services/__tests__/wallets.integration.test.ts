@@ -99,6 +99,7 @@ describe('wallets service', () => {
     });
   });
 
+  // I9: a credit_card wallet is never positive-balanced.
   describe('the DB CHECK itself (wallets_cc_non_positive)', () => {
     it('rejects a raw UPDATE that pushes a credit card balance positive, independent of application code', async () => {
       const userId = await createTestUser();

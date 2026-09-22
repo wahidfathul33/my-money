@@ -1,3 +1,4 @@
+import { checkAxeCleanAtEveryColorScheme, checkNoHorizontalOverflow } from './helpers/a11y-check';
 import { expect, test } from './fixtures/authenticated';
 
 /**
@@ -118,5 +119,46 @@ test.describe('Deposito', () => {
     await expect(createSheet).not.toBeVisible(DB_TIMEOUT);
 
     await expect(page.getByText('estimasi, bebas pajak', { exact: false }).first()).toBeVisible(DB_TIMEOUT);
+  });
+
+  // Neither /wealth/assets/deposits nor its [id] detail page has overflow
+  // or axe coverage anywhere (tasks/23-hardening-and-launch's route audit).
+  // The list page is auditable empty (no wallet needed); the detail page
+  // needs one real deposit, created the same way the first test above does.
+  test('/wealth/assets/deposits dan halaman detail — tanpa horizontal overflow, axe nol pelanggaran', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+
+    await checkNoHorizontalOverflow(page, '/wealth/assets/deposits');
+    await checkAxeCleanAtEveryColorScheme(page, '/wealth/assets/deposits');
+
+    await page.goto('/wallets');
+    await page.getByRole('button', { name: 'Tambah dompet' }).click();
+    const walletSheet = page.getByRole('dialog', { name: 'Tambah dompet' });
+    await walletSheet.getByLabel('Nama dompet').fill('BCA Audit');
+    await walletSheet.getByLabel('Saldo awal (Rp)').fill('50000000');
+    await walletSheet.getByRole('button', { name: 'Tambah dompet' }).click();
+    await expect(walletSheet).not.toBeVisible(DB_TIMEOUT);
+
+    await page.goto('/wealth/assets/deposits');
+    await page.getByRole('button', { name: 'Tambah deposito' }).click();
+    const createSheet = page.getByRole('dialog', { name: 'Deposito baru' });
+    await expect(createSheet).toBeVisible();
+    await createSheet.getByLabel('Nama bank').fill('Bank Audit');
+    await createSheet.getByLabel('Pokok (Rp)').fill('10000000');
+    await createSheet.getByLabel('Suku bunga (% per tahun)').fill('4.25');
+    await createSheet.getByLabel('Tanggal jatuh tempo').fill(isoDateOffset(180));
+    await createSheet.getByRole('combobox', { name: 'Dompet sumber' }).click();
+    await page.getByRole('option', { name: 'BCA Audit' }).click();
+    await createSheet.getByRole('button', { name: 'Buat deposito' }).click();
+    await expect(createSheet).not.toBeVisible(DB_TIMEOUT);
+
+    await page.getByRole('link', { name: /Bank Audit/ }).click();
+    await expect(page).toHaveURL(/\/wealth\/assets\/deposits\/[^/]+$/, DB_TIMEOUT);
+    const detailUrl = page.url();
+
+    await checkNoHorizontalOverflow(page, detailUrl);
+    await checkAxeCleanAtEveryColorScheme(page, detailUrl);
   });
 });

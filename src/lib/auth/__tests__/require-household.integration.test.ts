@@ -116,6 +116,10 @@ describe('requireHouseholdMember', () => {
     ).rejects.toThrow(NotFoundError);
   });
 
+  // I15: a transaction tagged to a household must be created by a member
+  // active AT THE TIME of tagging — this is the service-layer check every
+  // household-scoped mutation calls inside its own transaction (see
+  // src/lib/services/transactions.ts's `requireHouseholdMember` call sites).
   it("a 'removed' membership is rejected — status filter, not just row existence", async () => {
     const owner = await createTestUser();
     const removedUser = await createTestUser();

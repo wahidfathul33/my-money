@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { dbWrite } from '../src/lib/db/write';
 import { wallets } from '../src/lib/db/schema';
 import { createTestDebt } from '../src/lib/db/__tests__/test-helpers';
+import { auditRouteA11y } from './helpers/a11y-check';
 import { test, expect } from './fixtures/authenticated';
 
 /**
@@ -76,5 +77,13 @@ test.describe('Net worth — personal', () => {
 
     await netWorthCard.click();
     await expect(page).toHaveURL(/\/wealth\/net-worth$/, DB_TIMEOUT);
+  });
+
+  // /wealth/net-worth has no overflow or axe coverage anywhere
+  // (tasks/23-hardening-and-launch's route audit). The default zero-balance
+  // starter wallet is enough real content to audit.
+  test('/wealth/net-worth — tanpa horizontal overflow, axe nol pelanggaran', async ({ page }) => {
+    test.setTimeout(60_000);
+    await auditRouteA11y(page, '/wealth/net-worth');
   });
 });

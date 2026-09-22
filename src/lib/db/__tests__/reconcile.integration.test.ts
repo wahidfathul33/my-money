@@ -6,15 +6,38 @@
  * returns zero rows. Runs against the real Neon database (.env).
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { dbWrite } from '@/lib/db/write';
 import { users } from '@/lib/db/schema/users';
 import { wallets } from '@/lib/db/schema/wallets';
 import { ledgerEntries, transactions } from '@/lib/db/schema/transactions';
 import { postEntries } from '@/lib/finance/ledger';
-import { createTestUser, createTestWallet, deleteTestUser } from './test-helpers';
+import { createTransaction } from '@/lib/services/transactions';
+import { createTestCategory, createTestUser, createTestWallet, deleteTestUser } from './test-helpers';
 import { runReconciliation } from '../reconcile';
+
+/**
+ * I6: every non-void transaction has at least one non-void ledger entry.
+ * There's no FK forcing this (`ledger_entries.transaction_id` is nullable,
+ * and nothing points the other way from `transactions`), so — like I1/I11/I12
+ * above — this can only be caught by a periodic query, never a CHECK
+ * constraint. Inlined here rather than added to src/lib/db/reconcile.ts,
+ * since this task's own scope is test coverage, not new production
+ * reconciliation surface.
+ */
+async function orphanNonVoidTransactionIds(): Promise<string[]> {
+  const rows = await dbWrite.execute<{ id: string }>(sql`
+    SELECT t.id
+    FROM transactions t
+    LEFT JOIN ledger_entries le
+           ON le.transaction_id = t.id AND le.voided_at IS NULL
+    WHERE t.voided_at IS NULL
+    GROUP BY t.id
+    HAVING COUNT(le.id) = 0
+  `);
+  return rows.rows.map((r) => r.id);
+}
 
 describe('runReconciliation', () => {
   const simpleUserIds: string[] = [];
@@ -138,6 +161,54 @@ describe('runReconciliation', () => {
         await dbWrite.delete(transactions).where(inArray(transactions.id, [senderTxId, receiverTxId]));
         await dbWrite.delete(wallets).where(inArray(wallets.userId, [senderId, receiverId]));
         await dbWrite.delete(users).where(inArray(users.id, [senderId, receiverId]));
+      }
+    });
+  });
+
+  describe('I6 — every non-void transaction has at least one non-void ledger entry', () => {
+    it('a transaction recorded through the real service is never orphaned', async () => {
+      const userId = await createTestUser();
+      simpleUserIds.push(userId);
+      const walletId = await createTestWallet(userId);
+      const categoryId = await createTestCategory(userId, { type: 'expense' });
+
+      const created = await createTransaction(userId, {
+        type: 'expense',
+        amount: 25_000_00n,
+        categoryId,
+        walletId,
+        transactionDate: new Date(),
+        note: null,
+        idempotencyKey: crypto.randomUUID(),
+      });
+
+      expect(await orphanNonVoidTransactionIds()).not.toContain(created.id);
+    });
+
+    it('flags a transaction row inserted with no backing ledger entry — proves the query actually catches the violation it exists for', async () => {
+      const userId = await createTestUser();
+      simpleUserIds.push(userId);
+      const categoryId = await createTestCategory(userId, { type: 'expense' });
+      const txId = uuidv7();
+
+      // Deliberately simulates the bug I6 exists to catch: a transaction row
+      // written without ever calling postEntries in the same DB transaction.
+      // There's no FK to stop this — that's exactly why I6 is a query
+      // invariant, not a CHECK constraint (see docs/05-financial-integrity.md §5).
+      await dbWrite.insert(transactions).values({
+        id: txId,
+        userId,
+        type: 'expense',
+        categoryId,
+        amount: 10_000_00n,
+        transactionDate: new Date(),
+        createdBy: userId,
+      });
+
+      try {
+        expect(await orphanNonVoidTransactionIds()).toContain(txId);
+      } finally {
+        await dbWrite.delete(transactions).where(eq(transactions.id, txId));
       }
     });
   });

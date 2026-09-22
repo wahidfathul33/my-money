@@ -19,6 +19,16 @@ function hashToIndex(seed: string, length: number): number {
   return hash % length;
 }
 
+/** The same deterministic hue `<MemberAvatar>` itself uses — exported so
+ * `MemberBar` (docs/07-design-system.md §14.3/§14.4) can color its "siapa
+ * membayar apa" segments identically, per §14.4: "Dipakai konsisten di
+ * avatar, bar ..., dan rincian kontribusi." Never re-derive this hash
+ * separately elsewhere — a second implementation could silently drift from
+ * this one and give the same member two different colors on two screens. */
+export function avatarHueFor(seed: string): number {
+  return AVATAR_HUES[hashToIndex(seed, AVATAR_HUES.length)]!;
+}
+
 function initialsFor(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) return '?';

@@ -97,14 +97,19 @@ test.describe('authentication', () => {
       await page.waitForURL(baseURL + '/', { timeout: 45_000 });
 
       // Onboarding done -> functional dashboard, real data from the DB.
+      // task 20's real dashboard deliberately doesn't show per-wallet
+      // detail (docs/09-screen-specs.md §1: "Aset dan liabilitas rinci
+      // tidak tampil di dashboard") — the wallet's balance surfaces
+      // instead as the aggregate "Kas" tile, the same figure since BCA is
+      // the only wallet.
       await expect(page).toHaveURL(baseURL + '/');
-      await expect(page.getByText('BCA')).toBeVisible();
+      await expect(page.getByText('Kas', { exact: true })).toBeVisible();
       await expect(page.getByText('Rp150.000').first()).toBeVisible();
 
       // Session persists after refresh — no bounce back to /signin.
       await page.reload();
       await expect(page).toHaveURL(baseURL + '/');
-      await expect(page.getByText('BCA')).toBeVisible();
+      await expect(page.getByText('Kas', { exact: true })).toBeVisible();
     } finally {
       await deleteTestUser(userId);
     }
@@ -113,7 +118,6 @@ test.describe('authentication', () => {
   test('logout deletes the session row in the database (not just the cookie), and the route becomes protected again', async ({
     page,
     context,
-    baseURL,
   }) => {
     // See the onboarding test's comment above — same first-hit Turbopack
     // compile + real dbWrite round trip for signOutAction.
@@ -124,8 +128,10 @@ test.describe('authentication', () => {
     try {
       await setSessionCookie(context, sessionToken);
 
-      await page.goto('/');
-      await expect(page).toHaveURL(baseURL + '/');
+      // "Keluar" lives on /settings (docs/09 §18) — task 20 moved it there
+      // off the old placeholder dashboard when it replaced that page's
+      // content with the real one (src/app/(app)/settings/page.tsx).
+      await page.goto('/settings');
       await expect(await sessionExists(sessionToken)).toBe(true);
 
       await page.getByRole('button', { name: 'Keluar' }).click();

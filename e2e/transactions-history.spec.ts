@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures/authenticated';
+import { waitForDomToSettle } from './fixtures/base';
 import { createTestWallet } from '../src/lib/db/__tests__/test-helpers';
 import {
   getDefaultWalletAndCategory,
@@ -46,7 +47,13 @@ test.describe('Riwayat transaksi', () => {
     await expect(page.getByRole('checkbox', { name: 'Pengeluaran', exact: true })).toBeVisible();
 
     // Reload — proves the state really lives in the URL, not just React state.
+    // `page.reload()` isn't auto-wrapped the way `page.goto()` is (the
+    // `page` fixture in fixtures/base.ts only overrides `.goto`) — same
+    // transient duplicate-DOM hydration race `waitForDomToSettle()` exists
+    // for elsewhere, just reached via reload instead of a fresh navigation
+    // here.
     await page.reload();
+    await waitForDomToSettle(page);
     await expect(page).toHaveURL(/type=expense/);
     await expect(page.getByRole('checkbox', { name: 'Pengeluaran', exact: true })).toBeVisible(DB_TIMEOUT);
     // The row's note isn't rendered in the list row (docs/09 §3's

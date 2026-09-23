@@ -114,12 +114,26 @@ test.describe('Household privacy audit — three real accounts, one household', 
         await expect(page.getByText('2 dari 3 anggota')).toBeVisible();
         await expect(page.getByText('Rp3.000.000').first()).toBeVisible();
 
-        // Household expenses page — C never tagged anything, so C never
-        // appears there at all, financial or otherwise.
+        // Household expenses page — C never tagged anything, so C's
+        // financial activity never appears there. C's NAME still legitimately
+        // appears once, in the "Filter anggota" chip row (member-filter-chips.tsx)
+        // — every active member is a valid filter target regardless of
+        // sharing, same "identity is never secret, only financial figures
+        // are" contract as the net-worth page above. Scoped by
+        // `role="group" aria-label="Filter anggota"` vs. the transaction
+        // list's own `data-testid` (household-transaction-list.tsx), rather
+        // than asserting C's name absent from the page as a whole.
         await page.goto(`/household/${householdId}/transactions`);
         await waitForDomToSettle(page);
-        await expect(page.getByText('Member C')).toHaveCount(0);
-        await expect(page.getByText('Rp9.999.000')).toHaveCount(0);
+        await expect(page.getByRole('group', { name: 'Filter anggota' }).getByText('Member C')).toBeVisible();
+        await expect(page.locator('body')).not.toContainText('Rp9.999.000');
+        // Either the empty state (no household expenses at all yet from A/B)
+        // or the transaction list itself — whichever renders, C's name must
+        // not appear inside it.
+        const listOrEmptyState = page.getByTestId('household-transaction-list');
+        if (await listOrEmptyState.count()) {
+          await expect(listOrEmptyState.getByText('Member C')).toHaveCount(0);
+        }
       }
     } finally {
       await ownerContext.close();

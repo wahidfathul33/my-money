@@ -42,7 +42,7 @@ export function DepositCard({ deposit, href }: DepositCardProps) {
         <span className="flex items-center gap-2">
           <span className="text-text truncate text-body font-medium">{deposit.bankName}</span>
           {deposit.rolledFromId && (
-            <span className="bg-surface-raised text-text-subtle shrink-0 rounded-full px-2 py-0.5 text-xs">ARO</span>
+            <span className="bg-surface-raised text-text-muted shrink-0 rounded-full px-2 py-0.5 text-xs">ARO</span>
           )}
           {deposit.status === 'matured' && (
             <span className="bg-warning-subtle text-warning-readable shrink-0 rounded-full px-2 py-0.5 text-xs font-medium">
@@ -61,7 +61,7 @@ export function DepositCard({ deposit, href }: DepositCardProps) {
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5">
         <MoneyText amount={estimate} tone="neutral" size="sm" />
-        <span className="text-text-subtle text-right text-[10px] leading-tight">{interestEstimateLabel(deposit.taxRate)}</span>
+        <span className="text-text-muted text-right text-[10px] leading-tight">{interestEstimateLabel(deposit.taxRate)}</span>
       </span>
     </Link>
   );

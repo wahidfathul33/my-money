@@ -90,7 +90,7 @@ export default async function WalletDetailPage({ params }: WalletDetailPageProps
                     <span className="text-text text-body">
                       {ENTRY_SOURCE_LABEL[entry.source] ?? entry.source}
                     </span>
-                    <span className="text-text-subtle text-xs">
+                    <span className="text-text-muted text-xs">
                       {new Intl.DateTimeFormat('id-ID', {
                         dateStyle: 'medium',
                         timeStyle: 'short',

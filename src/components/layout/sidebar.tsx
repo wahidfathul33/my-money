@@ -174,7 +174,7 @@ export function Sidebar({ addTransactionSheetData, households, unacknowledgedCou
                   )}
                 </Link>
               ) : (
-                <div className="text-text-subtle flex h-11 items-center gap-3 px-3 text-sm opacity-60">
+                <div className="text-text-muted flex h-11 items-center gap-3 px-3 text-sm opacity-60">
                   <item.icon className="size-5" aria-hidden="true" />
                   {item.label}
                   <span className="rounded-chip bg-surface-raised ml-auto px-2 py-0.5 text-xs">

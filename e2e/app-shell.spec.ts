@@ -63,7 +63,11 @@ test.describe('Bottom nav — mobile (<768px)', () => {
     );
 
     await page.goto('/wealth');
-    await expect(page.getByRole('link', { name: 'Kekayaan' })).toHaveAttribute(
+    // `exact: true` — task 19's dashboard "Kekayaan Bersih" card link also
+    // has an accessible name containing "Kekayaan" as a substring, which
+    // Playwright's default substring matching now matches ambiguously
+    // alongside this nav link.
+    await expect(page.getByRole('link', { name: 'Kekayaan', exact: true })).toHaveAttribute(
       'aria-current',
       'page',
     );

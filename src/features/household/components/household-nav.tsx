@@ -53,7 +53,7 @@ export function HouseholdNav({ householdId, name }: HouseholdNavProps) {
           ) : (
             <span
               key={item.label}
-              className="rounded-chip text-text-subtle shrink-0 px-3 py-1.5 text-sm whitespace-nowrap opacity-60"
+              className="rounded-chip text-text-muted shrink-0 px-3 py-1.5 text-sm whitespace-nowrap opacity-60"
             >
               {item.label}
             </span>

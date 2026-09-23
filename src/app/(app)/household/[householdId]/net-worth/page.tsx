@@ -97,7 +97,13 @@ export default async function HouseholdNetWorthPage({ params, searchParams }: Ho
                   <Link
                     key={opt.value}
                     href={`/household/${householdId}/net-worth?range=${opt.value}`}
-                    aria-pressed={opt.value === range}
+                    // `aria-pressed` isn't valid on the link role at all
+                    // (axe: critical) — this is a real `href` driving
+                    // query-param state via a plain navigation, not a
+                    // toggle button, so `aria-current="page"` is the
+                    // correct semantic (same value/omit-when-inactive
+                    // convention as src/components/layout/bottom-nav.tsx).
+                    aria-current={opt.value === range ? 'page' : undefined}
                     className={cn(
                       'pressable rounded-chip inline-flex h-11 min-w-11 items-center justify-center border px-4 text-sm font-medium',
                       opt.value === range

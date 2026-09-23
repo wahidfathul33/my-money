@@ -32,7 +32,7 @@ GitHub repo
     { "path": "/api/cron/deposit-maturity",   "schedule": "0 18 * * *" },
     { "path": "/api/cron/gold-price",         "schedule": "0 19 * * *" },
     { "path": "/api/cron/reconcile",          "schedule": "0 20 * * *" },
-    { "path": "/api/cron/expire-invitations", "schedule": "0 * * * *" },
+    { "path": "/api/cron/expire-invitations", "schedule": "0 16 * * *" },
     { "path": "/api/cron/net-worth-snapshot", "schedule": "55 16 * * *" }
   ]
 }
@@ -49,9 +49,11 @@ GitHub repo
 | `deposit-maturity` | `0 18 * * *` | 01:00 |
 | `gold-price` | `0 19 * * *` | 02:00 |
 | `reconcile` | `0 20 * * *` | 03:00 |
-| `expire-invitations` | `0 * * * *` | setiap jam |
+| `expire-invitations` | `0 16 * * *` | 23:00 |
 
-`expire-invitations` berjalan setiap jam, bukan sekali sehari seperti cron lain di tabel ini (task 11's implementasi — src/app/api/cron/expire-invitations/route.ts — memilih kadensi ini supaya undangan kedaluwarsa tak lama setelah batas 7 harinya lewat, bukan tertunda hingga hampir sehari). Ia tidak menulis apa pun yang bersifat finansial — hanya mengubah status undangan. Urutannya terhadap `reconcile` tidak berpengaruh, dan menjalankannya berulang tidak dapat merusak saldo siapa pun.
+**Seluruh cron berjalan harian** — akun Vercel Hobby/gratis hanya mengizinkan kadensi harian; jadwal per jam memerlukan paket Pro. `expire-invitations` awalnya dirancang berjalan setiap jam (task 11's implementasi — src/app/api/cron/expire-invitations/route.ts — supaya undangan kedaluwarsa tak lama setelah batas 7 harinya lewat) tetapi diturunkan ke harian di task 23 untuk tetap pada paket gratis. Ini aman: `acceptInvitation` (src/lib/services/invitations.ts) memeriksa `expiresAt > now` secara real-time pada setiap percobaan terima, terlepas dari kapan cron ini terakhir berjalan — cron ini murni housekeeping (mengubah status undangan untuk tampilan, bukan pemeriksa keabsahan), jadi kadensi yang lebih jarang hanya membuat undangan yang sudah lewat tampil "Menunggu" hingga ~24 jam lebih lama, bukan celah keamanan. Ia tidak menulis apa pun yang bersifat finansial. Urutannya terhadap `reconcile` tidak berpengaruh, dan menjalankannya berulang tidak dapat merusak saldo siapa pun.
+
+Bila nanti pindah ke paket Pro (atau memakai trigger cron eksternal gratis seperti GitHub Actions terjadwal yang memanggil rute ini dengan header `Authorization: Bearer $CRON_SECRET`), jadwal ini bisa dikembalikan ke `0 * * * *` tanpa perubahan kode apa pun.
 
 > Kesalahan zona waktu di sini menghasilkan snapshot yang ditulis pada hari yang salah, dan grafik net worth yang bergeser satu hari. Konversi ini diverifikasi test.
 

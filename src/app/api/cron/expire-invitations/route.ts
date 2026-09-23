@@ -4,10 +4,18 @@ import { expireInvitations } from '@/lib/services/invitations';
 
 /**
  * `GET /api/cron/expire-invitations` — docs/12-security-and-auth.md §8,
- * scheduled hourly via `vercel.json`. Bearer `CRON_SECRET` (min 32 chars,
- * Vercel-only env var — src/lib/env.ts) is the only auth; this route sits
- * outside `src/proxy.ts`'s matcher (`/api/cron` is explicitly excluded)
- * because Vercel Cron doesn't carry a user session.
+ * scheduled daily via `vercel.json` (Vercel's Hobby/free plan only allows
+ * daily cron jobs — an hourly schedule is Pro-only. Safe to run daily
+ * rather than hourly: this route is pure housekeeping, not the actual
+ * expiry check — `acceptInvitation` in src/lib/services/invitations.ts
+ * independently verifies `expiresAt > now` in real time on every accept
+ * attempt regardless of whether this cron has caught up yet, so the only
+ * effect of the coarser cadence is a stale invitation showing "Menunggu"
+ * in the UI for up to ~24h after its real 7-day expiry, never a security
+ * or correctness gap). Bearer `CRON_SECRET` (min 32 chars, Vercel-only env
+ * var — src/lib/env.ts) is the only auth; this route sits outside
+ * `src/proxy.ts`'s matcher (`/api/cron` is explicitly excluded) because
+ * Vercel Cron doesn't carry a user session.
  *
  * `expireInvitations` (src/lib/services/invitations.ts) touches ONLY
  * `household_invitations.status`, guarded by `WHERE status = 'pending'` —

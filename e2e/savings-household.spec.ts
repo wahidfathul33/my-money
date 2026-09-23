@@ -3,7 +3,7 @@ import { dbWrite } from '../src/lib/db/write';
 import { householdMembers } from '../src/lib/db/schema';
 import { deleteTestHousehold, deleteTestUser } from '../src/lib/db/__tests__/test-helpers';
 import { seedSessionUser, setSessionCookie } from './helpers/auth-session';
-import { test, expect } from './fixtures/base';
+import { test, expect, suppressDevOverlay, waitForDomToSettle } from './fixtures/base';
 
 /**
  * tasks/15-savings-goals — two real user sessions contributing to the SAME
@@ -49,6 +49,15 @@ test.describe('shared savings goal — two-context flows', () => {
 
     const ownerContext = await browser.newContext({ baseURL });
     const memberContext = await browser.newContext({ baseURL });
+    // A manually-created browser.newContext() never runs fixtures/base.ts's
+    // `page` fixture override, so the dev overlay's issues badge — which
+    // sits exactly where AmountKeypad renders (contribute-sheet.tsx uses
+    // the same shared keypad as the Add Transaction sheet) — silently
+    // intercepts every keypad tap, hanging for the full test timeout with
+    // no application error at all (same root cause fixed in
+    // e2e/sharing.spec.ts and e2e/transfers-member.spec.ts).
+    await suppressDevOverlay(ownerContext);
+    await suppressDevOverlay(memberContext);
 
     try {
       await setSessionCookie(ownerContext, owner.sessionToken);
@@ -59,6 +68,7 @@ test.describe('shared savings goal — two-context flows', () => {
 
       // Owner creates the household via the real UI.
       await ownerPage.goto('/household/new');
+      await waitForDomToSettle(ownerPage);
       await ownerPage.getByLabel('Nama keluarga').fill('Keluarga Tabungan E2E');
       await ownerPage.getByRole('button', { name: 'Buat Keluarga' }).click();
       await expect(ownerPage).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);

@@ -265,9 +265,9 @@ Skala 4px. Ukuran yang diizinkan: `4 8 12 16 20 24 32 40 48 64`.
 
 ```css
 @theme {
-  --space-page-x:  1rem;
-  --space-section: 1.5rem;
-  --space-card:    1rem;
+  --spacing-page-x:  1rem;
+  --spacing-section: 1.5rem;
+  --spacing-card:    1rem;
   --nav-height:    3.5rem;
   --safe-b:        env(safe-area-inset-bottom, 0px);
   --safe-t:        env(safe-area-inset-top, 0px);

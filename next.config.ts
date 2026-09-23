@@ -61,5 +61,11 @@ export default withSentryConfig(nextConfig, {
   authToken: process.env.SENTRY_AUTH_TOKEN,
   silent: true,
   widenClientFileUpload: false,
-  disableLogger: true,
+  // `disableLogger` is deprecated (SDK warning: "Use webpack.treeshake.removeDebugLogging
+  // instead") — but that replacement is explicitly "Not supported with
+  // Turbopack" too, per the same warning, and this project runs Turbopack
+  // (`next dev`/`next build`, no `--webpack` flag). Neither option does
+  // anything here, so dropped rather than swapped for an equally-inert
+  // replacement — this is a minor Sentry-SDK-internal bundle trim, not
+  // behavior anything depends on.
 });

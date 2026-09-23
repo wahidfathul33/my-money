@@ -284,17 +284,29 @@ test.describe('Navigasi keyboard', () => {
     await expect(addSheet).not.toBeVisible();
 
     // Radix Dialog returns focus to its trigger ("Tambah transaksi") on
-    // close, asynchronously — it can steal focus back after our explicit
-    // .focus() below wins the race once, reopening the WRONG dialog on
-    // Enter. Re-focus in a loop until it actually sticks.
+    // close, asynchronously — it can steal focus back AFTER our explicit
+    // .focus() below wins the race once, meaning Enter can land back on
+    // "Tambah transaksi" and reopen THAT dialog instead of "Lainnya" —
+    // confirmed via a DOM snapshot on an isolated repro (the wrong dialog
+    // was genuinely open, "Lainnya" never got queried). Re-focusing alone
+    // (the original fix here) doesn't close that window: the steal can
+    // still happen in the gap between the focus check and the keypress.
+    // The retry loop now covers the WHOLE focus-then-Enter-then-verify
+    // sequence, closing the wrong dialog first if a previous attempt's
+    // race actually won.
     const lainnyaButton = page.getByRole('button', { name: 'Lainnya' });
+    const sheet = page.getByRole('dialog', { name: 'Lainnya' });
+    const wrongDialog = page.getByRole('dialog', { name: 'Tambah transaksi' });
     await expect(async () => {
+      if (await wrongDialog.isVisible()) {
+        await page.keyboard.press('Escape');
+        await expect(wrongDialog).not.toBeVisible();
+      }
       await lainnyaButton.focus();
       await expect(lainnyaButton).toBeFocused();
-    }).toPass({ timeout: 5000 });
-    await page.keyboard.press('Enter');
-    const sheet = page.getByRole('dialog', { name: 'Lainnya' });
-    await expect(sheet).toBeVisible();
+      await page.keyboard.press('Enter');
+      await expect(sheet).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 10_000 });
     // Fokus terjebak di dalam sheet (docs/07 §14.2).
     await page.keyboard.press('Tab');
     const activeInsideSheet = await sheet.evaluate((el) => el.contains(document.activeElement));

@@ -354,8 +354,27 @@ export async function deleteTestUser(userId: string) {
     .where(eq(transactions.createdBy, userId));
   if (writtenByThisUser.length > 0) {
     const ids = writtenByThisUser.map((row) => row.id);
-    await dbWrite.delete(ledgerEntries).where(inArray(ledgerEntries.transactionId, ids));
-    await dbWrite.delete(transactions).where(inArray(transactions.id, ids));
+    // Retry a few times, not once: an e2e test's LAST UI action (e.g. the
+    // "Urungkan" undo click on a void — src/lib/services/transactions.ts's
+    // `unvoidTransaction`) can still be committing its `postEntries` INSERT
+    // when the test function returns and this fixture teardown starts
+    // immediately after — confirmed by direct query (a single leftover
+    // `ledger_entries` row, landed AFTER this exact delete already ran,
+    // for a transaction whose only OTHER trace was this one row). The
+    // RESTRICT FK is correctly catching a real leftover write each time;
+    // a single delete attempt loses that race often enough to matter, a
+    // few retries with a short pause absorb it without masking a
+    // genuinely stuck delete (still throws on the last attempt).
+    for (let attempt = 1; ; attempt++) {
+      await dbWrite.delete(ledgerEntries).where(inArray(ledgerEntries.transactionId, ids));
+      try {
+        await dbWrite.delete(transactions).where(inArray(transactions.id, ids));
+        break;
+      } catch (err) {
+        if (attempt >= 5) throw err;
+        await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+      }
+    }
   }
 
   // task 17: `deposits.wallet_id` and `deposits.asset_id` are both

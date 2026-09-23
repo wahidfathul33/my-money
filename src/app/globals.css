@@ -159,6 +159,16 @@
     --color-positive-subtle: oklch(25% 0.045 152);
     --color-negative: oklch(71% 0.16 25);
     --color-negative-subtle: oklch(25% 0.05 25);
+    /* Task 23 fix: this was the only `-subtle` background token missing a
+       dark-mode override — brand/positive/negative-subtle all darken here,
+       this one didn't, so `.text-warning-readable`'s dark-mode value
+       (`--color-warning`, 72% L) ended up rendered against a background
+       that stayed at light mode's 96% L. Lighthouse caught it on the
+       OfflineBanner ("Koneksi lambat…", bg-warning-subtle
+       text-warning-readable): 2.22:1, needs 4.5:1. Same L (25%) as
+       positive-subtle/negative-subtle above, same hue/chroma as light
+       mode's own value (0.045 75). */
+    --color-warning-subtle: oklch(25% 0.045 75);
   }
 }
 

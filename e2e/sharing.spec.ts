@@ -4,7 +4,7 @@ import { dbWrite } from '../src/lib/db/write';
 import { householdMembers, transactions, wallets } from '../src/lib/db/schema';
 import { deleteTestHousehold, deleteTestUser } from '../src/lib/db/__tests__/test-helpers';
 import { seedSessionUser, setSessionCookie } from './helpers/auth-session';
-import { test, expect, waitForDomToSettle } from './fixtures/base';
+import { test, expect, suppressDevOverlay, waitForDomToSettle } from './fixtures/base';
 
 /**
  * tasks/12-sharing-and-privacy — the two-context flows spec.md's
@@ -48,6 +48,15 @@ test.describe('sharing & privacy — two-context flows', () => {
 
     const ownerContext = await browser.newContext({ baseURL });
     const memberContext = await browser.newContext({ baseURL });
+    // A manually-created browser.newContext() never runs fixtures/base.ts's
+    // `page` fixture override, so the dev overlay's issues badge — which
+    // sits exactly where the Add Transaction sheet's amount keypad renders
+    // — silently intercepts every keypad tap, and Playwright's actionability
+    // check retries the same click for the full test timeout with no
+    // application error at all (root-caused in e2e/transfers-member.spec.ts's
+    // own header comment; this file just hadn't been patched yet).
+    await suppressDevOverlay(ownerContext);
+    await suppressDevOverlay(memberContext);
 
     try {
       await setSessionCookie(ownerContext, owner.sessionToken);
@@ -56,6 +65,12 @@ test.describe('sharing & privacy — two-context flows', () => {
       const memberPage = await memberContext.newPage();
 
       await ownerPage.goto('/household/new');
+      // Manually-created context's page never gets the `page` fixture's
+      // auto-`waitForDomToSettle` wrapping — same transient duplicate-DOM
+      // race as the memberPage navigation further down this file, just at
+      // a different spot (getByLabel resolving to 2 elements right after
+      // this goto).
+      await waitForDomToSettle(ownerPage);
       await ownerPage.getByLabel('Nama keluarga').fill('Keluarga Berbagi');
       await ownerPage.getByRole('button', { name: 'Buat Keluarga' }).click();
       await expect(ownerPage).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
@@ -156,14 +171,35 @@ test.describe('sharing & privacy — two-context flows', () => {
 
     const ownerContext = await browser.newContext({ baseURL });
     const memberContext = await browser.newContext({ baseURL });
+    // A manually-created browser.newContext() never runs fixtures/base.ts's
+    // `page` fixture override, so the dev overlay's issues badge — which
+    // sits exactly where the Add Transaction sheet's amount keypad renders
+    // — silently intercepts every keypad tap, and Playwright's actionability
+    // check retries the same click for the full test timeout with no
+    // application error at all (root-caused in e2e/transfers-member.spec.ts's
+    // own header comment; this file just hadn't been patched yet).
+    await suppressDevOverlay(ownerContext);
+    await suppressDevOverlay(memberContext);
 
     try {
       await setSessionCookie(ownerContext, owner.sessionToken);
       await setSessionCookie(memberContext, member.sessionToken);
       const ownerPage = await ownerContext.newPage();
       const memberPage = await memberContext.newPage();
+      // The mobile/tablet icon-rail sidebar's "Tambah transaksi" button
+      // (aria-label, src/components/layout/sidebar.tsx lines ~89-96) only
+      // renders below the `lg:` (1024px) breakpoint — the Desktop Chrome
+      // project's default 1280px viewport instead renders the wide
+      // sidebar's own "+ Tambah" button (visible text, different accessible
+      // name, line ~190), so `getByRole('button', { name: 'Tambah transaksi' })`
+      // below matches nothing there and hangs for the full test timeout
+      // waiting for an element that will never appear — same viewport
+      // convention as e2e/transfers-member.spec.ts's own two-context tests.
+      await ownerPage.setViewportSize({ width: 390, height: 844 });
+      await memberPage.setViewportSize({ width: 390, height: 844 });
 
       await ownerPage.goto('/household/new');
+      await waitForDomToSettle(ownerPage);
       await ownerPage.getByLabel('Nama keluarga').fill('Keluarga Pengeluaran');
       await ownerPage.getByRole('button', { name: 'Buat Keluarga' }).click();
       await expect(ownerPage).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
@@ -202,18 +238,35 @@ test.describe('sharing & privacy — two-context flows', () => {
         await expect(ownerPage.getByText('Tersimpan', { exact: true })).not.toBeVisible({ timeout: 8000 });
 
         // Owner records a SECOND, UNTAGGED expense — the 🏠 toggle stays off.
+        // Deliberately a DIFFERENT category than the first transaction
+        // (Transportasi, not Makan & Minum): tasks/12-sharing-and-privacy
+        // spec.md's "Pilihan household terakhir diingat per kategori"
+        // (src/features/transactions/components/add-transaction-sheet.tsx's
+        // `handleCategoryChange`) prefills the 🏠 toggle from whatever
+        // household was last used for the SAME category — reusing "Makan &
+        // Minum" here would auto-tag this expense too, which is the
+        // feature working as designed, not something this test should
+        // fight by clicking the toggle back off.
         await ownerPage.getByRole('button', { name: 'Tambah transaksi' }).click();
         await expect(addSheet).toBeVisible();
         for (const digit of ['2', '0', '0', '0', '0']) {
           await addSheet.getByRole('button', { name: digit, exact: true }).click();
         }
-        await addSheet.getByRole('button', { name: 'Makan & Minum' }).click();
+        await addSheet.getByRole('button', { name: 'Transportasi' }).click();
+        await expect(addSheet.getByRole('button', { name: 'Tandai ke keluarga' })).toBeVisible();
         await addSheet.getByRole('button', { name: 'Simpan' }).click();
         await expect(addSheet).not.toBeVisible(DB_TIMEOUT);
 
         // Member visits the household expenses page — never navigated there
         // by the owner, proving the tag (not context) drives visibility.
+        // `memberPage` is a manually-created context's page, so it never got
+        // the `page` fixture's auto-`waitForDomToSettle` wrapping (only
+        // applied to the `page` fixture itself — see fixtures/base.ts's own
+        // doc comment on `waitForDomToSettle`) — without it, the assertion
+        // below can race a transient duplicate-render right after
+        // navigation and hit a strict-mode "resolved to 2 elements" error.
         await memberPage.goto(`/household/${householdId}/transactions`);
+        await waitForDomToSettle(memberPage);
         await expect(memberPage.getByText('Rp45.000')).toBeVisible(DB_TIMEOUT);
         await expect(memberPage.getByText('Owner Pengeluaran').first()).toBeVisible();
         // docs/09-screen-specs.md §13's exact meta row: payer name AND
@@ -240,12 +293,18 @@ test.describe('sharing & privacy — two-context flows', () => {
 
     const owner = await seedSessionUser({ onboarded: true, name: 'Owner Massal' });
     const ownerContext = await browser.newContext({ baseURL });
+    await suppressDevOverlay(ownerContext);
 
     try {
       await setSessionCookie(ownerContext, owner.sessionToken);
       const page = await ownerContext.newPage();
+      // See the equivalent comment above (test 2 in this file) — the
+      // "Tambah transaksi" accessible name this test clicks below only
+      // exists below the `lg:` desktop breakpoint.
+      await page.setViewportSize({ width: 390, height: 844 });
 
       await page.goto('/household/new');
+      await waitForDomToSettle(page);
       await page.getByLabel('Nama keluarga').fill('Keluarga Massal');
       await page.getByRole('button', { name: 'Buat Keluarga' }).click();
       await expect(page).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
@@ -286,7 +345,14 @@ test.describe('sharing & privacy — two-context flows', () => {
         await expect(confirmDialog).toBeVisible();
         await confirmDialog.getByRole('button', { name: 'Tandai', exact: true }).click();
 
-        await expect(page.getByText('2 transaksi ditandai ke Keluarga Massal')).toBeVisible(DB_TIMEOUT);
+        // `exact: true` — same reasoning as the `Tersimpan` toast assertions
+        // above (this file's own established pattern): the toast's
+        // aria-live mirror renders "Notification 2 transaksi ditandai ke
+        // Keluarga Massal…", which substring-matches this locator too
+        // without `exact`.
+        await expect(page.getByText('2 transaksi ditandai ke Keluarga Massal', { exact: true })).toBeVisible(
+          DB_TIMEOUT,
+        );
 
         const taggedCount = await dbWrite
           .select({ id: transactions.id })
@@ -322,6 +388,9 @@ test.describe('sharing & privacy — two-context flows', () => {
     const memberContext = await browser.newContext({ baseURL });
     const ownerAContext = await browser.newContext({ baseURL });
     const ownerBContext = await browser.newContext({ baseURL });
+    await suppressDevOverlay(memberContext);
+    await suppressDevOverlay(ownerAContext);
+    await suppressDevOverlay(ownerBContext);
 
     try {
       await setSessionCookie(memberContext, member.sessionToken);
@@ -332,12 +401,14 @@ test.describe('sharing & privacy — two-context flows', () => {
       const ownerBPage = await ownerBContext.newPage();
 
       await ownerAPage.goto('/household/new');
+      await waitForDomToSettle(ownerAPage);
       await ownerAPage.getByLabel('Nama keluarga').fill('Keluarga Alpha');
       await ownerAPage.getByRole('button', { name: 'Buat Keluarga' }).click();
       await expect(ownerAPage).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
       const householdA = ownerAPage.url().split('/household/')[1]!.split(/[/?]/)[0]!;
 
       await ownerBPage.goto('/household/new');
+      await waitForDomToSettle(ownerBPage);
       await ownerBPage.getByLabel('Nama keluarga').fill('Keluarga Beta');
       await ownerBPage.getByRole('button', { name: 'Buat Keluarga' }).click();
       await expect(ownerBPage).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);

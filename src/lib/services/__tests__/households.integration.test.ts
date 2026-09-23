@@ -61,6 +61,7 @@ describe('households service', () => {
     });
   });
 
+  // I16: every active household has exactly one active owner.
   describe('hm_single_owner_idx', () => {
     it('rejects a second active owner row for the same household, independent of application code', async () => {
       const userId = await createTestUser();

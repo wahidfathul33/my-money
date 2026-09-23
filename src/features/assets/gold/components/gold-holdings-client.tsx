@@ -106,7 +106,7 @@ export function GoldHoldingsClient({
             </>
           ) : (
             <div className="flex flex-col items-center gap-3 pt-2">
-              <p className="text-text-subtle text-body">Nilai belum tersedia</p>
+              <p className="text-text-muted text-body">Nilai belum tersedia</p>
               <Button size="sm" onClick={() => setPriceOpen(true)}>
                 Masukkan harga saat ini
               </Button>

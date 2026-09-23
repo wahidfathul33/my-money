@@ -187,12 +187,12 @@ function CategoryListRow({
         <div className="flex items-center gap-2">
           <span className="text-text truncate text-sm font-medium">{category.name}</span>
           {isBuiltIn && (
-            <span className="bg-surface-raised text-text-subtle rounded-chip px-2 py-0.5 text-xs">
+            <span className="bg-surface-raised text-text-muted rounded-chip px-2 py-0.5 text-xs">
               Bawaan
             </span>
           )}
           {category.isArchived && (
-            <span className="bg-surface-raised text-text-subtle rounded-chip px-2 py-0.5 text-xs">
+            <span className="bg-surface-raised text-text-muted rounded-chip px-2 py-0.5 text-xs">
               Diarsipkan
             </span>
           )}

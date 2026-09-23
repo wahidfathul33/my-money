@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireUser } from '@/lib/auth/require-user';
 import { requireHouseholdAccess } from '@/lib/services/households';
 import { NotFoundError, UnauthenticatedError } from '@/lib/api/errors';
+import { checkRateLimit } from '@/lib/api/rate-limit';
 import { serializeMoney } from '@/lib/finance/money';
 import {
   listHouseholdTransactionsPage,
@@ -27,6 +28,8 @@ import {
  * `member` this route started with, so a client following the documented
  * contract literally still works.
  */
+
+const RATE_LIMIT = { windowMs: 60_000, max: 60 };
 
 const querySchema = z.object({
   cursor: z.string().trim().min(1).optional(),
@@ -78,6 +81,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return errorResponse('NOT_A_MEMBER', err.message, 404);
     }
     throw err;
+  }
+
+  const { allowed } = checkRateLimit(`households-transactions:${userId}`, RATE_LIMIT);
+  if (!allowed) {
+    return errorResponse('RATE_LIMITED', 'Terlalu banyak permintaan. Coba lagi sebentar lagi.', 429);
   }
 
   const rawParams = Object.fromEntries(new URL(request.url).searchParams);

@@ -247,7 +247,15 @@ export function computeSale(lots: GoldLotForSale[], gramsSold: Grams, pricePerGr
   const byRemainderDesc = [...shares].sort((a, b) => (a.remainder < b.remainder ? 1 : a.remainder > b.remainder ? -1 : 0));
   for (const s of byRemainderDesc) {
     if (leftover <= 0n) break;
-    reduceBy.set(s.lotId, (reduceBy.get(s.lotId) ?? 0n) + 1n);
+    // Non-null assertion, not `?? 0n`: `reduceBy` was just built from
+    // `shares.map(s => [s.lotId, s.floor])` two lines above, in this same
+    // function call, so `s.lotId` (itself drawn from `shares`) is
+    // structurally guaranteed present — same "we just built this Map from
+    // the same key domain" reasoning as ledger.ts's `ownerByWallet.get(walletId)!`.
+    // An `?? 0n` fallback here would be unreachable dead code, not defense
+    // in depth — TypeScript's `Map.get()` signature just can't express
+    // "these keys are known to exist" on its own.
+    reduceBy.set(s.lotId, reduceBy.get(s.lotId)! + 1n);
     leftover -= 1n;
   }
 
@@ -255,7 +263,9 @@ export function computeSale(lots: GoldLotForSale[], gramsSold: Grams, pricePerGr
     proceeds,
     costBasis,
     realizedGain,
-    reductions: lots.map((lot) => ({ lotId: lot.id, reduceBy: reduceBy.get(lot.id) ?? 0n })),
+    // Same reasoning as above: `reduceBy`'s keys are exactly `shares`'
+    // lotIds, which are exactly `lots`' ids (`shares = lots.map(...)`).
+    reductions: lots.map((lot) => ({ lotId: lot.id, reduceBy: reduceBy.get(lot.id)! })),
   };
 }
 

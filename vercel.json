@@ -17,6 +17,14 @@
     {
       "path": "/api/cron/gold-price",
       "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/cron/reconcile",
+      "schedule": "0 20 * * *"
+    },
+    {
+      "path": "/api/cron/net-worth-snapshot",
+      "schedule": "55 16 * * *"
     }
   ]
 }

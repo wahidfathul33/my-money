@@ -535,6 +535,9 @@ describe('transactions service', () => {
         expect(row.householdId).toBe(household);
       });
 
+      // I15: tagging is refused unless the caller is an active member at the
+      // moment of tagging (see src/lib/auth/__tests__/require-household.integration.test.ts's
+      // "a 'removed' membership is rejected" for the status-flip case).
       it("rejects tagging to a household the caller is NOT an active member of — 'household yang bukan miliknya ditolak', and rolls back the whole write", async () => {
         const owner = await createTestUser();
         const stranger = await createTestUser();

@@ -17,7 +17,7 @@ export function TopCategoriesSection({ items }: { items: TopCategoryComparison[]
         {items.map((item, index) => (
           <Card key={item.categoryId} className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="text-text-subtle w-4 shrink-0 text-xs font-semibold">{index + 1}</span>
+              <span className="text-text-muted w-4 shrink-0 text-xs font-semibold">{index + 1}</span>
               <span className="text-text truncate text-sm">{item.name}</span>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-0.5">

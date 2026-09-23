@@ -88,7 +88,11 @@ test.describe('authentication', () => {
       await expect(page).toHaveURL(/\/onboarding/);
 
       await page.getByLabel('Nama dompet').fill('BCA');
-      await page.getByLabel('Jenis dompet').selectOption('bank');
+      // `Jenis dompet` is the shared Radix Select (src/components/ui/select.tsx),
+      // not a native <select> — click-trigger-then-click-option, same
+      // pattern as e2e/wallets.spec.ts's own "Jenis dompet" interaction.
+      await page.getByRole('combobox', { name: 'Jenis dompet' }).click();
+      await page.getByRole('option', { name: 'Bank' }).click();
       await page.getByLabel('Saldo saat ini (Rp)').fill('150000');
       await page.getByRole('button', { name: 'Lanjutkan' }).click();
 

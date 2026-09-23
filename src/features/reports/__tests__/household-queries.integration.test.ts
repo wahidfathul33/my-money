@@ -102,6 +102,10 @@ describe('reports household queries', () => {
     }
   });
 
+  // I14: a transaction counts at most once in one household aggregation.
+  // This describe block's tests each sum two different members' transactions
+  // to an EXACT expected total (never doubled, never dropped) across two
+  // different aggregation shapes (byCategory here, byMember below).
   describe('getHouseholdSummary — byCategory', () => {
     it('groups built-in categories by system_key EXACTLY, across members, even after a rename', async () => {
       const ownerId = await createTestUser();

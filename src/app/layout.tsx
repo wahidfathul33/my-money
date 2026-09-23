@@ -1,3 +1,5 @@
+import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import type { ReactNode } from 'react';
@@ -55,6 +57,14 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
             need to. */}
         <ToastProvider>{children}</ToastProvider>
         <ServiceWorkerRegistration />
+        {/* Privacy mode by default — no cookies, no cross-site tracking, no
+            custom event payloads anywhere in this codebase (grep confirms
+            no `track()` call sites), so there's nothing here that could
+            carry a name or an amount. Both are inert until this app is
+            actually served from Vercel (docs/13-deployment-vercel.md §9) —
+            they no-op in this local/dev worktree. */}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

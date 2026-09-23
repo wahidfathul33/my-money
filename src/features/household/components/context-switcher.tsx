@@ -66,7 +66,7 @@ export function ContextSwitcher({ households, variant, unacknowledgedCount = 0 }
       <SheetContent variant={variant === 'mobile' ? 'bottom' : 'center'} title="Ganti konteks">
         <ul className="flex flex-col gap-1">
           <li>
-            <p className="text-text-subtle px-2 pt-2 pb-1 text-xs font-semibold tracking-wide uppercase">
+            <p className="text-text-muted px-2 pt-2 pb-1 text-xs font-semibold tracking-wide uppercase">
               Pribadi
             </p>
             <SheetClose asChild>
@@ -85,7 +85,7 @@ export function ContextSwitcher({ households, variant, unacknowledgedCount = 0 }
           </li>
 
           <li>
-            <p className="text-text-subtle px-2 pt-3 pb-1 text-xs font-semibold tracking-wide uppercase">
+            <p className="text-text-muted px-2 pt-3 pb-1 text-xs font-semibold tracking-wide uppercase">
               Keluarga
             </p>
             <ul className="flex flex-col gap-1">

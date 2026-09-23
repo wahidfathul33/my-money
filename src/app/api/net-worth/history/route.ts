@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/require-user';
 import { UnauthenticatedError } from '@/lib/api/errors';
+import { checkRateLimit } from '@/lib/api/rate-limit';
 import { serializeMoney } from '@/lib/finance/money';
 import { getNetWorthHistory, type NetWorthSnapshotPoint } from '@/features/net-worth/queries';
 
@@ -13,6 +14,8 @@ import { getNetWorthHistory, type NetWorthSnapshotPoint } from '@/features/net-w
  * (src/features/net-worth/queries.ts's `getNetWorthHistory`) — never
  * recomputed live, since the whole point is a POINT-IN-TIME series.
  */
+
+const RATE_LIMIT = { windowMs: 60_000, max: 60 };
 
 const querySchema = z.object({ range: z.enum(['3m', '6m', '1y', 'all']).default('all') });
 
@@ -40,6 +43,11 @@ export async function GET(request: NextRequest) {
       return errorResponse('UNAUTHENTICATED', err.message, 401);
     }
     throw err;
+  }
+
+  const { allowed } = checkRateLimit(`net-worth-history:${userId}`, RATE_LIMIT);
+  if (!allowed) {
+    return errorResponse('RATE_LIMITED', 'Terlalu banyak permintaan. Coba lagi sebentar lagi.', 429);
   }
 
   const rawParams = Object.fromEntries(new URL(request.url).searchParams);

@@ -1,3 +1,4 @@
+import { auditRouteA11y } from './helpers/a11y-check';
 import { expect, test } from './fixtures/authenticated';
 
 /**
@@ -139,5 +140,13 @@ test.describe('Gold holdings', () => {
 
     await expect(sellSheet.getByText('Melebihi kepemilikan emas Anda')).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Konfirmasi penjualan emas' })).not.toBeVisible();
+  });
+
+  // /wealth/assets/gold has no overflow or axe coverage anywhere
+  // (tasks/23-hardening-and-launch's route audit). No lot yet is a real,
+  // reachable state (the empty-state CTA) — no need to buy gold first.
+  test('/wealth/assets/gold — tanpa horizontal overflow, axe nol pelanggaran', async ({ page }) => {
+    test.setTimeout(60_000);
+    await auditRouteA11y(page, '/wealth/assets/gold');
   });
 });

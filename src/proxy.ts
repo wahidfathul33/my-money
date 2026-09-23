@@ -26,5 +26,16 @@ export const config = {
   // list (`api/auth`, `api/cron`, `signin`, `invite`) — it's task 01's
   // design-system showcase page: no user data, no auth surface, and its own
   // e2e suite (e2e/kitchen-sink.spec.ts) depends on unauthenticated access.
-  matcher: ['/((?!api/auth|api/cron|signin|invite|kitchen-sink|_next|favicon.ico).*)'],
+  //
+  // `api/health` (task 23, docs/13-deployment-vercel.md §9) is excluded for
+  // the same reason as `api/cron`: an external uptime checker carries no
+  // user session and can't be made to. It reports only `{ status, db }`
+  // regardless — see src/app/api/health/route.ts's own doc comment.
+  //
+  // `privacy`/`terms` (task 23, "Audit Legal") must be readable before
+  // sign-in — src/app/(auth)/signin/page.tsx links both from its own
+  // unauthenticated screen.
+  matcher: [
+    '/((?!api/auth|api/cron|api/health|signin|invite|privacy|terms|kitchen-sink|_next|favicon.ico).*)',
+  ],
 };

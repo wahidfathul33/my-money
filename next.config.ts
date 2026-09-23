@@ -1,9 +1,17 @@
+import { withSentryConfig } from '@sentry/nextjs/config';
 import type { NextConfig } from 'next';
 
 // Security headers — docs/12-security-and-auth.md §12. `Referrer-Policy`
 // matters specifically because of invitation links (task 10): without it, a
 // token embedded in a URL can leak via the `Referer` header when the
 // recipient clicks an outbound link from the invitation page.
+//
+// `connect-src` carries two task-23 additions beyond docs/12 §12's original
+// list: Sentry's ingest endpoint (error/session reporting — no-ops today
+// since NEXT_PUBLIC_SENTRY_DSN is unset, see src/lib/observability/sentry.ts)
+// and Vercel's Web Vitals beacon for Speed Insights/Analytics. Both are
+// inert without a deployed Vercel/Sentry project; they're here now so
+// nothing needs touching at deploy time.
 const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -17,7 +25,7 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https://lh3.googleusercontent.com",
-      "connect-src 'self'",
+      "connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://vitals.vercel-insights.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -42,4 +50,22 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// `withSentryConfig` wires source-map upload at build time — inert without
+// `SENTRY_AUTH_TOKEN` (it logs a notice and skips upload, it does not fail
+// the build; verified locally via `npm run build`). `org`/`project` are
+// intentionally read from optional env vars rather than hardcoded: this
+// environment has no Sentry project, so there is nothing real to name yet.
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: true,
+  widenClientFileUpload: false,
+  // `disableLogger` is deprecated (SDK warning: "Use webpack.treeshake.removeDebugLogging
+  // instead") — but that replacement is explicitly "Not supported with
+  // Turbopack" too, per the same warning, and this project runs Turbopack
+  // (`next dev`/`next build`, no `--webpack` flag). Neither option does
+  // anything here, so dropped rather than swapped for an equally-inert
+  // replacement — this is a minor Sentry-SDK-internal bundle trim, not
+  // behavior anything depends on.
+});

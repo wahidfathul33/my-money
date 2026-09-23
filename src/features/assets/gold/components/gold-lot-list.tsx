@@ -59,7 +59,7 @@ function GoldLotRow({ lot }: { lot: GoldLotClientData }) {
           </span>
         </div>
       ) : (
-        <p className="text-text-subtle text-xs">Nilai belum tersedia — masukkan harga saat ini</p>
+        <p className="text-text-muted text-xs">Nilai belum tersedia — masukkan harga saat ini</p>
       )}
     </Card>
   );

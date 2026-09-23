@@ -61,7 +61,7 @@ export function DepositDetailClient({ deposit, wallets }: DepositDetailClientPro
             <span className="text-text-muted text-sm">{STATUS_LABEL[deposit.status]}</span>
           </div>
           {deposit.rolledFromId && (
-            <span className="bg-surface-raised text-text-subtle shrink-0 rounded-full px-2 py-0.5 text-xs">ARO</span>
+            <span className="bg-surface-raised text-text-muted shrink-0 rounded-full px-2 py-0.5 text-xs">ARO</span>
           )}
         </div>
 
@@ -105,7 +105,7 @@ export function DepositDetailClient({ deposit, wallets }: DepositDetailClientPro
           <span className="text-text-muted text-sm">Estimasi bunga bersih</span>
           <div className="flex flex-col items-end">
             <MoneyText amount={estimate} tone="neutral" size="md" />
-            <span className="text-text-subtle text-xs">{interestEstimateLabel(deposit.taxRate)}</span>
+            <span className="text-text-muted text-xs">{interestEstimateLabel(deposit.taxRate)}</span>
           </div>
         </div>
 

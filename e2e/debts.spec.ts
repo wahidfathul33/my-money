@@ -1,3 +1,4 @@
+import { auditRouteA11y } from './helpers/a11y-check';
 import { expect, test } from './fixtures/authenticated';
 
 /**
@@ -144,5 +145,13 @@ test.describe('Debts & receivables', () => {
     await expect(paySheet.getByText(/Rp100\.000/)).toBeVisible();
     // Rejected — the sheet stays open, nothing was recorded.
     await expect(paySheet).toBeVisible();
+  });
+
+  // /wealth/debts has no overflow or axe coverage anywhere
+  // (tasks/23-hardening-and-launch's route audit). Empty state is a real,
+  // reachable state — no debt needs to exist first.
+  test('/wealth/debts — tanpa horizontal overflow, axe nol pelanggaran', async ({ page }) => {
+    test.setTimeout(60_000);
+    await auditRouteA11y(page, '/wealth/debts');
   });
 });

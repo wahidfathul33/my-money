@@ -1,3 +1,4 @@
+import { checkAxeCleanAtEveryColorScheme, checkNoHorizontalOverflow } from './helpers/a11y-check';
 import { expect, test } from './fixtures/authenticated';
 
 /**
@@ -130,5 +131,31 @@ test.describe('Savings goals', () => {
     await expect(
       withdrawSheet.getByText('Anda belum memiliki kontribusi pada target ini untuk ditarik.'),
     ).toBeVisible();
+  });
+
+  // Neither /wealth/savings nor its [id] detail page has overflow or axe
+  // coverage anywhere (tasks/23-hardening-and-launch's route audit). The
+  // list page is auditable empty; the detail page needs one real goal.
+  test('/wealth/savings dan halaman detail — tanpa horizontal overflow, axe nol pelanggaran', async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+
+    await checkNoHorizontalOverflow(page, '/wealth/savings');
+    await checkAxeCleanAtEveryColorScheme(page, '/wealth/savings');
+
+    await page.getByRole('button', { name: 'Buat target' }).click();
+    const createSheet = page.getByRole('dialog', { name: 'Target tabungan baru' });
+    await createSheet.getByLabel('Nama target').fill('Target Audit');
+    await createSheet.getByLabel('Target (Rp)').fill('1000000');
+    await createSheet.getByRole('button', { name: 'Buat target' }).click();
+    await expect(createSheet).not.toBeVisible(DB_TIMEOUT);
+
+    await page.getByRole('link', { name: /Target Audit/ }).click();
+    await expect(page).toHaveURL(/\/wealth\/savings\/[^/]+$/, DB_TIMEOUT);
+    const detailUrl = page.url();
+
+    await checkNoHorizontalOverflow(page, detailUrl);
+    await checkAxeCleanAtEveryColorScheme(page, detailUrl);
   });
 });

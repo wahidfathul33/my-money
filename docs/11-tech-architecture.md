@@ -5,7 +5,7 @@
 | Lapisan | Pilihan | Catatan |
 |---------|---------|---------|
 | Framework | **Next.js (App Router)** `16.3.4` | Dipin eksak saat bootstrap (task 00) |
-| Bahasa | **TypeScript** `7.0.2`, `strict: true` | `noUncheckedIndexedAccess` juga aktif |
+| Bahasa | **TypeScript** `6.0.3`, `strict: true` | `noUncheckedIndexedAccess` juga aktif |
 | Styling | **Tailwind CSS v4** `4.1.11` | Token via `@theme`, lihat [07](07-design-system.md) |
 | Primitif UI | **Radix UI** | Aksesibel secara bawaan; ditambahkan di task 01 |
 | Ikon | **lucide-react** | Ditambahkan di task 01 |
@@ -14,13 +14,15 @@
 | Auth | **Auth.js v5** + Drizzle adapter | Ditambahkan di task 04 |
 | Validasi | **Zod** | Batas Server Action + parsing env; ditambahkan saat modul pertama membutuhkannya |
 | Chart | **Recharts** | Cukup ringan; hanya dimuat di rute laporan; ditambahkan di task laporan |
-| Form | **react-hook-form** | Hanya untuk form panjang; form pendek pakai Server Action langsung |
-| Data klien | **SWR** | Hanya untuk daftar inkremental |
+| Form | Native (`useState`/`useFormStatus`) | Server Action langsung; tidak jadi memakai react-hook-form — lihat catatan di bawah |
+| Data klien | Hand-rolled (`fetch` + `useState`) | `IntersectionObserver` untuk infinite scroll; tidak jadi memakai SWR — lihat catatan di bawah |
 | Test | **Vitest** `4.1.11` + **Playwright** `1.62.1` + **fast-check** | fast-check ditambahkan saat modul `lib/finance` pertama ditulis |
-| Lint/format | **ESLint** `10.9.1` + **Prettier** `3.9.6` | `eslint-config-next` `16.3.4`, `prettier-plugin-tailwindcss` |
+| Lint/format | **ESLint** `9.39.5` + **Prettier** `3.9.6` | `eslint-config-next` `16.3.4`, `prettier-plugin-tailwindcss` |
 | Deploy | **Vercel** | Region `sin1` |
 
 React dipin di `19.2.8` (mengikuti versi yang didukung Next.js 16). Versi persis tercatat di `package.json`; tabel ini hanya ringkasan.
+
+**react-hook-form dan SWR tidak jadi ditambahkan.** Keduanya direncanakan di dokumen ini sejak awal, tetapi tidak satu pun modul yang dibangun sepanjang task 01–22 butuh keduanya secara nyata: form panjang tetap cukup ditangani `useState` + `useFormStatus` di atas Server Action, dan infinite scroll transaksi (`src/features/transactions/components/transaction-list.tsx`) memakai `IntersectionObserver` + `fetch` + `useState` buatan sendiri. Bukan bagian dari `package.json`.
 
 **Bukan bagian dari stack, dan itu disengaja:** state manager global (Redux/Zustand) — Server Component ditambah URL state sudah menutupi kebutuhan; menambah store global akan menciptakan sumber kebenaran kedua yang bisa menyimpang dari database.
 
@@ -87,7 +89,7 @@ src/
 │   │   ├── components/
 │   │   └── hooks/
 │   ├── wallets/  categories/  budgets/  savings/
-│   ├── assets/   debts/       reports/  net-worth/
+│   ├── assets/   obligations/ reports/  net-worth/
 │   ├── transfers/                    ← transfer sendiri + antar anggota
 │   ├── household/                    ← household, keanggotaan, undangan
 │   └── sharing/                      ← share_wealth, exclude_from_household
@@ -107,6 +109,8 @@ src/
 │   │   ├── deposit.ts
 │   │   ├── budget.ts
 │   │   ├── savings.ts
+│   │   ├── obligation.ts             ← hutang & piutang
+│   │   ├── report-aggregation.ts
 │   │   └── transfer.ts               ← bentuk entry & efek ledger
 │   ├── services/                     ← orkestrasi: transaksi DB + aturan bisnis
 │   ├── auth/
@@ -173,7 +177,7 @@ Empat jenis state, empat mekanisme berbeda:
 | State server (kebenaran DB) | Server Component + `revalidatePath` | Saldo, transaksi, net worth |
 | State URL (bisa dibagikan) | `useSearchParams` + `router.replace` | Filter, periode, tab |
 | State UI lokal | `useState` | Sheet terbuka, isi keypad |
-| Cache klien (daftar inkremental) | SWR | Halaman berikutnya transaksi |
+| Cache klien (daftar inkremental) | `fetch` + `useState` (hand-rolled) | Halaman berikutnya transaksi — lihat §1 |
 
 **Tidak ada store global.** Kalau muncul kebutuhan berbagi state antar rute yang berjauhan, itu sinyal bahwa datanya seharusnya berasal dari server.
 
@@ -185,7 +189,7 @@ Potongan ini adalah standar yang dijadikan acuan review.
 // src/lib/services/transactions.ts
 import { and, eq } from 'drizzle-orm'
 import { dbWrite } from '@/lib/db/write'
-import { transactions, categories, dompet } from '@/lib/db/schema'
+import { transactions, categories, wallets } from '@/lib/db/schema'
 import { postEntries } from '@/lib/finance/ledger'
 import { NotFoundError, ValidationError } from '@/lib/api/errors'
 import type { Money } from '@/lib/finance/money'
@@ -219,10 +223,10 @@ export async function createTransaction(input: CreateTransactionInput) {
       throw new ValidationError({ categoryId: ['Kategori tidak cocok dengan jenis transaksi'] })
     }
 
-    const [dompet] = await tx.select().from(dompet)
+    const [wallet] = await tx.select().from(wallets)
       .where(and(eq(wallets.id, walletId), eq(wallets.userId, userId)))
       .limit(1)
-    if (!dompet) throw new NotFoundError('Dompet tidak ditemukan')
+    if (!wallet) throw new NotFoundError('Dompet tidak ditemukan')
 
     const [created] = await tx.insert(transactions).values({
       id: uuidv7(),
@@ -287,16 +291,19 @@ const serverSchema = z.object({
   DATABASE_URL_UNPOOLED: z.string().url(),
   AUTH_SECRET:           z.string().min(32),
   AUTH_URL:              z.string().url().optional(),  // opsional: disimpulkan Vercel
-  AUTH_GOOGLE_ID:        z.string().min(1),
-  AUTH_GOOGLE_SECRET:    z.string().min(1),
+  GOOGLE_CLIENT_ID:      z.string().min(1),
+  GOOGLE_CLIENT_SECRET:  z.string().min(1),
   CRON_SECRET:           z.string().min(32),
-  RESEND_API_KEY:        z.string().min(1),          // email undangan & magic link
+  SMTP_HOST:             z.string().min(1),           // transport magic-link & email undangan
+  SMTP_PORT:             z.coerce.number().int().positive(),
+  SMTP_USER:             z.string().min(1),
+  SMTP_PASSWORD:         z.string().min(1),
+  RESEND_API_KEY:        z.string().optional(),       // disiapkan, belum dipakai — lihat src/lib/env.ts
   EMAIL_FROM:            z.string().email(),
   APP_URL:               z.string().url(),           // untuk membangun tautan undangan
   GOLD_PRICE_PROVIDER:   z.enum(['manual', 'external']).default('manual'),
   GOLD_PRICE_API_URL:    z.string().url().optional(),
   GOLD_PRICE_API_KEY:    z.string().optional(),
-  NODE_ENV:              z.enum(['development', 'test', 'production']),
 })
 
 export const env = serverSchema.parse(process.env)

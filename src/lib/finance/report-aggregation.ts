@@ -104,7 +104,15 @@ const SHORT_MONTH_FORMAT = new Intl.DateTimeFormat('id-ID', { month: 'short', ti
  */
 export function shortMonthLabel(period: string): string {
   const [year, month] = period.split('-').map(Number);
-  return SHORT_MONTH_FORMAT.format(new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, 1)));
+  // `year` is a non-null assertion, not `?? 1970`: `String.split` always
+  // returns at least one element for any input (including ''), so `year`
+  // is never actually undefined at runtime — only the TYPE checker can't
+  // prove that from a plain array destructure. `month`, by contrast,
+  // genuinely CAN be undefined — a `period` with no `-` at all (malformed
+  // caller input) yields a one-element split — so its `?? 1` fallback is a
+  // real, reachable defensive default (see this function's own test for
+  // that case), not dead code like `year`'s would be.
+  return SHORT_MONTH_FORMAT.format(new Date(Date.UTC(year!, (month ?? 1) - 1, 1)));
 }
 
 const MIN_HISTORY_DAYS = 7;

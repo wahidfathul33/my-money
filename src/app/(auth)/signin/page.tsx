@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { SignInForm } from './signin-form';
@@ -24,6 +25,17 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         </p>
       ) : null}
       <SignInForm callbackUrl={callbackUrl ?? '/'} />
+      <p className="text-text-muted mt-6 text-xs">
+        Dengan masuk, Anda menyetujui{' '}
+        <Link href="/terms" className="text-brand-readable underline">
+          Ketentuan Layanan
+        </Link>{' '}
+        dan{' '}
+        <Link href="/privacy" className="text-brand-readable underline">
+          Kebijakan Privasi
+        </Link>{' '}
+        kami.
+      </p>
     </main>
   );
 }

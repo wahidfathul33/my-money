@@ -30,8 +30,15 @@ export function fromRupiah(rupiah: number | string): Money {
   const unsigned = negative ? raw.trim().slice(1) : raw.trim();
 
   const [whole = '0', frac = ''] = unsigned.split('.');
+  // `whole` can be an empty string (falsy, not undefined) for a leading-dot
+  // input like ".5" — split('.') on that yields ['', '5'], which the
+  // destructuring default above doesn't catch (it only covers a MISSING
+  // array element, not an empty one) — hence the explicit `|| '0'` here.
+  // `cents` never needs the same treatment: `(frac + '00').slice(0, 2)` is
+  // always exactly 2 characters (frac.length + 2 >= 2), so it can never be
+  // empty/falsy — no fallback needed.
   const cents = (frac + '00').slice(0, 2);
-  const magnitude = BigInt(whole || '0') * MINOR_UNITS + BigInt(cents || '0');
+  const magnitude = BigInt(whole || '0') * MINOR_UNITS + BigInt(cents);
 
   return negative ? -magnitude : magnitude;
 }

@@ -1,3 +1,4 @@
+import { checkAxeCleanAtEveryColorScheme, checkNoHorizontalOverflow } from './helpers/a11y-check';
 import { expect, test } from './fixtures/authenticated';
 
 /**
@@ -79,5 +80,22 @@ test.describe('Dompet', () => {
 
     await expect(sheet.getByRole('alert')).toBeVisible(DB_TIMEOUT);
     await expect(sheet).toBeVisible(); // Still open — the submission was rejected.
+  });
+
+  // /wallets/[id] has no overflow or axe coverage anywhere
+  // (tasks/23-hardening-and-launch's route audit). No need to create a
+  // wallet first — authedUserId already has the starter "Tunai" wallet
+  // (e2e/fixtures/authenticated.ts), so its own detail page is a real,
+  // reachable-by-every-user route.
+  test('/wallets/[id] — tanpa horizontal overflow, axe nol pelanggaran', async ({ page }) => {
+    test.setTimeout(90_000);
+
+    await page.goto('/wallets');
+    await page.getByRole('link', { name: /Tunai/ }).click();
+    await expect(page).toHaveURL(/\/wallets\/[^/]+$/, DB_TIMEOUT);
+    const detailUrl = page.url();
+
+    await checkNoHorizontalOverflow(page, detailUrl);
+    await checkAxeCleanAtEveryColorScheme(page, detailUrl);
   });
 });

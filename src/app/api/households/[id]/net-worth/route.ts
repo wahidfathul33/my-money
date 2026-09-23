@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { requireUser } from '@/lib/auth/require-user';
 import { requireHouseholdAccess } from '@/lib/services/households';
 import { NotFoundError, UnauthenticatedError } from '@/lib/api/errors';
+import { checkRateLimit } from '@/lib/api/rate-limit';
 import { serializeMoney } from '@/lib/finance/money';
 import { getHouseholdNetWorth } from '@/features/net-worth/queries';
 
@@ -26,6 +27,8 @@ import { getHouseholdNetWorth } from '@/features/net-worth/queries';
  * "doesn't exist" from "exists but you're not in it" would confirm a
  * guessed UUID belongs to someone else's household.
  */
+
+const RATE_LIMIT = { windowMs: 60_000, max: 60 };
 
 function errorResponse(code: string, message: string, status: number) {
   return NextResponse.json({ error: { code, message } }, { status });
@@ -52,6 +55,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return errorResponse('NOT_A_MEMBER', err.message, 404);
     }
     throw err;
+  }
+
+  const { allowed } = checkRateLimit(`households-net-worth:${userId}`, RATE_LIMIT);
+  if (!allowed) {
+    return errorResponse('RATE_LIMITED', 'Terlalu banyak permintaan. Coba lagi sebentar lagi.', 429);
   }
 
   try {

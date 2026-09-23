@@ -32,7 +32,7 @@ GitHub repo
     { "path": "/api/cron/deposit-maturity",   "schedule": "0 18 * * *" },
     { "path": "/api/cron/gold-price",         "schedule": "0 19 * * *" },
     { "path": "/api/cron/reconcile",          "schedule": "0 20 * * *" },
-    { "path": "/api/cron/expire-invitations", "schedule": "0 21 * * *" },
+    { "path": "/api/cron/expire-invitations", "schedule": "0 * * * *" },
     { "path": "/api/cron/net-worth-snapshot", "schedule": "55 16 * * *" }
   ]
 }
@@ -49,9 +49,9 @@ GitHub repo
 | `deposit-maturity` | `0 18 * * *` | 01:00 |
 | `gold-price` | `0 19 * * *` | 02:00 |
 | `reconcile` | `0 20 * * *` | 03:00 |
-| `expire-invitations` | `0 21 * * *` | 04:00 |
+| `expire-invitations` | `0 * * * *` | setiap jam |
 
-`expire-invitations` tidak menulis apa pun yang bersifat finansial — ia hanya mengubah status undangan. Urutannya terhadap `reconcile` tidak berpengaruh, dan menjalankannya berulang tidak dapat merusak saldo siapa pun.
+`expire-invitations` berjalan setiap jam, bukan sekali sehari seperti cron lain di tabel ini (task 11's implementasi — src/app/api/cron/expire-invitations/route.ts — memilih kadensi ini supaya undangan kedaluwarsa tak lama setelah batas 7 harinya lewat, bukan tertunda hingga hampir sehari). Ia tidak menulis apa pun yang bersifat finansial — hanya mengubah status undangan. Urutannya terhadap `reconcile` tidak berpengaruh, dan menjalankannya berulang tidak dapat merusak saldo siapa pun.
 
 > Kesalahan zona waktu di sini menghasilkan snapshot yang ditulis pada hari yang salah, dan grafik net worth yang bergeser satu hari. Konversi ini diverifikasi test.
 
@@ -67,10 +67,11 @@ Diatur di dashboard Vercel, terpisah per environment.
 | `DATABASE_URL_UNPOOLED` | ✓ | ✓ | ✓ | Direct, untuk migrasi |
 | `AUTH_SECRET` | ✓ | ✓ | ✓ | Berbeda per environment |
 | `AUTH_URL` | ✓ | auto | ✓ | |
-| `AUTH_GOOGLE_ID` | ✓ | ✓ | ✓ | |
-| `AUTH_GOOGLE_SECRET` | ✓ | ✓ | ✓ | |
+| `GOOGLE_CLIENT_ID` | ✓ | ✓ | ✓ | |
+| `GOOGLE_CLIENT_SECRET` | ✓ | ✓ | ✓ | |
 | `CRON_SECRET` | ✓ | ✓ | — | |
-| `RESEND_API_KEY` | ✓ | ✓ | ✓ | Email undangan & magic link |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | ✓ | ✓ | ✓ | Transport email undangan & magic link |
+| `RESEND_API_KEY` | opsional | opsional | opsional | Disiapkan, belum dipakai — lihat `src/lib/env.ts` |
 | `EMAIL_FROM` | ✓ | ✓ | ✓ | Domain terverifikasi (SPF + DKIM) |
 | `APP_URL` | ✓ | auto | ✓ | Basis tautan undangan |
 | `GOLD_PRICE_PROVIDER` | ✓ | ✓ | ✓ | `manual` \| `external` |
@@ -83,7 +84,7 @@ Diatur di dashboard Vercel, terpisah per environment.
 
 **Email undangan di preview.** `APP_URL` di preview harus menunjuk ke deployment preview itu sendiri, bukan ke produksi. Kalau tidak, undangan yang dibuat saat menguji preview akan mengirim tautan ke produksi, dan token yang dicarinya tidak ada di database produksi — kegagalan yang membingungkan karena semuanya tampak berfungsi sampai tautannya diklik.
 
-Di lingkungan preview, pengiriman email sebaiknya diarahkan ke inbox uji (Resend mendukung ini) daripada ke alamat sungguhan.
+Di lingkungan preview, pengiriman email sebaiknya diarahkan ke inbox uji (mis. akun SMTP terpisah) daripada ke alamat sungguhan.
 
 ## 4. Pipeline Build
 
@@ -97,6 +98,8 @@ Di lingkungan preview, pengiriman email sebaiknya diarahkan ke inbox uji (Resend
     "lint":           "eslint . --max-warnings=0",
     "lint:fix":       "eslint . --fix",
     "typecheck":      "tsc --noEmit",
+    "format":         "prettier --write .",
+    "format:check":   "prettier --check .",
     "test":           "vitest run",
     "test:watch":     "vitest",
     "test:coverage":  "vitest run --coverage",

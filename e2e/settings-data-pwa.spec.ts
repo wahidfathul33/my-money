@@ -38,6 +38,12 @@ test.describe('offline banner + blocked save', () => {
   });
 
   test('attempting to save a transaction while offline is blocked with a clear message, never silently queued', async ({ page }) => {
+    // "Tambah transaksi" is only the icon-rail sidebar button's accessible
+    // name (<1024px) — Desktop Chrome project's default 1280px viewport
+    // renders the wide sidebar's "+ Tambah" text button instead, so this
+    // locator would otherwise match nothing and time out (same root cause
+    // e2e/sharing.spec.ts hit — see its own comment on this exact issue).
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
     await page.getByRole('button', { name: 'Tambah transaksi' }).click();
     const sheet = page.getByRole('dialog', { name: 'Tambah transaksi' });

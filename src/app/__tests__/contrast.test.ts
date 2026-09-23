@@ -143,6 +143,30 @@ describe('warna turunan (BudgetBar) lolos AA', () => {
     expect(contrast('dark', 'warning', 'bg')).toBeGreaterThanOrEqual(TEXT_THRESHOLD);
     expect(contrast('dark', 'warning', 'surface')).toBeGreaterThanOrEqual(TEXT_THRESHOLD);
   });
+
+  /**
+   * Task 23: `--color-warning-subtle` was the only `-subtle` background
+   * token missing a dark-mode override (brand/positive/negative-subtle all
+   * have one) — in dark mode it silently stayed at light mode's 96% L,
+   * pairing with `.text-warning-readable`'s dark value (`--color-warning`,
+   * 72% L) at only 2.22:1. Caught by Lighthouse on
+   * src/components/layout/offline-banner.tsx's "Koneksi lambat…" banner
+   * (`bg-warning-subtle text-warning-readable`), not by this file's own
+   * pre-existing pairs — this token combination had never been curated
+   * here before. Locking in both modes now that globals.css has the fix.
+   */
+  it('.text-warning-readable di atas bg-warning-subtle lolos AA, kedua mode — OfflineBanner "Koneksi lambat"', () => {
+    // Light mode: `.text-warning-readable`'s actual rendered color is the
+    // override above (50% L), not the raw `--color-warning` token (72% L)
+    // — same reason the "di atas bg/surface/surface-raised" test above
+    // uses `lightWarningReadable` directly instead of the `contrast()`
+    // helper. Dark mode's override IS the raw token, so the helper applies
+    // there.
+    expect(wcagContrast(lightWarningReadable, tokens.light['warning-subtle']!)).toBeGreaterThanOrEqual(
+      TEXT_THRESHOLD,
+    );
+    expect(contrast('dark', 'warning', 'warning-subtle')).toBeGreaterThanOrEqual(TEXT_THRESHOLD);
+  });
 });
 
 /**

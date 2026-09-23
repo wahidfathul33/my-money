@@ -58,8 +58,21 @@ export default async function DashboardPage() {
   const greeting = `${greetingForHour(toLocalHour(now, tz))}, ${displayName}`;
 
   const headerAction = (
-    <Link href="/settings" aria-label="Pengaturan">
+    // No `aria-label` here: it would REPLACE the accessible name outright,
+    // and Avatar's visible fallback-initials text (e.g. "LA") is real
+    // rendered content a voice-control user can see and say — WCAG 2.5.3
+    // (Label in Name) requires the accessible name to actually contain
+    // whatever's visibly displayed, not just be hidden from it
+    // (`aria-hidden` was tried first here and doesn't help: it only
+    // affects the screen-reader tree, not what's on screen, so the
+    // mismatch Lighthouse flags is unchanged by it). Letting the Link's
+    // name be computed from its content instead — the visible fallback
+    // text (or the image's own `alt={name}`) plus this sr-only suffix —
+    // means "LA Pengaturan" always contains "LA", satisfying 2.5.3, while
+    // still telling screen reader users where the link goes.
+    <Link href="/settings">
       <Avatar src={user.image ?? undefined} name={displayName} />
+      <span className="sr-only">Pengaturan</span>
     </Link>
   );
 

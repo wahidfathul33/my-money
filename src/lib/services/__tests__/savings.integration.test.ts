@@ -469,6 +469,13 @@ describe('savings service', () => {
     });
   });
 
+  // I5: every savings contribution has a non-null ledger_entry_id whose
+  // amount is opposite in sign and equal in magnitude — the NOT NULL
+  // constraint here, plus the sign/magnitude checks in 'contribute' and
+  // 'withdraw' above (e.g. "writes a ledger_entries row ... whose id becomes
+  // the contribution's ledger_entry_id" and "writes a ledger_entries row
+  // (source=savings_withdrawal) with a positive amount into the withdrawer
+  // wallet"), together prove it end to end.
   describe('the DB constraint itself (ledger_entry_id NOT NULL)', () => {
     it('rejects a raw INSERT of a savings_contributions row with a NULL ledger_entry_id, independent of application code', async () => {
       const userId = await createTestUser();
@@ -842,6 +849,7 @@ describe('savings service', () => {
   });
 
   describe('reconciliation', () => {
+    // I3: savings_goal.current_amount = SUM(savings_contributions.amount WHERE voided_at IS NULL).
     it('current_amount always equals SUM(non-void savings_contributions.amount) after a sequence of contribute/withdraw', async () => {
       const userId = await createTestUser();
       userIds.push(userId);

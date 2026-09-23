@@ -414,33 +414,41 @@ Playwright, viewport mobile (Pixel 5) sebagai target utama.
 Skenario 16–26 memerlukan **dua sesi browser** dalam satu test. Playwright menanganinya lewat dua `browserContext` terpisah:
 
 ```ts
-test('mencatat transfer tidak menyentuh saldo lawan sampai ia mencatatnya', async ({ browser }) => {
-  const wahid = await browser.newContext({ storageState: 'e2e/.auth/wahid.json' })
-  const istri = await browser.newContext({ storageState: 'e2e/.auth/istri.json' })
+// Contoh diringkas dari e2e/transfers-member.spec.ts — lihat file itu untuk
+// versi lengkap (seed household, viewport, penanganan dialog konfirmasi).
+test('mencatat transfer ke anggota -> kedua saldo langsung benar -> muncul di Aktivitas penerima', async ({ browser }) => {
+  const senderContext = await browser.newContext({ baseURL })
+  const receiverContext = await browser.newContext({ baseURL })
+  await setSessionCookie(senderContext, sender.sessionToken)
+  await setSessionCookie(receiverContext, receiver.sessionToken)
 
-  const pageW = await wahid.newPage()
-  const pageI = await istri.newPage()
+  const senderPage = await senderContext.newPage()
+  const receiverPage = await receiverContext.newPage()
 
-  await pageW.goto('/')
-  // … catat transfer Rp1.000.000 ke Istri (memilih ORANG, bukan dompet)
-  await expect(pageW.getByText('Menunggu dicatat Istri')).toBeVisible()
+  // Pengirim mencatat transfer Rp1.000.000 ke Istri (memilih ORANG, lalu
+  // dompet tujuannya) dan mengonfirmasi — ADR-030: satu pencatatan menulis
+  // KEDUA sisi sekaligus, dalam satu DB transaction. Tidak ada status
+  // "menunggu" di sisi manapun.
+  await senderPage.goto('/')
+  // … alur Tambah transaksi -> tab Transfer -> Ke anggota keluarga -> Istri -> Tunai -> Simpan -> Catat
 
-  // Saldo Istri belum berubah sama sekali
-  await pageI.goto('/wallets')
-  await expect(pageI.getByTestId('wallet-bri-balance')).toHaveText('Rp5.000.000')
+  // Kedua saldo sudah benar SEKETIKA, dibaca dari DUA SESI independen.
+  await expect(senderPage.getByRole('link', { name: /Tunai/ })).toContainText('−Rp1.000.000')
+  await expect(receiverPage.getByRole('link', { name: /Tunai/ })).toContainText('Rp1.000.000')
 
-  await pageI.goto('/activity')
-  await expect(pageI.getByText('Wahid mencatat transfer')).toBeVisible()
-  await pageI.getByRole('button', { name: 'Catat' }).click()
-  await pageI.getByRole('button', { name: 'BRI' }).click()      // Istri pilih wallet-nya
-  await pageI.getByRole('button', { name: 'Simpan' }).click()
-
-  await pageI.goto('/wallets')
-  await expect(pageI.getByTestId('wallet-bri-balance')).toHaveText('Rp6.000.000')
+  // Penerima DIBERI TAHU lewat Aktivitas — bukan dimintai persetujuan
+  // (docs/03-domain-model.md §9.3). "Oke" hanya menghilangkan badge
+  // "belum ditinjau"; saldonya sudah berubah sebelum penerima membuka
+  // halaman ini sama sekali.
+  await receiverPage.goto('/activity')
+  await expect(receiverPage.getByText('Suami E2E mencatat')).toBeVisible()
+  await expect(receiverPage.getByText('+Rp1.000.000')).toBeVisible()
 })
 ```
 
 Menjalankan dua konteks memang lebih lambat, tetapi tidak ada cara lain menguji jaminan terpenting fitur ini di lapisan UI dan otorisasi sekaligus.
+
+**Kedaulatan penerima (skenario 20)** bukan berarti transfer masuk menunggu tindakannya — uangnya sudah pindah. Yang dapat dilakukan penerima setelahnya adalah memindahkan entri masuk itu ke dompet lain, atau menghapusnya sepihak (`e2e/transfers-member.spec.ts`'s kedua test) — tindakan atas entrinya sendiri, bukan syarat agar entrinya berlaku.
 
 ```ts
 // e2e/record-expense.spec.ts

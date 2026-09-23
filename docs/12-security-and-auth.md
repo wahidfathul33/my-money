@@ -253,7 +253,7 @@ export async function GET(request: Request) {
 | `AUTH_SECRET` | Env var Vercel, berbeda per environment |
 | Kredensial OAuth | Env var Vercel |
 | `CRON_SECRET` | Env var Vercel |
-| `RESEND_API_KEY` | Env var Vercel |
+| Kredensial SMTP (`SMTP_USER`/`SMTP_PASSWORD`) | Env var Vercel |
 | Kunci API harga emas | Env var Vercel, opsional |
 | Token undangan | **Tidak disimpan** — hanya hash SHA-256 |
 

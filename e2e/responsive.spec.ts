@@ -8,8 +8,25 @@ import { expect, test } from './fixtures/authenticated';
 const WIDTHS = [360, 375, 390, 430, 768, 1024, 1440];
 const HEIGHT = 844;
 
-// Empat rute placeholder task ini (tasks/02/todo.md "Halaman Placeholder").
-const ROUTES = ['/', '/transactions', '/wealth', '/settings'];
+// Empat rute placeholder task ini (tasks/02/todo.md "Halaman Placeholder"),
+// plus setiap rute lain yang tidak butuh setup khusus di luar sesi
+// authedUserId (tanpa household, tanpa entitas kekayaan yang dibuat) —
+// tasks/23-hardening-and-launch's "Audit Aksesibilitas"/"Audit Performa"
+// menuntut seluruh rute, bukan sampel. Rute yang butuh data seed (halaman
+// household, detail dompet/deposito/target tabungan, /onboarding,
+// /invite/[token]) punya cakupan sendiri di describe block/spec file lain
+// — lihat e2e/helpers/a11y-check.ts dan file-file yang mengimpornya.
+const ROUTES = [
+  '/',
+  '/transactions',
+  '/wealth',
+  '/settings',
+  '/activity',
+  '/budgets',
+  '/wallets',
+  '/household',
+  '/household/new',
+];
 
 for (const route of ROUTES) {
   test.describe(`Responsif — ${route}`, () => {

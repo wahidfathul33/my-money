@@ -41,7 +41,7 @@ export function SignInForm({ callbackUrl }: { callbackUrl: string }) {
         ) : null}
       </form>
 
-      <div className="text-text-subtle flex items-center gap-3 text-xs">
+      <div className="text-text-muted flex items-center gap-3 text-xs">
         <div className="bg-border h-px flex-1" />
         atau
         <div className="bg-border h-px flex-1" />

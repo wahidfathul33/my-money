@@ -86,7 +86,7 @@ export function SetupSteps({ householdName, steps }: SetupStepsProps) {
                 </Link>
               )}
               {!step.done && !step.href && (
-                <span className="text-text-subtle text-sm">Segera hadir</span>
+                <span className="text-text-muted text-sm">Segera hadir</span>
               )}
             </div>
           </li>

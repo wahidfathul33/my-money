@@ -3,6 +3,7 @@ import { uuidv7 } from 'uuidv7';
 import { dbWrite } from '../src/lib/db/write';
 import { categories } from '../src/lib/db/schema/categories';
 import { transactions } from '../src/lib/db/schema/transactions';
+import { auditRouteA11y } from './helpers/a11y-check';
 import { expect, test } from './fixtures/authenticated';
 
 /**
@@ -136,5 +137,14 @@ test.describe('categories settings', () => {
     const renamed = await findCategoryByName(authedUserId, 'Tagihan Bulanan');
     expect(renamed).toBeDefined();
     expect(renamed!.systemKey).toBe('bills');
+  });
+
+  // /settings/categories has neither an overflow nor an axe check anywhere
+  // else (tasks/23-hardening-and-launch's route audit) — the 16 canonical
+  // categories from seedNewUser are already enough content to audit, no
+  // extra seeding needed.
+  test('/settings/categories — tanpa horizontal overflow, axe nol pelanggaran', async ({ page }) => {
+    test.setTimeout(60_000);
+    await auditRouteA11y(page, '/settings/categories');
   });
 });

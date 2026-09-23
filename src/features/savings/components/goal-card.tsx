@@ -46,7 +46,7 @@ export function GoalCard({ goal, href, showHouseholdBadge = true }: GoalCardProp
         <span className="flex items-center gap-2">
           <span className="text-text truncate text-body font-medium">{goal.name}</span>
           {showHouseholdBadge && goal.householdName && (
-            <span className="bg-surface-raised text-text-subtle shrink-0 rounded-full px-2 py-0.5 text-xs">
+            <span className="bg-surface-raised text-text-muted shrink-0 rounded-full px-2 py-0.5 text-xs">
               {goal.householdName}
             </span>
           )}

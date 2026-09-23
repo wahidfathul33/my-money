@@ -32,6 +32,20 @@ const eslintConfig = defineConfig([
     },
   },
 
+  // docs/12-security-and-auth.md §6: "sql.raw dilarang aturan lint" — the one
+  // documented exception is src/features/transactions/history-queries.ts's
+  // `getDayTotals` (see that file's own doc comment and eslint-rules/no-sql-raw.js
+  // for why it's safe there: the interpolated value is guarded by
+  // `assertSupportedTimezone`/`isValidTimeZone`, never attacker-controlled text).
+  {
+    plugins: { local: localRulesPlugin },
+    files: ['**/*.{ts,tsx}'],
+    ignores: ['src/features/transactions/history-queries.ts', '**/__tests__/**', '**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}'],
+    rules: {
+      'local/no-sql-raw': 'error',
+    },
+  },
+
   // Playwright fixtures conventionally destructure a `use` callback (e.g.
   // `async ({ page }, use) => { ... await use(x) ... }`) — eslint-plugin-
   // react-hooks (from eslint-config-next) matches that against React's

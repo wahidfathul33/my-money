@@ -56,7 +56,7 @@ export function IconPicker({ value, onChange }: IconPickerProps) {
           <div className="flex flex-col gap-4">
             {ICON_GROUPS.map((group) => (
               <div key={group.group}>
-                <p className="text-text-subtle mb-2 text-xs font-medium tracking-wide uppercase">
+                <p className="text-text-muted mb-2 text-xs font-medium tracking-wide uppercase">
                   {group.label}
                 </p>
                 <IconGrid icons={group.icons} value={value} onChange={onChange} />

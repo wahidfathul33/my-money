@@ -65,6 +65,12 @@ test.describe('sharing & privacy — two-context flows', () => {
       const memberPage = await memberContext.newPage();
 
       await ownerPage.goto('/household/new');
+      // Manually-created context's page never gets the `page` fixture's
+      // auto-`waitForDomToSettle` wrapping — same transient duplicate-DOM
+      // race as the memberPage navigation further down this file, just at
+      // a different spot (getByLabel resolving to 2 elements right after
+      // this goto).
+      await waitForDomToSettle(ownerPage);
       await ownerPage.getByLabel('Nama keluarga').fill('Keluarga Berbagi');
       await ownerPage.getByRole('button', { name: 'Buat Keluarga' }).click();
       await expect(ownerPage).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
@@ -193,6 +199,7 @@ test.describe('sharing & privacy — two-context flows', () => {
       await memberPage.setViewportSize({ width: 390, height: 844 });
 
       await ownerPage.goto('/household/new');
+      await waitForDomToSettle(ownerPage);
       await ownerPage.getByLabel('Nama keluarga').fill('Keluarga Pengeluaran');
       await ownerPage.getByRole('button', { name: 'Buat Keluarga' }).click();
       await expect(ownerPage).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
@@ -297,6 +304,7 @@ test.describe('sharing & privacy — two-context flows', () => {
       await page.setViewportSize({ width: 390, height: 844 });
 
       await page.goto('/household/new');
+      await waitForDomToSettle(page);
       await page.getByLabel('Nama keluarga').fill('Keluarga Massal');
       await page.getByRole('button', { name: 'Buat Keluarga' }).click();
       await expect(page).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
@@ -393,12 +401,14 @@ test.describe('sharing & privacy — two-context flows', () => {
       const ownerBPage = await ownerBContext.newPage();
 
       await ownerAPage.goto('/household/new');
+      await waitForDomToSettle(ownerAPage);
       await ownerAPage.getByLabel('Nama keluarga').fill('Keluarga Alpha');
       await ownerAPage.getByRole('button', { name: 'Buat Keluarga' }).click();
       await expect(ownerAPage).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);
       const householdA = ownerAPage.url().split('/household/')[1]!.split(/[/?]/)[0]!;
 
       await ownerBPage.goto('/household/new');
+      await waitForDomToSettle(ownerBPage);
       await ownerBPage.getByLabel('Nama keluarga').fill('Keluarga Beta');
       await ownerBPage.getByRole('button', { name: 'Buat Keluarga' }).click();
       await expect(ownerBPage).toHaveURL(/\/household\/(?!new$)[^/]+$/, DB_TIMEOUT);

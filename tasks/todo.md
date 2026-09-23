@@ -130,7 +130,7 @@ Rencana: [plan.md](plan.md) · Spesifikasi: [docs/](../docs/README.md)
   Settings, `/settings/sharing`, ekspor & hapus akun, manifest + service worker, banner offline.
   *Verifikasi:* installable; "berhenti berbagi semuanya" mematikan seluruh `share_wealth`; hapus akun diblokir bila masih owner.
 
-- [ ] **23 — [hardening-and-launch](23-hardening-and-launch/)**
+- [x] **23 — [hardening-and-launch](23-hardening-and-launch/)**
   Audit keamanan, a11y, performa, observability, runbook, uji pemulihan backup, go/no-go.
   *Verifikasi:* seluruh DoD di [docs/00](../docs/00-overview.md#7-definisi-selesai-definition-of-done-untuk-v10) terpenuhi.
 
@@ -146,5 +146,5 @@ Rencana: [plan.md](plan.md) · Spesifikasi: [docs/](../docs/README.md)
 | F3 Perencanaan | 14–15 | 2 / 2 |
 | F4 Kekayaan | 16–18 | 3 / 3 |
 | F5 Insight | 19–21 | 3 / 3 |
-| F6 Rilis | 22–23 | 1 / 2 |
-| **Total** | | **23 / 24** |
+| F6 Rilis | 22–23 | 2 / 2 |
+| **Total** | | **24 / 24** |

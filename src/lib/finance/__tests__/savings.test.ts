@@ -49,6 +49,23 @@ describe('calculateGoalProgress', () => {
     expect(result.isOverdue).toBe(false);
   });
 
+  it('defaults `today` to the real current UTC date when omitted', () => {
+    // Every other test in this file passes `today` explicitly (this
+    // input's own doc comment recommends exactly that, for determinism),
+    // so the `input.today ?? todayIso()` fallback itself is otherwise
+    // never exercised. A target date far in the future keeps the
+    // assertion stable regardless of when this test actually runs — the
+    // point is proving the default executes, not pinning an exact day
+    // count that would go stale.
+    const result = calculateGoalProgress({
+      targetAmount: base.targetAmount,
+      currentAmount: base.currentAmount,
+      targetDate: '2099-01-01',
+    });
+    expect(result.monthsRemaining).not.toBeNull();
+    expect(result.monthsRemaining!).toBeGreaterThan(0);
+  });
+
   it('months_remaining = ceil(days / 30.44) for a future target date', () => {
     // 2026-01-01 -> 2026-04-01 is 90 days. 90 / 30.44 = 2.956... -> ceil = 3.
     const result = calculateGoalProgress({ ...base, targetDate: '2026-04-01' });

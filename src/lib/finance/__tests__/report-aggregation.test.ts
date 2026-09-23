@@ -111,6 +111,12 @@ describe('shortMonthLabel — spec.md "Sep bukan September"', () => {
       expect(shortMonthLabel(period).length).toBeLessThanOrEqual(4);
     }
   });
+
+  it('period tanpa tanda hubung (malformed) jatuh ke bulan Januari — fallback `month ?? 1`', () => {
+    // period.split('-') pada string tanpa '-' menghasilkan array satu elemen
+    // — `month` benar-benar undefined di sini, bukan cuma di level tipe.
+    expect(shortMonthLabel('2026')).toBe('Jan');
+  });
 });
 
 describe('hasEnoughHistory — todo.md "Empty state: data < 7 hari"', () => {

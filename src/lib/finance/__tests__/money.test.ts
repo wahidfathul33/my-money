@@ -55,6 +55,15 @@ describe('fromRupiah', () => {
   it('handles amounts with no fractional part but a trailing dot', () => {
     expect(fromRupiah('50000.')).toBe(5000000n);
   });
+
+  it('handles a leading dot with no whole part — the `whole || "0"` fallback', () => {
+    // split('.') on ".5" yields ['', '5']: `whole` is an empty string (falsy,
+    // not undefined), so the `whole || '0'` fallback in fromRupiah actually
+    // fires here — unlike a merely-missing array element, which the
+    // destructuring default `= '0'` already covers.
+    expect(fromRupiah('.5')).toBe(50n);
+    expect(fromRupiah('-.5')).toBe(-50n);
+  });
 });
 
 describe('formatIDR', () => {

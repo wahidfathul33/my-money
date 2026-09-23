@@ -45,6 +45,15 @@ describe('parseGrams / formatGramsForDb / formatGramsDisplay', () => {
   it('formats a large gram-scaled value with Indonesian grouping', () => {
     expect(formatGramsDisplay(parseGrams('1000'))).toBe('1.000');
   });
+
+  it('rejects negative grams — a defensive guard against corrupted caller data', () => {
+    // These two functions read already-parsed `Grams`, not user input
+    // (parseGrams itself already rejects a negative STRING) — the guard
+    // here is for a caller passing a corrupted/negative value directly,
+    // e.g. a stale `remaining_grams` read before its own validation.
+    expect(() => formatGramsForDb(-1n)).toThrow(RangeError);
+    expect(() => formatGramsDisplay(-1n)).toThrow(RangeError);
+  });
 });
 
 describe('gramsToMoney — explicit half-up rounding, never float', () => {
@@ -94,6 +103,32 @@ describe('averageCostPerGram — weighted average over remaining grams', () => {
   it('handles a fractional weight lot', () => {
     const lots = [{ remainingGrams: parseGrams('0.5'), purchasePricePerGram: 1_200_000_00n }];
     expect(averageCostPerGram(lots)).toBe(1_200_000_00n);
+  });
+
+  it('throws when total remaining grams is negative — corrupted lot data, never a valid state reachable via parseGrams', () => {
+    // parseGrams itself rejects a negative STRING, so this can only happen
+    // if a caller constructs a GoldLotInput directly with a corrupted
+    // value (e.g. a stale DB read bypassing the sg_current_nonneg-style
+    // CHECK constraint's equivalent for gold_lots.remaining_grams) — the
+    // internal roundHalfUp helper's "denominator must be positive" guard
+    // is the last line of defense in the pure-function layer.
+    const lots = [{ remainingGrams: -5000n, purchasePricePerGram: 1_000_000_00n }];
+    expect(() => averageCostPerGram(lots)).toThrow(RangeError);
+  });
+
+  it('rounds a negative numerator half-up, away from zero — mirrors money.ts multiplyRatio\'s symmetric rounding', () => {
+    // A negative purchasePricePerGram is nonsensical business data, but the
+    // pure rounding function doesn't know that — it just needs to round
+    // correctly regardless of sign, same discipline as money.ts's own
+    // multiplyRatio (src/lib/finance/__tests__/money.test.ts "rounds a
+    // negative exact-half result away from zero").
+    // numerator = 10*(-100) + 5*0 = -1000; total = 15; half = 15/2 = 7 (bigint floor)
+    // negative path: (numerator - half) / denominator = (-1000 - 7) / 15 = -67
+    const lots = [
+      { remainingGrams: 10n, purchasePricePerGram: -100n },
+      { remainingGrams: 5n, purchasePricePerGram: 0n },
+    ];
+    expect(averageCostPerGram(lots)).toBe(-67n);
   });
 });
 
@@ -220,6 +255,33 @@ describe('computeSale', () => {
     const lots = [lot('a', '10', 1_050_000_00n)];
     expect(() => computeSale(lots, parseGrams('10.0001'), 1_190_000_00n)).toThrow(RangeError);
   });
+
+  it('awards leftover scaled-gram units to the largest remainder first, among THREE distinct remainders', () => {
+    // The existing "three equal 1g lots" test above always ties (every
+    // remainder identical), which only ever exercises the comparator's
+    // "equal" branch — never proves the actual largest-remainder ORDERING
+    // logic. Raw (unscaled) inputs here, not parseGrams, purely to keep the
+    // arithmetic exact and easy to hand-verify:
+    //   a: remainingGrams=5 -> product=7*5=35 -> floor=3, remainder=5
+    //   b: remainingGrams=3 -> product=7*3=21 -> floor=2, remainder=1
+    //   c: remainingGrams=2 -> product=7*2=14 -> floor=1, remainder=4
+    // sum(floors)=6, leftover=7-6=1 scaled unit, awarded to the largest
+    // remainder (a=5) — descending order a(5) > c(4) > b(1) exercises BOTH
+    // the "<" and ">" branches of the sort comparator across the three
+    // pairwise comparisons a real 3-element sort makes.
+    const lots: GoldLotForSale[] = [
+      { id: 'a', remainingGrams: 5n, purchasePricePerGram: 1_000_000_00n },
+      { id: 'b', remainingGrams: 3n, purchasePricePerGram: 1_000_000_00n },
+      { id: 'c', remainingGrams: 2n, purchasePricePerGram: 1_000_000_00n },
+    ];
+    const sale = computeSale(lots, 7n, 1_190_000_00n);
+
+    const byId = new Map(sale.reductions.map((r) => [r.lotId, r.reduceBy]));
+    expect(byId.get('a')).toBe(4n); // floor 3 + the 1 leftover unit
+    expect(byId.get('b')).toBe(2n); // floor 2, no leftover (smallest remainder)
+    expect(byId.get('c')).toBe(1n); // floor 1, no leftover
+    expect([...byId.values()].reduce((s, v) => s + v, 0n)).toBe(7n);
+  });
 });
 
 describe('priceAgeDays / isPriceStale', () => {
@@ -237,6 +299,18 @@ describe('priceAgeDays / isPriceStale', () => {
 
   it('is stale at 31 days', () => {
     expect(isPriceStale(31)).toBe(true);
+  });
+
+  it('defaults `today` to the real current UTC date when omitted', () => {
+    // Every other test in this describe block passes `today` explicitly
+    // for determinism (this function's own doc comment recommends exactly
+    // that) — which means the `today = todayIso()` default parameter
+    // itself is never otherwise exercised. A price dated today (computed
+    // the same way, via `new Date().toISOString().slice(0, 10)`) must
+    // still read as age 0 through the real default, not just the
+    // explicit-today path already covered above.
+    const today = new Date().toISOString().slice(0, 10);
+    expect(priceAgeDays(today)).toBe(0);
   });
 });
 

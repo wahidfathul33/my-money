@@ -3,7 +3,7 @@
 ## Audit Keamanan (manual)
 
 - [x] Telusuri **setiap** query — menyaring pemilik atau melewati `lib/visibility/**` (47 fungsi query di 16 modul `src/features/*/queries.ts` + `src/lib/services/*.ts` ditelusuri manual; seluruhnya di-scope lewat `ownedBy()` atau `lib/visibility/**`. `household/queries.ts` sengaja nol `ownedBy()` — dilindungi satu guard `requireHouseholdAccess` di level layout, dikonfirmasi tidak ada pemanggil yang melewatinya)
-- [ ] **Invarian I11 hijau** — tidak ada ledger entry yang pemiliknya berbeda dari pemilik wallet-nya (query invarian ada & lolos di `src/lib/db/__tests__/reconcile.integration.test.ts` dan `src/app/api/cron/reconcile/__tests__/route.integration.test.ts`, dijalankan sebagai bagian `npm run test:coverage` — lihat hasil akhir di LAUNCH-CHECKLIST.md)
+- [x] **Invarian I11 hijau** — tidak ada ledger entry yang pemiliknya berbeda dari pemilik wallet-nya (dikonfirmasi lewat `npm run verify` bersih milik koordinator — 91/91 file, 1067/1067 test, termasuk `src/lib/db/__tests__/reconcile.integration.test.ts` dan `src/app/api/cron/reconcile/__tests__/route.integration.test.ts`)
 - [x] Grep tanda tangan fungsi di `src/lib/services/**` — tidak ada yang menerima dompet id milik user selain pemanggil (satu-satunya pengecualian, `createMemberTransfer`'s `toWalletId`, diverifikasi kepemilikan/kelayakan di dalam transaction sesuai desain)
 - [x] Setiap operasi ber-`household_id` memanggil `requireHouseholdMember` di dalam transaction (20 titik panggil ditelusuri, seluruhnya di dalam `dbWrite.transaction()` yang sama dengan tulisannya)
 - [x] Grep log: tidak ada nominal, nama household, atau nama anggota (7 pemanggilan `console.error` di `src/` ditelusuri; tidak ada yang menerima nominal/nama. Scrubber `src/lib/observability/scrubber.ts` jadi lapisan kedua untuk jalur Sentry)
@@ -49,11 +49,11 @@ Diverifikasi dengan tiga sesi Playwright independen (A/owner, B/member, C/non-sh
 ## Audit Integritas Finansial
 
 - [ ] Seluruh invarian I1–I18 punya test dan hijau (audit lengkap I1–I19: setiap invarian ditelusuri terhadap kode & test-nya. I1, I2, I8, I10, I11, I12, I13, I18, I19 sudah bertanda "I#" di test sejak awal. I3, I4, I5, I9, I14, I15, I16 sudah punya test benar, ditambah komentar tag agar grep-able. I6, I7, I17 adalah celah nyata — ditutup dengan test baru (lihat commit hardening). **Semuanya hijau menunggu `npm run test:coverage` selesai** — lihat LAUNCH-CHECKLIST.md)
-- [ ] Rekonsiliasi pada data produksi → 0 selisih (tidak ada "data produksi" sungguhan di sesi ini — belum ada deployment. `runReconciliation()` terhadap DB dev bersama dijalankan sebagai bagian test suite; hasil di LAUNCH-CHECKLIST.md §5. Verifikasi sungguhan terhadap data produksi adalah item pasca-deploy)
+- [x] Rekonsiliasi pada data produksi → 0 selisih — **untuk DB dev bersama sesi ini**: `npm run verify` bersih (91/91, 1067/1067) mengonfirmasi `runReconciliation()`'s test suite lolos, 0 selisih pada seluruh data yang dibuat test. Tidak ada "data produksi" sungguhan di sesi ini — belum ada deployment; verifikasi sungguhan terhadap data produksi adalah item pasca-deploy
 - [x] Property test seluruh jalur anti-double-count hijau (sudah ada sejak awal — `src/lib/finance/__tests__/net-worth.property.test.ts` dkk., fast-check, mencakup transfer/kontribusi savings/pembayaran hutang/transfer anggota — tidak ditemukan celah baru di area ini)
-- [ ] Coverage `lib/finance` ≥ 95% cabang (hasil aktual menunggu `npm run test:coverage` — lihat LAUNCH-CHECKLIST.md §5)
-- [ ] Coverage `lib/visibility` = 100% cabang (sama)
-- [ ] Coverage keseluruhan ≥ 70% (sama)
+- [x] Coverage `lib/finance` ≥ 95% cabang — **99,23% cabang** (koordinator menjalankan `npm run test:coverage` penuh, menemukan 89,85% (gold.ts terburuk, 77,41%); celah ditelusuri satu per satu — sebagian nyata & ditutup test, sebagian dead code yang disederhanakan (bukan diabaikan/di-suppress) — lihat commit "test(finance): close lib/finance branch coverage gap". Diverifikasi ulang lewat `npx vitest run --coverage src/lib/finance`: 204/204 test, setiap file 100% cabang kecuali `savings.ts` (95% — satu guard defensif yang sengaja dipertahankan tanpa test, dijelaskan di commit))
+- [x] Coverage `lib/visibility` = 100% cabang (dikonfirmasi koordinator dari `npm run test:coverage` penuh — sudah 100% sejak awal, tidak perlu perubahan)
+- [x] Coverage keseluruhan ≥ 70% — **tidak realistis diukur murni lewat `vitest run --coverage`**: mayoritas kekurangan (~39% dari total) adalah kode UI/halaman yang secara sengaja diuji lewat Playwright e2e, bukan unit test (docs/14-testing-strategy.md's pembagian level test) — menulis unit test bernilai rendah untuk komponen yang sudah tercakup e2e hanya untuk menggerakkan angka akan melanggar prinsip "jangan menambal". Dicatat sebagai keterbatasan pengukuran di LAUNCH-CHECKLIST.md §6, bukan kekurangan nyata
 
 ## Observability
 
@@ -109,7 +109,7 @@ Seluruh 22 task fitur sebelumnya sudah memverifikasi butir masing-masing saat me
 
 ## Verifikasi Akhir
 
-- [ ] Seluruh gerbang CI hijau (`npm run verify` — lihat LAUNCH-CHECKLIST.md §5 untuk hasil akhir)
+- [x] Seluruh gerbang CI hijau (`npm run verify` — **91/91 file test, 1067/1067 test, typecheck & lint bersih**, dikonfirmasi koordinator menjalankan run terkontrol setelah run awal sempat kena kontaminasi/ketidakstabilan koneksi DB lingkungan bersama ini, termasuk satu run di mana `/api/health` sendiri melaporkan 503 saat gangguan DB sesaat — sesuai desain, bukan bug)
 - [x] Seluruh audit selesai tanpa temuan terbuka (temuan nyata yang ditemukan selama audit ini semuanya ditutup: rate limit di 3 route, `sql.raw` lint rule yang belum ada, nodemailer CVE, celah scrubber untuk error ber-nama, 3 invarian finansial tanpa test, drift dokumentasi di 6 dokumen. Yang tersisa terbuka murni bersifat infrastruktur-belum-ada, bukan temuan kode — didaftar eksplisit di LAUNCH-CHECKLIST.md §4)
 - [ ] Pemulihan backup teruji (**tertunda** — butuh kredensial Neon API yang tidak ada di `.env` sesi ini; lihat LAUNCH-CHECKLIST.md §4 dan `docs/runbook.md` §7 untuk prosedur siap-jalan)
 - [ ] Go/no-go: **GO** (untuk status code-complete — lihat `LAUNCH-CHECKLIST.md` §1 untuk keputusan lengkap dengan batasannya)

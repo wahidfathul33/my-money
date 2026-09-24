@@ -98,7 +98,7 @@ const SHORT_MONTH_FORMAT = new Intl.DateTimeFormat('id-ID', { month: 'short', ti
  * `period` (`YYYY-MM`) → a short, never-rotated axis label ("Sep", not
  * "September") — spec.md's mobile chart rule. Formatted via a UTC-anchored
  * date purely for calendar-string arithmetic, same trick as
- * src/features/transactions/components/period-picker.tsx's
+ * src/features/transactions/period-label.ts's
  * `formatPeriodLabel` (`timeZone: 'UTC'` on the formatter avoids a second,
  * redundant timezone conversion — `period` is already a calendar string).
  */

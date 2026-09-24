@@ -77,23 +77,27 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               type={toast.variant === 'error' ? 'foreground' : 'background'}
               onOpenChange={(open) => !open && dismiss(toast.id)}
               className={cn(
-                'material-glass rounded-card shadow-float flex items-start gap-3 p-4',
+                'material-glass rounded-card shadow-float flex items-center gap-3 p-4',
                 'data-[state=open]:animate-none data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)]',
               )}
             >
-              <Icon
-                className={cn('mt-0.5 size-5 shrink-0', VARIANT_ICON_CLASS[toast.variant])}
-                aria-hidden="true"
-              />
-              <div className="flex-1">
-                <ToastPrimitive.Title className="text-text text-sm font-semibold">
-                  {toast.title}
-                </ToastPrimitive.Title>
-                {toast.description && (
-                  <ToastPrimitive.Description className="text-text-muted text-sm">
-                    {toast.description}
-                  </ToastPrimitive.Description>
-                )}
+              {/* Ikon + teks dikelompokkan: ikon sejajar baris judul, sementara
+                  grupnya ikut ter-center terhadap tombol aksi/tutup yang 44px. */}
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <Icon
+                  className={cn('mt-0.5 size-5 shrink-0', VARIANT_ICON_CLASS[toast.variant])}
+                  aria-hidden="true"
+                />
+                <div className="min-w-0 flex-1">
+                  <ToastPrimitive.Title className="text-text text-sm font-semibold">
+                    {toast.title}
+                  </ToastPrimitive.Title>
+                  {toast.description && (
+                    <ToastPrimitive.Description className="text-text-muted text-sm">
+                      {toast.description}
+                    </ToastPrimitive.Description>
+                  )}
+                </div>
               </div>
               {toast.action && (
                 <ToastPrimitive.Action altText={toast.action.label} asChild>

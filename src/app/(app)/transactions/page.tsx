@@ -18,7 +18,8 @@ import { toHistoryClientItem } from '@/features/transactions/history-client-type
 import { getAddTransactionSheetData } from '@/features/transactions/sheet-data';
 import { AddTransactionSheet } from '@/features/transactions/components/add-transaction-sheet';
 import { listCategories } from '@/features/transactions/queries';
-import { PeriodPicker, formatPeriodLabel } from '@/features/transactions/components/period-picker';
+import { formatPeriodLabel } from '@/features/transactions/period-label';
+import { PeriodPicker } from '@/features/transactions/components/period-picker';
 import { FilterBar, type FilterBarCategoryOption } from '@/features/transactions/components/filter-bar';
 import { TransactionList, TransactionSearchButton } from '@/features/transactions/components/transaction-list';
 import { getUserPreferences } from '@/features/settings/queries';

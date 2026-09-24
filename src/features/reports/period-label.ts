@@ -1,7 +1,7 @@
 /**
  * `period` (`YYYY-MM`) → "September 2026" — same idea as
- * src/features/transactions/components/period-picker.tsx's own
- * `formatPeriodLabel`, duplicated here rather than imported per
+ * src/features/transactions/period-label.ts's own `formatPeriodLabel`,
+ * duplicated here rather than imported per
  * docs/11-tech-architecture.md §3 ("features/A tidak boleh mengimpor dari
  * features/B").
  */

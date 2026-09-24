@@ -7,19 +7,8 @@
  */
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { shiftPeriod } from '@/lib/date/timezone';
+import { formatPeriodLabel } from '../period-label';
 import { useHistoryFilters } from '../use-history-filters';
-
-const MONTH_LABEL_FORMAT = new Intl.DateTimeFormat('id-ID', {
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-
-/** `period` (`YYYY-MM`) → "September 2026". `timeZone: 'UTC'` on the formatter + a UTC-constructed date means this is pure calendar-string formatting, not another timezone conversion. */
-export function formatPeriodLabel(period: string): string {
-  const [year, month] = period.split('-').map(Number);
-  return MONTH_LABEL_FORMAT.format(new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, 1)));
-}
 
 export function PeriodPicker() {
   const { filters, update } = useHistoryFilters();

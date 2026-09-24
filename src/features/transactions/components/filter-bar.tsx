@@ -14,6 +14,7 @@
  * chips.
  */
 import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Chip } from '@/components/ui/chip';
 import { Button } from '@/components/ui/button';
@@ -54,7 +55,7 @@ function todayInputValue(): string {
 }
 
 export function FilterBar({ wallets, categories }: FilterBarProps) {
-  const { filters, update, resetFilters } = useHistoryFilters();
+  const { filters, update, resetFilters, isPending } = useHistoryFilters();
   const [openSheet, setOpenSheet] = useState<'wallet' | 'category' | 'type' | 'date' | null>(null);
 
   const selectedWallet = wallets.find((w) => w.id === filters.walletId);
@@ -62,14 +63,30 @@ export function FilterBar({ wallets, categories }: FilterBarProps) {
   const active = hasActiveFilters(filters);
 
   return (
-    <div className="flex gap-2 overflow-x-auto px-page-x pb-1" role="group" aria-label="Filter transaksi">
-      <Chip variant="filter" selected={!active} onClick={resetFilters} className="shrink-0">
+    <div
+      className="flex items-center gap-2 overflow-x-auto px-page-x pb-1"
+      role="group"
+      aria-label="Filter transaksi"
+      aria-busy={isPending || undefined}
+    >
+      {/* Baris mencegah tap ganda saat navigasi filter sedang berjalan
+          (router.replace ini me-refetch seluruh daftar dari server) — tanpa
+          ini, tap kedua sebelum hasil pertama datang terasa seperti
+          "halaman diam lalu tiba-tiba pindah". */}
+      <Chip
+        variant="filter"
+        selected={!active}
+        onClick={resetFilters}
+        disabled={isPending}
+        className="shrink-0"
+      >
         Semua
       </Chip>
       <Chip
         variant="filter"
         selected={Boolean(filters.walletId)}
         onClick={() => setOpenSheet('wallet')}
+        disabled={isPending}
         className="shrink-0"
       >
         {selectedWallet?.name ?? 'Dompet'}
@@ -78,6 +95,7 @@ export function FilterBar({ wallets, categories }: FilterBarProps) {
         variant="filter"
         selected={Boolean(filters.categoryId)}
         onClick={() => setOpenSheet('category')}
+        disabled={isPending}
         className="shrink-0"
       >
         {selectedCategory?.name ?? 'Kategori'}
@@ -86,6 +104,7 @@ export function FilterBar({ wallets, categories }: FilterBarProps) {
         variant="filter"
         selected={Boolean(filters.type)}
         onClick={() => setOpenSheet('type')}
+        disabled={isPending}
         className="shrink-0"
       >
         {filters.type ? TYPE_LABEL[filters.type] : 'Tipe'}
@@ -94,10 +113,14 @@ export function FilterBar({ wallets, categories }: FilterBarProps) {
         variant="filter"
         selected={Boolean(filters.from || filters.to)}
         onClick={() => setOpenSheet('date')}
+        disabled={isPending}
         className="shrink-0"
       >
         Tanggal
       </Chip>
+      {isPending && (
+        <Loader2 className="text-text-muted size-4 shrink-0 animate-spin" aria-hidden="true" />
+      )}
 
       <Sheet open={openSheet === 'wallet'} onOpenChange={(open) => !open && setOpenSheet(null)}>
         <SheetContent title="Pilih dompet">

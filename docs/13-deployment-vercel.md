@@ -38,6 +38,8 @@ GitHub repo
 }
 ```
 
+**Runtime Node.js 24.** Versinya tidak diletakkan di `vercel.json` (field itu tidak ada) melainkan di `engines.node` pada `package.json` — `>=24.0.0`. Vercel memetakan rentang semver ke versi mayor tertinggi yang tersedia, dan 24.x saat ini adalah yang tertinggi sekaligus default, jadi rentang ini mengunci deployment ke 24.x tanpa ikut menolak Node yang lebih baru di mesin lokal. Nilai di `package.json` menimpa pilihan **Settings → Build and Deployment → Node.js Version** di dashboard, sehingga repo ini adalah satu-satunya sumber kebenaran; tidak perlu menyentuh dashboard. `.nvmrc` (`24`) dan `node-version: 24` di CI (§6) menjaga mesin lokal dan runner GitHub tetap sejalan dengan runtime produksi. Node 20 dideprekasi Vercel per 1 Oktober 2026.
+
 **Region `sin1` (Singapura)** — terdekat dengan pengguna Indonesia dan dengan region Neon. Menempatkan compute jauh dari database menambah latensi pada setiap query, dan halaman dashboard melakukan beberapa.
 
 **Jadwal cron dalam UTC.** Vercel Cron hanya menerima UTC. Konversi ke WIB (UTC+7):
@@ -148,7 +150,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
+        with: { node-version: 24, cache: npm }
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
@@ -161,7 +163,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
+        with: { node-version: 24, cache: npm }
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

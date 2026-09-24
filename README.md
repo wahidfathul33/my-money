@@ -6,6 +6,8 @@ Full product & technical spec: [docs/README.md](docs/README.md). Implementation 
 
 ## Run locally
 
+Requires **Node.js 24** or newer (`.nvmrc` pins 24 — `nvm use` picks it up). CI and Vercel both run 24.x; see [docs/13-deployment-vercel.md](docs/13-deployment-vercel.md) §2.
+
 ```bash
 npm install
 cp .env.example .env   # then fill in real values (see docs/11-tech-architecture.md §8)

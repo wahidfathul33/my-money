@@ -3,11 +3,13 @@ import { Gem, HandCoins, Landmark, Target, TrendingUp } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/layout/page-header';
 import { MoneyText } from '@/components/finance/money-text';
+import { formatGramsDisplay } from '@/lib/finance/gold';
 import { requireUser } from '@/lib/auth/require-user';
 import { getTotalSavings, listGoals } from '@/features/savings/queries';
 import { getTotalDebt, getTotalReceivable } from '@/features/obligations/queries';
 import { getUserPreferences } from '@/features/settings/queries';
 import { getTotalDepositValue, listDeposits } from '@/features/assets/deposits/queries';
+import { getGoldHoldingsSummary } from '@/features/assets/gold/queries';
 import { getNetWorth } from '@/features/net-worth/queries';
 
 // Hub kekayaan — tumbuh per task. Task 15 (savings-goals) menambah kartu
@@ -16,24 +18,34 @@ import { getNetWorth } from '@/features/net-worth/queries';
 // menambah kartu "Kekayaan Bersih" di paling atas, satu-satunya baris di
 // sini yang menautkan ke ANGKA GABUNGAN — setiap kartu lain menautkan ke
 // modul sumbernya sendiri (docs/02-IA §5: "Setiap baris dapat ditap untuk
-// menuju modul terkait"). Emas belum punya kartunya sendiri di sini
-// (menyusul di task-task berikutnya). Setiap kartu berdiri sendiri dan
-// tidak saling bergantung, supaya task lain yang juga menambah entry point
-// di halaman ini bisa menambah kartunya sendiri tanpa menyentuh baris
-// punya task lain.
+// menuju modul terkait"). Kartu "Emas" menyusul entry point yang sama untuk
+// /wealth/assets/gold — sebelumnya halaman itu ada tapi tidak tertaut dari
+// mana pun di UI. Setiap kartu berdiri sendiri dan tidak saling bergantung,
+// supaya task lain yang juga menambah entry point di halaman ini bisa
+// menambah kartunya sendiri tanpa menyentuh baris punya task lain.
 export default async function WealthPage() {
   const user = await requireUser();
-  const [netWorth, goals, totalSaved, totalDebt, totalReceivable, preferences, deposits, totalDepositPrincipal] =
-    await Promise.all([
-      getNetWorth(user.id),
-      listGoals(user.id),
-      getTotalSavings(user.id),
-      getTotalDebt(user.id),
-      getTotalReceivable(user.id),
-      getUserPreferences(user.id),
-      listDeposits(user.id),
-      getTotalDepositValue(user.id),
-    ]);
+  const [
+    netWorth,
+    goals,
+    totalSaved,
+    totalDebt,
+    totalReceivable,
+    preferences,
+    deposits,
+    totalDepositPrincipal,
+    goldSummary,
+  ] = await Promise.all([
+    getNetWorth(user.id),
+    listGoals(user.id),
+    getTotalSavings(user.id),
+    getTotalDebt(user.id),
+    getTotalReceivable(user.id),
+    getUserPreferences(user.id),
+    listDeposits(user.id),
+    getTotalDepositValue(user.id),
+    getGoldHoldingsSummary(user.id),
+  ]);
   const hasSavings = goals.length > 0;
   const hasObligations = totalDebt > 0n || totalReceivable > 0n;
   const activeDepositCount = deposits.filter((d) => d.status === 'active').length;
@@ -71,6 +83,28 @@ export default async function WealthPage() {
         </Link>
 
         <Link
+          href="/wealth/assets/gold"
+          className="pressable-tint bg-surface rounded-card flex items-center gap-3 p-4"
+        >
+          <span className="bg-brand-subtle text-brand-readable flex size-11 shrink-0 items-center justify-center rounded-full">
+            <Gem className="size-5" aria-hidden="true" />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-text text-body font-medium">Emas</span>
+            <span className="text-text-muted text-sm">
+              {goldSummary.hasHoldings ? `Total ${formatGramsDisplay(goldSummary.totalGrams)} gram` : 'Belum ada emas'}
+            </span>
+          </span>
+          {/* Sama seperti kartu Kekayaan Bersih & halaman /wealth/assets/gold
+              sendiri (ADR-007): tanpa harga buyback yang pernah tercatat,
+              nilainya disembunyikan daripada ditampilkan sebagai Rp0 yang
+              menyesatkan. */}
+          {goldSummary.hasHoldings && goldSummary.hasPrice && (
+            <MoneyText amount={goldSummary.currentValue} tone="plain" size="md" />
+          )}
+        </Link>
+
+        <Link
           href="/wealth/assets/deposits"
           className="pressable-tint bg-surface rounded-card flex items-center gap-3 p-4"
         >
@@ -105,7 +139,7 @@ export default async function WealthPage() {
           <MoneyText amount={totalDebt} tone="plain" size="md" />
         </Link>
 
-        {!hasSavings && !hasObligations && !hasDeposits && (
+        {!hasSavings && !hasObligations && !hasDeposits && !goldSummary.hasHoldings && (
           <EmptyState
             icon={Gem}
             title="Belum ada data kekayaan"

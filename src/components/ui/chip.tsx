@@ -25,7 +25,7 @@ export function Chip({ variant = 'selectable', selected = false, className, ...p
       aria-pressed={variant === 'selectable' ? selected : undefined}
       className={cn(
         'pressable rounded-chip inline-flex h-11 min-w-11 items-center justify-center border px-4 text-sm font-medium',
-        'transition-colors',
+        'transition-colors disabled:pointer-events-none disabled:opacity-50',
         selected
           ? // text-brand-readable, bukan text-brand mentah — lihat komentar
             // di globals.css: --color-brand gagal AA di atas

@@ -50,6 +50,7 @@ export function TabsTrigger({ variant = 'underline', className, ...props }: Tabs
     <TabsPrimitive.Trigger
       className={cn(
         'flex h-11 flex-1 items-center justify-center text-sm font-medium transition-colors',
+        'disabled:pointer-events-none disabled:opacity-50',
         'focus-visible:outline-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
         TRIGGER_VARIANT_CLASS[variant],
         className,

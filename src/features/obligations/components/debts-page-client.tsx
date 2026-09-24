@@ -24,9 +24,9 @@
  * payment entry point of its own, so every actionable row needs SOME
  * always-visible way to record a payment.
  */
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { HandCoins, Plus } from 'lucide-react';
+import { HandCoins, Loader2, Plus } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -163,6 +163,7 @@ export function DebtsPageClient({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tab = searchParams.get('tab') === 'receivables' ? 'receivables' : 'debts';
+  const [isTabPending, startTabTransition] = useTransition();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<ObligationListItemClientData | null>(null);
@@ -171,7 +172,13 @@ export function DebtsPageClient({
   function setTab(next: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', next);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    // startTransition + isTabPending below: this re-renders the page from
+    // the server (debts/receivables + totals are both server-fetched), so
+    // without feedback here the tap looks ignored until the content
+    // suddenly swaps underneath the user.
+    startTabTransition(() => {
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    });
   }
 
   const createKind: 'debt' | 'receivable' = tab === 'receivables' ? 'receivable' : 'debt';
@@ -180,14 +187,17 @@ export function DebtsPageClient({
     <div className="px-page-x flex flex-col gap-4 pb-8">
       <Tabs value={tab} onValueChange={setTab} className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <TabsList variant="segmented" className="flex-1">
-            <TabsTrigger variant="segmented" value="debts" className="flex-1">
+          <TabsList variant="segmented" className="flex-1" aria-busy={isTabPending || undefined}>
+            <TabsTrigger variant="segmented" value="debts" className="flex-1" disabled={isTabPending}>
               Hutang
             </TabsTrigger>
-            <TabsTrigger variant="segmented" value="receivables" className="flex-1">
+            <TabsTrigger variant="segmented" value="receivables" className="flex-1" disabled={isTabPending}>
               Piutang
             </TabsTrigger>
           </TabsList>
+          {isTabPending && (
+            <Loader2 className="text-text-muted size-4 shrink-0 animate-spin" aria-hidden="true" />
+          )}
           <Button onClick={() => setCreateOpen(true)} aria-label={`Tambah ${createKind === 'debt' ? 'hutang' : 'piutang'}`}>
             <Plus className="size-4" aria-hidden="true" />
             Tambah

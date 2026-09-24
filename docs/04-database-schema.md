@@ -43,6 +43,11 @@ CREATE TYPE payout_schedule   AS ENUM ('at_maturity','monthly');
 CREATE TYPE obligation_status AS ENUM ('active','partially_paid','paid','written_off');
 CREATE TYPE budget_period     AS ENUM ('monthly','custom');
 
+-- tasks/24-recurring-transactions — dipakai oleh recurring_transactions DAN
+-- recurring_savings_contributions (reuse enum yang sama).
+CREATE TYPE recurring_frequency AS ENUM ('daily','weekly','monthly');
+CREATE TYPE recurring_status    AS ENUM ('active','paused','ended');
+
 -- Household
 CREATE TYPE household_role    AS ENUM ('owner','member');
 CREATE TYPE membership_status AS ENUM ('active','pending','removed');
@@ -656,6 +661,71 @@ CREATE INDEX budgets_period_idx ON budgets (period_start DESC);
 `category_key` merujuk `categories.system_key`, bukan `categories.id` — sebuah budget household "makan & minum" mencocokkan kategori bawaan bersangkutan milik anggota mana pun, secara eksak.
 
 Budget household hanya dapat dibuat untuk kategori bawaan. Kategori kustom tidak dapat dicocokkan lintas anggota; ia tetap tampil di laporan sebagai barisnya sendiri, tetapi tidak dianggarkan bersama.
+
+## 11.1 Transaksi Rutin & Kontribusi Tabungan Otomatis
+
+`tasks/24-recurring-transactions/spec.md`. Setiap baris dimiliki **satu
+user** (bukan household) — identik dengan bagaimana `transactions` bekerja
+hari ini; `household_id` pada `recurring_transactions` hanya menandai
+transaksi HASIL materialisasinya, sama seperti `transactions.household_id`.
+`start_date`/`end_date`/`next_run_date` sengaja `DATE`, bukan `TIMESTAMPTZ`
+— jadwal berulang murni kalender, bukan terikat jam tertentu (lihat
+`src/lib/date/recurring.ts`'s file header).
+
+```sql
+CREATE TABLE recurring_transactions (
+  id             UUID PRIMARY KEY,
+  user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  household_id   UUID REFERENCES households(id) ON DELETE SET NULL,   -- tag, bukan kepemilikan
+  type           category_type NOT NULL,                              -- reuse, hanya income|expense
+  amount         BIGINT NOT NULL,
+  category_id    UUID NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
+  wallet_id      UUID NOT NULL REFERENCES wallets(id) ON DELETE RESTRICT,
+  note           TEXT,
+  frequency      recurring_frequency NOT NULL,
+  start_date     DATE NOT NULL,
+  end_date       DATE,                                                -- NULL = tanpa batas
+  next_run_date  DATE NOT NULL,
+  status         recurring_status NOT NULL DEFAULT 'active',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  CONSTRAINT rt_amount_positive CHECK (amount > 0),
+  CONSTRAINT rt_end_date_valid  CHECK (end_date IS NULL OR end_date >= start_date)
+);
+
+CREATE INDEX rt_status_next_run_idx ON recurring_transactions (status, next_run_date);
+CREATE INDEX rt_user_idx ON recurring_transactions (user_id);
+
+CREATE TABLE recurring_savings_contributions (
+  id             UUID PRIMARY KEY,
+  user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  goal_id        UUID NOT NULL REFERENCES savings_goals(id) ON DELETE RESTRICT,
+  wallet_id      UUID NOT NULL REFERENCES wallets(id) ON DELETE RESTRICT,
+  amount         BIGINT NOT NULL,       -- nominal kontribusi tiap siklus, dipakai apa adanya oleh contribute()
+  frequency      recurring_frequency NOT NULL,
+  start_date     DATE NOT NULL,
+  end_date       DATE,
+  next_run_date  DATE NOT NULL,
+  status         recurring_status NOT NULL DEFAULT 'active',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  CONSTRAINT rsc_amount_positive CHECK (amount > 0),
+  CONSTRAINT rsc_end_date_valid  CHECK (end_date IS NULL OR end_date >= start_date)
+);
+
+CREATE INDEX rsc_status_next_run_idx ON recurring_savings_contributions (status, next_run_date);
+CREATE INDEX rsc_user_idx ON recurring_savings_contributions (user_id);
+CREATE INDEX rsc_goal_idx ON recurring_savings_contributions (goal_id);
+```
+
+Materialisasi (satu cron harian, `/api/cron/recurring`) memanggil
+`createTransaction`/`contribute` apa adanya — lihat
+[06-api-contracts §7](06-api-contracts.md#7-cron-jobs) — dan memajukan
+`next_run_date` (via `computeNextRunDate`, dengan penjepitan akhir bulan)
+dalam TRANSAKSI DB yang sama dengan posting-nya, yang membuat re-run cron
+di hari yang sama aman tanpa duplikasi.
 
 ## 12. Net Worth Snapshot
 

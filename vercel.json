@@ -25,6 +25,10 @@
     {
       "path": "/api/cron/net-worth-snapshot",
       "schedule": "55 16 * * *"
+    },
+    {
+      "path": "/api/cron/recurring",
+      "schedule": "15 20 * * *"
     }
   ]
 }

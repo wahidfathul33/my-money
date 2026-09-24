@@ -33,10 +33,26 @@ import { createMemberTransferAction, createSelfTransferAction, voidTransferActio
 import { ConfirmMemberTransfer } from '@/features/transfers/components/confirm-member-transfer';
 import type { MemberTransferSelection } from '@/features/transfers/components/transfer-target-picker';
 import { getLastHouseholdChoice, setLastHouseholdChoice } from '@/features/sharing/last-household-choice';
+import { createRecurringTransactionAction } from '@/features/recurring/actions';
+import type { RecurringFrequency } from '@/lib/date/recurring';
 import { evaluateExpression } from '../amount-math';
 import { createTransactionAction, voidTransactionAction } from '../actions';
 import type { AddTransactionSheetData } from '../sheet-data';
 import { TransactionEditor, type EditorTabType, type TransferMode } from './transaction-editor';
+
+/** Local calendar date components (`YYYY-MM-DD`) — deliberately NOT
+ * `date.toISOString().slice(0, 10)`, which would report the wrong calendar
+ * day for any instant near local midnight (the exact bug
+ * src/lib/date/timezone.ts's file header documents at length). The
+ * `DatePicker` this sheet uses always constructs `Date` values from local
+ * `y/m/d` components (see date-picker.tsx's `pickCustom`), so reading them
+ * back with `getFullYear`/`getMonth`/`getDate` round-trips exactly. */
+function toDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 interface AddTransactionSheetProps extends AddTransactionSheetData {
   trigger: ReactNode;
@@ -139,6 +155,10 @@ function AddTransactionSheetForm({
   );
   const [date, setDate] = useState<Date>(() => new Date());
   const [note, setNote] = useState('');
+  // tasks/24-recurring-transactions — "Ulangi transaksi ini".
+  const [recurring, setRecurring] = useState(false);
+  const [recurringFrequency, setRecurringFrequency] = useState<RecurringFrequency>('monthly');
+  const [recurringEndDate, setRecurringEndDate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   // Generated once per mount — this component only mounts while the sheet
@@ -262,6 +282,41 @@ function AddTransactionSheetForm({
     }
 
     setError(null);
+
+    // "Ulangi transaksi ini" — tasks/24-recurring-transactions. A separate
+    // Server Action (returns a recurring RULE id, not a transaction id), so
+    // it gets its own save path rather than folding into the branch below.
+    if (type !== 'transfer' && recurring) {
+      startTransition(async () => {
+        const result = await createRecurringTransactionAction({
+          type,
+          amount: serializeMoney(amount),
+          categoryId: categoryId!,
+          walletId,
+          note,
+          frequency: recurringFrequency,
+          startDate: toDateStr(date),
+          endDate: recurringEndDate || null,
+          householdId,
+        });
+
+        if (result.error || !result.id) {
+          setError(result.error ?? 'Gagal menyimpan. Data Anda tidak berubah — coba lagi.');
+          return;
+        }
+
+        onHasInputChange(false);
+        onDone();
+        router.refresh();
+        // No "Urungkan" action here — unlike a single transaction, undoing a
+        // recurring RULE has no single well-defined target (it may or may
+        // not have already materialized a first occurrence today); managing
+        // or removing it lives in /settings/recurring instead.
+        toast.show({ title: 'Transaksi rutin tersimpan', variant: 'success' });
+      });
+      return;
+    }
+
     startTransition(async () => {
       const result =
         type === 'transfer'
@@ -360,6 +415,13 @@ function AddTransactionSheetForm({
         households={households}
         householdId={householdId}
         onHouseholdChange={handleHouseholdChange}
+        allowRecurring
+        recurring={recurring}
+        onRecurringChange={setRecurring}
+        recurringFrequency={recurringFrequency}
+        onRecurringFrequencyChange={setRecurringFrequency}
+        recurringEndDate={recurringEndDate}
+        onRecurringEndDateChange={setRecurringEndDate}
       />
 
       {isMemberTransfer && selectedCounterparty && selectedTargetWallet && selectedFromWallet && (

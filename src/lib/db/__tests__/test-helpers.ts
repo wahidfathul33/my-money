@@ -17,6 +17,7 @@ import { households, householdMembers } from '@/lib/db/schema/households';
 import { savingsContributions, savingsGoals } from '@/lib/db/schema/savings';
 import { debtPayments, debts, receivablePayments, receivables } from '@/lib/db/schema/obligations';
 import { assets, deposits, goldLots, goldPrices, goldSales } from '@/lib/db/schema/assets';
+import { recurringSavingsContributions, recurringTransactions } from '@/lib/db/schema/recurring';
 
 export async function createTestUser(overrides: Partial<typeof users.$inferInsert> = {}) {
   const id = uuidv7();
@@ -53,6 +54,56 @@ export async function createTestCategory(
     userId,
     name: 'Test Category',
     type: 'expense',
+    ...overrides,
+  });
+  return id;
+}
+
+/** Inserts a `recurring_transactions` row directly — task 24. Prefer the
+ * real `createRecurringTransaction` service when the test exercises
+ * creation itself; this is for tests that need a rule to already exist at a
+ * SPECIFIC `next_run_date`/`status` (e.g. the cron materialization tests),
+ * without going through the service's own "materialize today's occurrence
+ * synchronously" side effect. */
+export async function createTestRecurringTransaction(
+  userId: string,
+  overrides: Partial<typeof recurringTransactions.$inferInsert> = {},
+) {
+  const id = uuidv7();
+  const walletId = overrides.walletId ?? (await createTestWallet(userId));
+  const categoryId = overrides.categoryId ?? (await createTestCategory(userId, { type: 'expense' }));
+  await dbWrite.insert(recurringTransactions).values({
+    id,
+    userId,
+    type: 'expense',
+    amount: 100_000_00n,
+    categoryId,
+    walletId,
+    frequency: 'monthly',
+    startDate: '2026-01-01',
+    nextRunDate: '2026-01-01',
+    ...overrides,
+  });
+  return id;
+}
+
+/** Same as `createTestRecurringTransaction`, for `recurring_savings_contributions` — task 24. */
+export async function createTestRecurringContribution(
+  userId: string,
+  goalId: string,
+  overrides: Partial<typeof recurringSavingsContributions.$inferInsert> = {},
+) {
+  const id = uuidv7();
+  const walletId = overrides.walletId ?? (await createTestWallet(userId));
+  await dbWrite.insert(recurringSavingsContributions).values({
+    id,
+    userId,
+    goalId,
+    walletId,
+    amount: 100_000_00n,
+    frequency: 'monthly',
+    startDate: '2026-01-01',
+    nextRunDate: '2026-01-01',
     ...overrides,
   });
   return id;
@@ -268,6 +319,14 @@ export async function deleteTestReceivable(receivableId: string) {
  * the goal itself, which the creator owns).
  */
 export async function deleteTestSavingsGoal(goalId: string) {
+  // tasks/24-recurring-transactions: `recurring_savings_contributions.goal_id`
+  // is ON DELETE RESTRICT, same reasoning as `savings_contributions` above —
+  // must go first, REGARDLESS of which user owns the recurring rule row (a
+  // shared goal can have an auto-contribution rule owned by a member other
+  // than the goal's creator).
+  await dbWrite
+    .delete(recurringSavingsContributions)
+    .where(eq(recurringSavingsContributions.goalId, goalId));
   await dbWrite.delete(savingsContributions).where(eq(savingsContributions.savingsGoalId, goalId));
   await dbWrite.delete(savingsGoals).where(eq(savingsGoals.id, goalId));
 }
@@ -399,6 +458,18 @@ export async function deleteTestUser(userId: string) {
   await dbWrite.delete(goldSales).where(eq(goldSales.userId, userId));
   await dbWrite.delete(goldLots).where(eq(goldLots.userId, userId));
   await dbWrite.delete(goldPrices).where(eq(goldPrices.userId, userId));
+
+  // tasks/24-recurring-transactions: `recurring_transactions.wallet_id`/
+  // `.category_id` and `recurring_savings_contributions.wallet_id` are all
+  // ON DELETE RESTRICT (src/lib/db/schema/recurring.ts), so this user's own
+  // recurring rules must go before `wallets` below. `user_id` on both is
+  // ON DELETE CASCADE, so this is only needed because of the ordering
+  // relative to `wallets`/`categories`, not because cascade wouldn't
+  // eventually clear it on its own.
+  await dbWrite.delete(recurringTransactions).where(eq(recurringTransactions.userId, userId));
+  await dbWrite
+    .delete(recurringSavingsContributions)
+    .where(eq(recurringSavingsContributions.userId, userId));
 
   await dbWrite.delete(householdMembers).where(eq(householdMembers.userId, userId));
   await dbWrite.delete(ledgerEntries).where(eq(ledgerEntries.userId, userId));

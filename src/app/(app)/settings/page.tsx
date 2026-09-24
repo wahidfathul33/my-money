@@ -1,4 +1,4 @@
-import { ChevronRight, CircleUser, Database, Info, LogOut, Share2, SlidersHorizontal, Tag } from 'lucide-react';
+import { ChevronRight, CircleUser, Database, Info, LogOut, Repeat, Share2, SlidersHorizontal, Tag } from 'lucide-react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,15 @@ export default function SettingsPage() {
                 <Share2 className="size-5" aria-hidden="true" />
               </span>
               <span className="text-text flex-1 text-sm font-medium">Yang Saya Bagikan</span>
+              <ChevronRight className="text-text-subtle size-4" aria-hidden="true" />
+            </Link>
+          </li>
+          <li>
+            <Link href="/settings/recurring" className="list-row flex items-center gap-3 px-4 py-3">
+              <span className="bg-surface-raised text-text-muted flex size-10 items-center justify-center rounded-full">
+                <Repeat className="size-5" aria-hidden="true" />
+              </span>
+              <span className="text-text flex-1 text-sm font-medium">Transaksi Rutin</span>
               <ChevronRight className="text-text-subtle size-4" aria-hidden="true" />
             </Link>
           </li>

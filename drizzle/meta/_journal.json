@@ -43,6 +43,13 @@
       "when": 1789353176353,
       "tag": "0005_old_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790229739749,
+      "tag": "0006_adorable_meteorite",
+      "breakpoints": true
     }
   ]
 }

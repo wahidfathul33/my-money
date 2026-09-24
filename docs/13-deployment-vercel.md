@@ -33,7 +33,8 @@ GitHub repo
     { "path": "/api/cron/gold-price",         "schedule": "0 19 * * *" },
     { "path": "/api/cron/reconcile",          "schedule": "0 20 * * *" },
     { "path": "/api/cron/expire-invitations", "schedule": "0 16 * * *" },
-    { "path": "/api/cron/net-worth-snapshot", "schedule": "55 16 * * *" }
+    { "path": "/api/cron/net-worth-snapshot", "schedule": "55 16 * * *" },
+    { "path": "/api/cron/recurring",          "schedule": "15 20 * * *" }
   ]
 }
 ```
@@ -52,6 +53,7 @@ GitHub repo
 | `gold-price` | `0 19 * * *` | 02:00 |
 | `reconcile` | `0 20 * * *` | 03:00 |
 | `expire-invitations` | `0 16 * * *` | 23:00 |
+| `recurring` | `15 20 * * *` | 03:15 |
 
 **Seluruh cron berjalan harian** — akun Vercel Hobby/gratis hanya mengizinkan kadensi harian; jadwal per jam memerlukan paket Pro. `expire-invitations` awalnya dirancang berjalan setiap jam (task 11's implementasi — src/app/api/cron/expire-invitations/route.ts — supaya undangan kedaluwarsa tak lama setelah batas 7 harinya lewat) tetapi diturunkan ke harian di task 23 untuk tetap pada paket gratis. Ini aman: `acceptInvitation` (src/lib/services/invitations.ts) memeriksa `expiresAt > now` secara real-time pada setiap percobaan terima, terlepas dari kapan cron ini terakhir berjalan — cron ini murni housekeeping (mengubah status undangan untuk tampilan, bukan pemeriksa keabsahan), jadi kadensi yang lebih jarang hanya membuat undangan yang sudah lewat tampil "Menunggu" hingga ~24 jam lebih lama, bukan celah keamanan. Ia tidak menulis apa pun yang bersifat finansial. Urutannya terhadap `reconcile` tidak berpengaruh, dan menjalankannya berulang tidak dapat merusak saldo siapa pun.
 

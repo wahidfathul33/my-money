@@ -16,6 +16,8 @@ import {
 } from '@/features/savings/client-types';
 import { serializeMoney } from '@/lib/finance/money';
 import { GoalDetailClient } from '@/features/savings/components/goal-detail-client';
+import { getActiveRecurringContributionForGoal } from '@/features/recurring/queries';
+import { toRecurringContributionClientData } from '@/features/recurring/client-types';
 
 /**
  * `/wealth/savings/[id]` — one detail page for BOTH a personal goal and a
@@ -32,13 +34,15 @@ export default async function SavingsGoalDetailPage({ params }: { params: Promis
   if (!goal) notFound();
 
   const isShared = goal.householdId !== null;
-  const [contributions, memberTotals, wallets, defaultWalletId, ownFundedAmount] = await Promise.all([
-    listContributions(id),
-    isShared ? getContributionsByMember(id) : Promise.resolve([]),
-    listWalletOptions(user.id),
-    resolveDefaultWalletId(user.id),
-    getOwnFundedAmount(user.id, id),
-  ]);
+  const [contributions, memberTotals, wallets, defaultWalletId, ownFundedAmount, recurringContribution] =
+    await Promise.all([
+      listContributions(id),
+      isShared ? getContributionsByMember(id) : Promise.resolve([]),
+      listWalletOptions(user.id),
+      resolveDefaultWalletId(user.id),
+      getOwnFundedAmount(user.id, id),
+      getActiveRecurringContributionForGoal(user.id, id),
+    ]);
 
   return (
     <>
@@ -50,6 +54,7 @@ export default async function SavingsGoalDetailPage({ params }: { params: Promis
         wallets={wallets}
         defaultWalletId={defaultWalletId}
         ownFundedAmount={serializeMoney(ownFundedAmount)}
+        recurringContribution={recurringContribution ? toRecurringContributionClientData(recurringContribution) : null}
       />
     </>
   );

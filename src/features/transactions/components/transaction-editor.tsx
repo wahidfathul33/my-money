@@ -9,15 +9,17 @@
  * factoring the fields out here keeps that behavior defined exactly once.
  */
 import { useState } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, Repeat } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { TransferForm } from '@/features/transfers/components/transfer-form';
 import { MemberTransferForm } from '@/features/transfers/components/member-transfer-form';
 import type { MemberTransferSelection } from '@/features/transfers/components/transfer-target-picker';
 import type { TransferTargetPerson } from '@/features/transfers/target-queries';
 import { HouseholdToggle, type HouseholdOption } from '@/features/sharing/components/household-toggle';
+import type { RecurringFrequency } from '@/lib/date/recurring';
 import { formatExpression } from '../amount-math';
 import type { RecordableTransactionType } from '../queries';
 import type { CategoryRow, CategoryWithChildren } from '../queries';
@@ -26,6 +28,12 @@ import { AmountKeypad } from './amount-keypad';
 import { CategoryPicker } from './category-picker';
 import { DatePicker } from './date-picker';
 import { WalletPicker } from './wallet-picker';
+
+const RECURRING_FREQUENCY_LABEL: Record<RecurringFrequency, string> = {
+  daily: 'Harian',
+  weekly: 'Mingguan',
+  monthly: 'Bulanan',
+};
 
 /** tasks/13-transfers-member — which half of the "Transfer" tab is active. Meaningless (and unrendered) unless `type === 'transfer' && hasHousehold`. */
 export type TransferMode = 'own' | 'member';
@@ -80,6 +88,23 @@ export interface TransactionEditorProps {
   households?: HouseholdOption[];
   householdId?: string | null;
   onHouseholdChange?: (id: string | null) => void;
+  /**
+   * tasks/24-recurring-transactions — "Ulangi transaksi ini". Only rendered
+   * (and only meaningful) when `type !== 'transfer'` — spec.md is explicit
+   * that recurring transfers are out of scope. `allowRecurring` defaults to
+   * `false`, same opt-in-per-caller convention as `allowTransfer`:
+   * `edit-transaction-sheet.tsx` never opts in (an existing transaction
+   * isn't itself a recurring RULE — editing one doesn't retroactively
+   * create one).
+   */
+  allowRecurring?: boolean;
+  recurring?: boolean;
+  onRecurringChange?: (recurring: boolean) => void;
+  recurringFrequency?: RecurringFrequency;
+  onRecurringFrequencyChange?: (frequency: RecurringFrequency) => void;
+  /** `YYYY-MM-DD`, or `''` for no end date. */
+  recurringEndDate?: string;
+  onRecurringEndDateChange?: (endDate: string) => void;
 }
 
 export function TransactionEditor({
@@ -114,6 +139,13 @@ export function TransactionEditor({
   households = [],
   householdId = null,
   onHouseholdChange,
+  allowRecurring = false,
+  recurring = false,
+  onRecurringChange,
+  recurringFrequency = 'monthly',
+  onRecurringFrequencyChange,
+  recurringEndDate = '',
+  onRecurringEndDateChange,
 }: TransactionEditorProps) {
   // Lazy initializer — visible from the start when editing a transaction
   // that already has a note, without either caller (create/edit) having to
@@ -258,6 +290,55 @@ export function TransactionEditor({
           onChange={(e) => onNoteChange(e.target.value)}
           maxLength={280}
         />
+      )}
+
+      {/* "Ulangi transaksi ini" — tasks/24-recurring-transactions. Only for
+          Pemasukan/Pengeluaran (`type !== 'transfer'`); recurring transfers
+          are explicitly out of scope (spec.md). */}
+      {allowRecurring && type !== 'transfer' && (
+        <div className="bg-surface-raised rounded-card flex flex-col gap-3 p-3">
+          <div className="flex items-center gap-2">
+            <Repeat className="text-text-muted size-4 shrink-0" aria-hidden="true" />
+            <span className="text-text flex-1 text-sm font-medium">Ulangi transaksi ini</span>
+            <Switch
+              label="Ulangi transaksi ini"
+              checked={recurring}
+              onCheckedChange={(checked) => onRecurringChange?.(checked)}
+            />
+          </div>
+
+          {recurring && (
+            <div className="flex flex-col gap-3">
+              <Tabs
+                value={recurringFrequency}
+                onValueChange={(v) => onRecurringFrequencyChange?.(v as RecurringFrequency)}
+              >
+                <TabsList variant="segmented" className="w-full">
+                  <TabsTrigger variant="segmented" value="daily">
+                    {RECURRING_FREQUENCY_LABEL.daily}
+                  </TabsTrigger>
+                  <TabsTrigger variant="segmented" value="weekly">
+                    {RECURRING_FREQUENCY_LABEL.weekly}
+                  </TabsTrigger>
+                  <TabsTrigger variant="segmented" value="monthly">
+                    {RECURRING_FREQUENCY_LABEL.monthly}
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              <label className="text-text flex h-11 items-center gap-2 text-sm font-medium">
+                Berakhir (opsional)
+                <input
+                  type="date"
+                  aria-label="Tanggal berakhir (opsional)"
+                  value={recurringEndDate}
+                  onChange={(e) => onRecurringEndDateChange?.(e.target.value)}
+                  className="rounded-input border-border bg-surface text-body text-text h-11 flex-1 border px-3"
+                />
+              </label>
+            </div>
+          )}
+        </div>
       )}
 
       {error && (

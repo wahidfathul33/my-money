@@ -118,7 +118,7 @@ function DepositFormSheetForm({ onOpenChange, deposit, wallets, defaultWalletId,
   ];
 
   return (
-    <form action={formAction} className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto overscroll-contain pb-1">
+    <form action={formAction} className="flex flex-col gap-4 pb-1">
       {isEdit && <input type="hidden" name="depositId" value={deposit!.id} />}
       {!isEdit && <input type="hidden" name="idempotencyKey" value={idempotencyKeyRef.current} />}
       <input type="hidden" name="payoutSchedule" value={payoutSchedule} />

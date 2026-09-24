@@ -94,22 +94,19 @@ export function WalletFormSheet({ open, onOpenChange, wallet }: WalletFormSheetP
         }
       >
         {/*
-         * `md:max-h-none` — on the desktop dialog presentation there's
-         * headroom to spare (the outer `.sheet-scroll`, globals.css, already
-         * caps the WHOLE sheet at `max-height: 85dvh` with real
-         * `overflow-y: auto`), so this form's own tighter `max-h-[50vh]`
-         * budget only exists for the mobile bottom sheet — there, grabber +
-         * title + description + this form together must stay under 85dvh on
-         * a small phone, which the outer box's own scroll alone doesn't
-         * guarantee since it caps the WHOLE sheet, not just this form's
-         * share of it (confirmed via Playwright on a 393×851 mobile
-         * viewport — see git history for the original off-screen-content
-         * bug this budget fixes).
+         * No height cap of its own — the outer `.sheet-scroll`
+         * (globals.css) already caps the WHOLE sheet at `max-height: 85dvh`
+         * with real `overflow-y: auto`, so grabber + title + description +
+         * this form scroll together as one unit past that point. An
+         * earlier version of this form additionally self-capped at
+         * `max-h-[50vh]` to work around content becoming unreachable below
+         * the fold — re-verified via Playwright on both a 393×851 and a
+         * 375×667 mobile viewport that this no longer reproduces (the
+         * button past the fold on the smaller viewport is still reachable
+         * via scroll and passes an actionability check), so the extra cap
+         * was just costing an unnecessary scrollbar on every larger screen.
          */}
-        <form
-          action={formAction}
-          className="flex max-h-[50vh] flex-col gap-4 overflow-y-auto overscroll-contain pb-1 md:max-h-none"
-        >
+        <form action={formAction} className="flex flex-col gap-4 pb-1">
           {isEdit && <input type="hidden" name="walletId" value={wallet!.id} />}
           <input type="hidden" name="icon" value={icon} />
           <input type="hidden" name="color" value={color} />

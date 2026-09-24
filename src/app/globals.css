@@ -1,6 +1,29 @@
 @import 'tailwindcss';
 
 /*
+ * Variant `dark:` Tailwind. Defaultnya HANYA `@media (prefers-color-scheme:
+ * dark)`, yang berarti utility seperti `dark:bg-slate-800`
+ * (src/features/categories/category-colors.ts) akan mengabaikan pilihan tema
+ * eksplisit pengguna — swatch kategori bisa terang di atas UI gelap, atau
+ * sebaliknya. Definisi ini menyamakannya dengan dua jalur yang dipakai token
+ * `--color-*` di bawah: ikut OS kecuali dipaksa terang, plus `data-theme='dark'`.
+ *
+ * `:where()` menjaga spesifisitas tetap nol, persis seperti `@media` bawaan —
+ * urutan utility di layer yang menentukan, bukan bobot selector.
+ */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme='light']), :root:not([data-theme='light']) *) {
+      @slot;
+    }
+  }
+
+  &:where(:root[data-theme='dark'], :root[data-theme='dark'] *) {
+    @slot;
+  }
+}
+
+/*
  * Token desain MyMoney — lihat docs/07-design-system.md §2-13.
  * Nilai OKLCH disalin apa adanya dari dokumen; jangan sesuaikan tanpa
  * memperbarui dokumennya terlebih dahulu.
@@ -141,35 +164,122 @@
  * `@media` — custom property tetap sama, hanya nilainya yang berubah
  * lewat cascade normal saat runtime.
  */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: oklch(15% 0.01 250);
-    --color-surface: oklch(19% 0.012 250);
-    --color-surface-raised: oklch(23% 0.012 250);
-    --color-border: oklch(28% 0.012 250);
-    --color-separator: oklch(32% 0.012 250);
-    --color-text: oklch(96% 0.004 250);
-    --color-text-muted: oklch(72% 0.01 250);
-    --color-text-subtle: oklch(58% 0.01 250);
-    --color-scrim: oklch(8% 0.01 250 / 0.56);
+/*
+ * NILAI mode gelap — sumber tunggal. Disimpan sebagai `--dark-*` lalu
+ * dipasang ke token sebenarnya lewat DUA jalur di bawah:
+ *
+ *   1. `@media (prefers-color-scheme: dark)` → pilihan "Ikuti sistem",
+ *      yaitu default dan satu-satunya perilaku sebelum pengaturan tema ada.
+ *   2. `:root[data-theme='dark']` → saat pengguna memilih "Gelap" eksplisit.
+ *
+ * `data-theme` ditulis root layout dari cookie (src/lib/theme.ts); "system"
+ * sengaja tidak menulis atribut sama sekali, jadi jalur 1 yang berlaku.
+ *
+ * CSS tidak bisa menyatukan selector di dalam dan di luar `@media` jadi satu
+ * aturan, jadi daftar PEMASANGANnya memang kembar — tapi yang kembar hanya
+ * baris `var()`, nilai warnanya cuma ada di sini dan tidak bisa melenceng
+ * antar jalur.
+ */
+:root {
+  --dark-bg: oklch(15% 0.01 250);
+  --dark-surface: oklch(19% 0.012 250);
+  --dark-surface-raised: oklch(23% 0.012 250);
+  --dark-border: oklch(28% 0.012 250);
+  --dark-separator: oklch(32% 0.012 250);
+  --dark-text: oklch(96% 0.004 250);
+  --dark-text-muted: oklch(72% 0.01 250);
+  --dark-text-subtle: oklch(58% 0.01 250);
+  --dark-scrim: oklch(8% 0.01 250 / 0.56);
 
-    --color-brand: oklch(72% 0.115 195);
-    --color-brand-subtle: oklch(27% 0.045 195);
-    --color-positive: oklch(74% 0.15 152);
-    --color-positive-subtle: oklch(25% 0.045 152);
-    --color-negative: oklch(71% 0.16 25);
-    --color-negative-subtle: oklch(25% 0.05 25);
-    /* Task 23 fix: this was the only `-subtle` background token missing a
-       dark-mode override — brand/positive/negative-subtle all darken here,
-       this one didn't, so `.text-warning-readable`'s dark-mode value
-       (`--color-warning`, 72% L) ended up rendered against a background
-       that stayed at light mode's 96% L. Lighthouse caught it on the
-       OfflineBanner ("Koneksi lambat…", bg-warning-subtle
-       text-warning-readable): 2.22:1, needs 4.5:1. Same L (25%) as
-       positive-subtle/negative-subtle above, same hue/chroma as light
-       mode's own value (0.045 75). */
-    --color-warning-subtle: oklch(25% 0.045 75);
+  --dark-brand: oklch(72% 0.115 195);
+  --dark-brand-subtle: oklch(27% 0.045 195);
+  --dark-positive: oklch(74% 0.15 152);
+  --dark-positive-subtle: oklch(25% 0.045 152);
+  --dark-negative: oklch(71% 0.16 25);
+  --dark-negative-subtle: oklch(25% 0.05 25);
+  /* Task 23 fix: this was the only `-subtle` background token missing a
+     dark-mode override — brand/positive/negative-subtle all darken here,
+     this one didn't, so `.text-warning-readable`'s dark-mode value
+     (`--color-warning`, 72% L) ended up rendered against a background
+     that stayed at light mode's 96% L. Lighthouse caught it on the
+     OfflineBanner ("Koneksi lambat…", bg-warning-subtle
+     text-warning-readable): 2.22:1, needs 4.5:1. Same L (25%) as
+     positive-subtle/negative-subtle above, same hue/chroma as light
+     mode's own value (0.045 75). */
+  --dark-warning-subtle: oklch(25% 0.045 75);
+}
+
+/* Jalur 1 — "Ikuti sistem". `:not([data-theme='light'])` adalah satu-satunya
+   perbedaan dari versi sebelum ada pengaturan tema: OS gelap tetap menang
+   kecuali pengguna memaksa terang. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: var(--dark-bg);
+    --color-surface: var(--dark-surface);
+    --color-surface-raised: var(--dark-surface-raised);
+    --color-border: var(--dark-border);
+    --color-separator: var(--dark-separator);
+    --color-text: var(--dark-text);
+    --color-text-muted: var(--dark-text-muted);
+    --color-text-subtle: var(--dark-text-subtle);
+    --color-scrim: var(--dark-scrim);
+
+    --color-brand: var(--dark-brand);
+    --color-brand-subtle: var(--dark-brand-subtle);
+    --color-positive: var(--dark-positive);
+    --color-positive-subtle: var(--dark-positive-subtle);
+    --color-negative: var(--dark-negative);
+    --color-negative-subtle: var(--dark-negative-subtle);
+    --color-warning-subtle: var(--dark-warning-subtle);
+
+    /* Teks "readable" — lihat rationale lengkapnya di dekat
+       `.text-brand-readable` dkk. di bawah. Di mode gelap token mentahnya
+       sudah lolos AA, jadi nilainya kembali ke token itu sendiri. */
+    --readable-brand: var(--color-brand);
+    --readable-positive: var(--color-positive);
+    --readable-warning: var(--color-warning);
   }
+}
+
+/* Jalur 2 — pilihan "Gelap" eksplisit, terlepas dari preferensi OS. */
+:root[data-theme='dark'] {
+  --color-bg: var(--dark-bg);
+  --color-surface: var(--dark-surface);
+  --color-surface-raised: var(--dark-surface-raised);
+  --color-border: var(--dark-border);
+  --color-separator: var(--dark-separator);
+  --color-text: var(--dark-text);
+  --color-text-muted: var(--dark-text-muted);
+  --color-text-subtle: var(--dark-text-subtle);
+  --color-scrim: var(--dark-scrim);
+
+  --color-brand: var(--dark-brand);
+  --color-brand-subtle: var(--dark-brand-subtle);
+  --color-positive: var(--dark-positive);
+  --color-positive-subtle: var(--dark-positive-subtle);
+  --color-negative: var(--dark-negative);
+  --color-negative-subtle: var(--dark-negative-subtle);
+  --color-warning-subtle: var(--dark-warning-subtle);
+
+  --readable-brand: var(--color-brand);
+  --readable-positive: var(--color-positive);
+  --readable-warning: var(--color-warning);
+}
+
+/* Memberi tahu UA skema mana yang dipakai, supaya kontrol native (scrollbar,
+   date picker, autofill) ikut gelap — bukan kotak putih menyilaukan di
+   tengah UI gelap. `light dark` untuk mode sistem; dua baris berikutnya
+   mengunci pilihan eksplisit. */
+:root {
+  color-scheme: light dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 /* ====================================================================== */
@@ -306,13 +416,15 @@ a {
    baru, bukan mengubah `--color-brand`); mode gelap tetap token aslinya
    karena sudah lolos. Diverifikasi ulang lewat axe (bukan cuma hitungan
    manual) — lihat laporan task 01. */
-.text-brand-readable {
-  color: oklch(46% 0.118 195);
+/* Nilai mode TERANG-nya di sini; versi gelapnya (`--color-brand` mentah)
+   ikut daftar pemasangan mode gelap di atas — satu tempat untuk semua
+   override gelap, bukan @media terpisah per kelas. */
+:root {
+  --readable-brand: oklch(46% 0.118 195);
 }
-@media (prefers-color-scheme: dark) {
-  .text-brand-readable {
-    color: var(--color-brand);
-  }
+
+.text-brand-readable {
+  color: var(--readable-brand);
 }
 
 /* Sama, tapi untuk Tabs (variant="underline"): warnanya hanya berlaku
@@ -320,25 +432,19 @@ a {
    `data-[state=active]:` Tailwind karena `.text-brand-readable` bukan
    utility (lihat src/components/ui/tabs.tsx). */
 .tabs-trigger-underline[data-state='active'] {
-  color: oklch(46% 0.118 195);
-}
-@media (prefers-color-scheme: dark) {
-  .tabs-trigger-underline[data-state='active'] {
-    color: var(--color-brand);
-  }
+  color: var(--readable-brand);
 }
 
 /* Teks `--color-positive` di atas bg/surface (mis. MoneyText tone
    "positive") gagal AA di mode terang (3.68-4.01:1) tapi lolos nyaman di
    mode gelap (7.77-9.06:1). Sama polanya dengan .text-brand-readable di
    atas. */
-.text-positive-readable {
-  color: oklch(44% 0.145 152);
+:root {
+  --readable-positive: oklch(44% 0.145 152);
 }
-@media (prefers-color-scheme: dark) {
-  .text-positive-readable {
-    color: var(--color-positive);
-  }
+
+.text-positive-readable {
+  color: var(--readable-positive);
 }
 
 /* Fill solid untuk Button variant="danger". --color-negative (56%/71% L)
@@ -356,13 +462,12 @@ a {
    daripada brand/positive di L serupa) tapi lolos nyaman di mode gelap
    (6.65-7.75:1). Sama polanya dengan .text-brand-readable /
    .text-positive-readable di atas — turunkan L saja, token mentahnya tetap. */
-.text-warning-readable {
-  color: oklch(50% 0.15 75);
+:root {
+  --readable-warning: oklch(50% 0.15 75);
 }
-@media (prefers-color-scheme: dark) {
-  .text-warning-readable {
-    color: var(--color-warning);
-  }
+
+.text-warning-readable {
+  color: var(--readable-warning);
 }
 
 /* ====================================================================== */

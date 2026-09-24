@@ -3,10 +3,11 @@
  * Tailwind's build-time scanner only picks up class names that appear as
  * literal strings in source — `` `bg-${color}-100` `` would silently ship no
  * CSS at all, so every color needs its classes spelled out here instead of
- * assembled at runtime. `dark:` in this app follows
- * `prefers-color-scheme` (Tailwind v4's default — see src/app/globals.css,
- * no `@custom-variant dark` override), so light/dark both fall out of the
- * same class list.
+ * assembled at runtime. `dark:` in this app follows the user's theme
+ * setting — OS preference by default, overridable to light/dark via
+ * `data-theme` on `<html>` (see `@custom-variant dark` in
+ * src/app/globals.css and src/lib/theme.ts) — so light/dark both fall out
+ * of the same class list.
  */
 import { CATEGORY_COLORS, type CategoryColor } from '@/lib/services/categories';
 

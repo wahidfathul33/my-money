@@ -44,15 +44,27 @@ function extractLightThemeBlock(css: string): string {
 }
 
 /**
- * Isi blok `:root { ... }` di dalam `@media (prefers-color-scheme: dark)`
- * (mode gelap). BUKAN `@theme` bersarang — lihat komentar di globals.css:
- * `@theme` tidak boleh dinest di dalam `@media`, kompiler Tailwind
- * menyatukannya jadi satu deklarasi `:root` tanpa syarat.
+ * Override mode gelap, dibaca dari deklarasi `--dark-*` di globals.css —
+ * sumber tunggal nilainya. BUKAN dari blok di dalam `@media
+ * (prefers-color-scheme: dark)`: sejak ada pengaturan tema, blok itu (dan
+ * kembarannya `:root[data-theme='dark']`) hanya berisi pemasangan
+ * `--color-x: var(--dark-x)`, bukan nilai warna.
+ *
+ * Regex-nya menuntut titik dua langsung setelah nama, jadi pemakaian
+ * `var(--dark-bg)` di daftar pemasangan tidak ikut tertangkap — hanya
+ * definisinya.
  */
-function extractDarkRootBlock(css: string): string {
-  const mediaStart = css.indexOf('@media (prefers-color-scheme: dark)');
-  if (mediaStart === -1) throw new Error('Blok dark mode tidak ditemukan di globals.css');
-  return extractBracedBlock(css.slice(mediaStart), ':root', 'mode gelap');
+function extractDarkTokens(css: string): Record<string, string> {
+  const tokens: Record<string, string> = {};
+  const re = /--dark-([\w-]+):\s*([^;]+);/g;
+  for (const match of css.matchAll(re)) {
+    const [, name, value] = match;
+    if (name && value) tokens[name] = value.trim();
+  }
+  if (Object.keys(tokens).length === 0) {
+    throw new Error('Tidak ada token `--dark-*` di globals.css — mode gelap tidak bisa diuji');
+  }
+  return tokens;
 }
 
 export interface DesignTokens {
@@ -69,6 +81,6 @@ export interface DesignTokens {
 export function readDesignTokens(): DesignTokens {
   const css = readFileSync(GLOBALS_CSS_PATH, 'utf-8');
   const light = extractColorTokens(extractLightThemeBlock(css));
-  const darkOverrides = extractColorTokens(extractDarkRootBlock(css));
+  const darkOverrides = extractDarkTokens(css);
   return { light, dark: { ...light, ...darkOverrides } };
 }

@@ -2,9 +2,11 @@ import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
+import { cookies } from 'next/headers';
 import type { ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/toast';
 import { ServiceWorkerRegistration } from '@/components/layout/service-worker-registration';
+import { THEME_COOKIE, parseTheme, themeAttribute } from '@/lib/theme';
 import './globals.css';
 
 // Inter Variable — subset latin, hanya varian variable, dimuat lewat
@@ -38,7 +40,14 @@ export const viewport: Viewport = {
   themeColor: '#008f90',
 };
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  // Tema dibaca di sini, bukan di client: `data-theme` sudah ikut di HTML
+  // pertama, jadi tidak ada kedipan terang-lalu-gelap dan tidak ada script
+  // blocking di <head>. `undefined` (pilihan "Ikuti sistem") sengaja tidak
+  // merender atribut sama sekali — globals.css jatuh ke
+  // `prefers-color-scheme`. Lihat src/lib/theme.ts.
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
+
   return (
     // data-scroll-behavior tells Next.js the `scroll-behavior: smooth` in
     // globals.css is deliberate (docs/07-design-system.md), silencing its
@@ -48,6 +57,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       lang="id"
       className={`${inter.variable} h-full antialiased`}
       data-scroll-behavior="smooth"
+      data-theme={themeAttribute(theme)}
     >
       <body className="flex min-h-full flex-col">
         {/* App-wide — tasks/07-transactions-core/spec.md needs toast +

@@ -576,7 +576,9 @@ Dengan hanya dua mekanisme berbagi, seluruh jawaban atas *"apa yang bisa dilihat
 
 ## 18. Settings — `/settings`
 
-Kelompok: Profil · Preferensi (zona waktu, dompet default, piutang sebagai aset) · **Yang Saya Bagikan** · **Keluarga** · Kategori · Dompet · Data (ekspor CSV, hapus akun) · Tentang.
+Kelompok: Profil · Preferensi (tema, zona waktu, dompet default, piutang sebagai aset) · **Yang Saya Bagikan** · **Keluarga** · Kategori · Dompet · Data (ekspor CSV, hapus akun) · Tentang.
+
+Tema punya tiga pilihan — Ikuti sistem (default), Terang, Gelap — dan satu-satunya kontrol di halaman ini yang tidak ditulis ke tabel `users`: nilainya di cookie, jadi berlaku per perangkat dan tetap bekerja offline. Lihat docs/07 §4.
 
 Hapus akun memerlukan pengetikan alamat email untuk konfirmasi, dan menyatakan dengan jelas bahwa seluruh data finansial akan hilang permanen.
 

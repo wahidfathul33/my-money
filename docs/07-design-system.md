@@ -183,6 +183,10 @@ Token semantik, bukan nama warna mentah. Komponen tidak pernah menyebut `blue-50
 
 **Mode gelap bukan inversi.** Latar `15%` bukan hitam murni: hitam murni menghilangkan shadow dan memunculkan smearing OLED saat scroll. Aksen dinaikkan terangnya karena warna jenuh di atas gelap terbaca lebih redup.
 
+**Mode gelap bisa dipaksa.** Defaultnya tetap mengikuti OS seperti di atas, tapi `/settings/preferences` punya pilihan Terang/Gelap eksplisit. Preferensinya disimpan di cookie (bukan tabel `users`) supaya root layout bisa menuliskannya sebagai `data-theme` pada `<html>` sejak render pertama di semua rute, termasuk yang belum login — lihat `src/lib/theme.ts`. Karena itu di `globals.css` nilai gelapnya hidup sekali sebagai `--dark-*` lalu dipasang lewat dua selector: `@media (prefers-color-scheme: dark) :root:not([data-theme='light'])` dan `:root[data-theme='dark']`. Variant `dark:` Tailwind diredefinisi (`@custom-variant`) mengikuti dua jalur yang sama, kalau tidak utility seperti `dark:bg-slate-800` akan mengabaikan pilihan pengguna.
+
+> Catatan implementasi: blok `@media { @theme { … } }` di atas ditulis apa adanya dari dokumen ini, tapi TIDAK dipakai — `@theme` tidak boleh dinest di dalam `@media` (kompiler Tailwind meratakannya jadi `:root` tanpa syarat, membuat aplikasi selalu gelap). `globals.css` memakai `:root` biasa; lihat komentar panjang di file itu.
+
 **Aturan warna finansial:**
 - Pemasukan: `--color-positive`, awalan `+`
 - Pengeluaran: `--color-negative`, awalan `−`

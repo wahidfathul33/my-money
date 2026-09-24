@@ -136,6 +136,16 @@ Rencana: [plan.md](plan.md) · Spesifikasi: [docs/](../docs/README.md)
 
 ---
 
+## F7 — Ekstensi v1.1
+
+v1.0 (task 00–23) selesai. Task di bawah ini adalah perpanjangan pasca-rilis, bukan bagian dari cakupan v1.0 asli — lihat [15-roadmap §7](../docs/15-roadmap.md#7-setelah-v10).
+
+- [ ] **24 — [recurring-transactions](24-recurring-transactions/)**
+  Transaksi rutin (pemasukan/pengeluaran, harian/mingguan/bulanan) & kontribusi tabungan otomatis ke goal yang sudah ada.
+  *Verifikasi:* auto-post tanpa konfirmasi; bulanan tanggal 31 dijepit dengan benar ke bulan pendek; cron dua kali sehari tidak pernah duplikat.
+
+---
+
 ## Ringkasan
 
 | Fase | Task | Selesai |
@@ -147,4 +157,5 @@ Rencana: [plan.md](plan.md) · Spesifikasi: [docs/](../docs/README.md)
 | F4 Kekayaan | 16–18 | 3 / 3 |
 | F5 Insight | 19–21 | 3 / 3 |
 | F6 Rilis | 22–23 | 2 / 2 |
-| **Total** | | **24 / 24** |
+| **v1.0** | | **24 / 24** |
+| F7 Ekstensi v1.1 | 24 | 0 / 1 |

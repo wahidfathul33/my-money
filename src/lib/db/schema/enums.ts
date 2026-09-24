@@ -55,6 +55,12 @@ export const obligationStatusEnum = pgEnum('obligation_status', [
 
 export const budgetPeriodEnum = pgEnum('budget_period', ['monthly', 'custom']);
 
+// tasks/24-recurring-transactions — shared by `recurring_transactions` and
+// `recurring_savings_contributions` (spec.md: "REUSE enum yang sama").
+export const recurringFrequencyEnum = pgEnum('recurring_frequency', ['daily', 'weekly', 'monthly']);
+
+export const recurringStatusEnum = pgEnum('recurring_status', ['active', 'paused', 'ended']);
+
 // Household
 export const householdRoleEnum = pgEnum('household_role', ['owner', 'member']);
 

@@ -23,6 +23,8 @@ import { calculateGoalProgress, suggestedMonthlyPerMember } from '@/lib/finance/
 import { categoryColorClasses } from '@/features/categories/category-colors';
 import { ExclusionToggle } from '@/features/sharing/components/exclusion-toggle';
 import type { WalletOption } from '@/features/transactions/sheet-data';
+import { AutoContributionToggle } from '@/features/recurring/components/auto-contribution-toggle';
+import type { RecurringContributionClientData } from '@/features/recurring/client-types';
 import { archiveGoalAction } from '../actions';
 import type {
   ContributionHistoryItemClientData,
@@ -42,6 +44,8 @@ interface GoalDetailClientProps {
   wallets: WalletOption[];
   defaultWalletId: string | null;
   ownFundedAmount: string;
+  /** The caller's own ACTIVE auto-contribution rule for this goal, or `null` — tasks/24-recurring-transactions. */
+  recurringContribution: RecurringContributionClientData | null;
 }
 
 export function GoalDetailClient({
@@ -51,6 +55,7 @@ export function GoalDetailClient({
   wallets,
   defaultWalletId,
   ownFundedAmount,
+  recurringContribution,
 }: GoalDetailClientProps) {
   const router = useRouter();
   const [contributeOpen, setContributeOpen] = useState(false);
@@ -159,6 +164,17 @@ export function GoalDetailClient({
           </Button>
         )}
       </div>
+
+      {goal.status !== 'archived' && (
+        <div className="bg-surface rounded-card p-4">
+          <AutoContributionToggle
+            goalId={goal.id}
+            existingRule={recurringContribution}
+            wallets={wallets}
+            defaultWalletId={defaultWalletId}
+          />
+        </div>
+      )}
 
       {isShared && (
         <MemberContributions members={memberTotals} currentAmount={goal.currentAmount} targetAmount={goal.targetAmount} />

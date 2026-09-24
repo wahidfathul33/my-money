@@ -289,6 +289,7 @@ Semua berada di `/api/cron/*`, dilindungi header `Authorization: Bearer ${CRON_S
 | `/api/cron/reconcile` | 03:00 harian | Cek invarian I1–I19, laporkan selisih (read-only — tidak pernah memperbaiki data, lihat [05 §5](05-financial-integrity.md#5-invarian)) |
 | `/api/cron/budget-rollover` | 00:05 tanggal 1 | Materialisasi budget berulang (pribadi + household) |
 | `/api/cron/expire-invitations` | setiap jam | Kedaluwarsakan undangan household > 7 hari |
+| `/api/cron/recurring` | 03:15 harian | Materialisasi transaksi rutin + kontribusi tabungan otomatis yang jatuh tempo (tasks/24-recurring-transactions) |
 
 `expire-invitations` **tidak menulis apa pun yang bersifat finansial** — ia hanya mengubah status undangan. Dengan model transfer di [03 §9.3](03-domain-model.md#93-transfer-ke-anggota-household), tidak ada transfer menggantung yang perlu dibalikkan, sehingga cron ini tidak dapat merusak saldo siapa pun meskipun dijalankan berulang.
 

@@ -20,6 +20,7 @@ export * from './assets';
 export * from './obligations';
 export * from './budgets';
 export * from './snapshots';
+export * from './recurring';
 
 import { users } from './users';
 import { households, householdInvitations, householdMembers } from './households';
@@ -31,6 +32,7 @@ import { assets, deposits, goldLots, goldPrices, goldSales } from './assets';
 import { debtPayments, debts, receivablePayments, receivables } from './obligations';
 import { budgets } from './budgets';
 import { householdNetWorthSnapshots, netWorthSnapshots } from './snapshots';
+import { recurringSavingsContributions, recurringTransactions } from './recurring';
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   defaultWallet: one(wallets, {
@@ -243,5 +245,27 @@ export const householdNetWorthSnapshotsRelations = relations(
       fields: [householdNetWorthSnapshots.householdId],
       references: [households.id],
     }),
+  }),
+);
+
+export const recurringTransactionsRelations = relations(recurringTransactions, ({ one }) => ({
+  user: one(users, { fields: [recurringTransactions.userId], references: [users.id] }),
+  household: one(households, {
+    fields: [recurringTransactions.householdId],
+    references: [households.id],
+  }),
+  category: one(categories, { fields: [recurringTransactions.categoryId], references: [categories.id] }),
+  wallet: one(wallets, { fields: [recurringTransactions.walletId], references: [wallets.id] }),
+}));
+
+export const recurringSavingsContributionsRelations = relations(
+  recurringSavingsContributions,
+  ({ one }) => ({
+    user: one(users, { fields: [recurringSavingsContributions.userId], references: [users.id] }),
+    goal: one(savingsGoals, {
+      fields: [recurringSavingsContributions.goalId],
+      references: [savingsGoals.id],
+    }),
+    wallet: one(wallets, { fields: [recurringSavingsContributions.walletId], references: [wallets.id] }),
   }),
 );

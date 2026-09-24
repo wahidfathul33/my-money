@@ -94,24 +94,21 @@ export function WalletFormSheet({ open, onOpenChange, wallet }: WalletFormSheetP
         }
       >
         {/*
-         * `.sheet-scroll` (globals.css, task 01/02) caps the whole sheet at
-         * `max-height: 85dvh` but sets no `overflow-y` on that OUTER box —
-         * fine for short forms, but this one (name + type + balance + an
-         * 8-icon grid + an 8-color grid) can push the sheet's total natural
-         * height past 85dvh. Because the outer box has no overflow rule,
-         * content past its cap doesn't clip or get a scrollbar — it just
-         * paints below the fixed, bottom-anchored box, off-screen and
-         * unreachable (confirmed via Playwright on a 393×851 mobile
-         * viewport). Rather than touch the shared Sheet primitive/globals.css
-         * (task 01's, out of this task's scope — see briefing), this form
-         * scrolls itself within a height budget deliberately small enough
-         * to leave headroom for the grabber/title/description chrome above
-         * it, so grabber+title+description+form never exceeds 85dvh even
-         * on a small phone.
+         * `md:max-h-none` — on the desktop dialog presentation there's
+         * headroom to spare (the outer `.sheet-scroll`, globals.css, already
+         * caps the WHOLE sheet at `max-height: 85dvh` with real
+         * `overflow-y: auto`), so this form's own tighter `max-h-[50vh]`
+         * budget only exists for the mobile bottom sheet — there, grabber +
+         * title + description + this form together must stay under 85dvh on
+         * a small phone, which the outer box's own scroll alone doesn't
+         * guarantee since it caps the WHOLE sheet, not just this form's
+         * share of it (confirmed via Playwright on a 393×851 mobile
+         * viewport — see git history for the original off-screen-content
+         * bug this budget fixes).
          */}
         <form
           action={formAction}
-          className="flex max-h-[50vh] flex-col gap-4 overflow-y-auto overscroll-contain pb-1"
+          className="flex max-h-[50vh] flex-col gap-4 overflow-y-auto overscroll-contain pb-1 md:max-h-none"
         >
           {isEdit && <input type="hidden" name="walletId" value={wallet!.id} />}
           <input type="hidden" name="icon" value={icon} />

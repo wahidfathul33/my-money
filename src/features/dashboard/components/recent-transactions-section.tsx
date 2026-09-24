@@ -44,9 +44,9 @@ export function RecentTransactionsSection({ transactions }: RecentTransactionsSe
   return (
     <section className="flex flex-col gap-3">
       <SectionHeader title="Transaksi Terakhir" href="/transactions" />
-      <div className="flex flex-col">
+      <div className="divide-border flex flex-col divide-y">
         {transactions.map((item) => (
-          <div key={item.id} className="flex items-center gap-3 py-2">
+          <div key={item.id} className="flex items-center gap-3 py-3">
             {item.type === 'transfer' ? (
               <span className="bg-surface-raised text-text-muted flex size-10 shrink-0 items-center justify-center rounded-full">
                 <ArrowLeftRight className="size-5" aria-hidden="true" />

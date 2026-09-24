@@ -275,11 +275,12 @@ export function TransactionEditor({
           aria-pressed={noteVisible}
           onClick={() => setNoteVisible((v) => !v)}
           className={cn(
-            'pressable-tint rounded-inner ml-auto flex size-11 items-center justify-center',
+            'pressable-tint rounded-inner ml-auto flex h-11 shrink-0 items-center gap-1.5 px-2 text-sm font-medium',
             note ? 'text-brand-readable' : 'text-text-muted',
           )}
         >
-          <FileText className="size-4" aria-hidden="true" />
+          <FileText className="size-4 shrink-0" aria-hidden="true" />
+          Catatan
         </button>
       </div>
 

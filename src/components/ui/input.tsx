@@ -40,7 +40,7 @@ export function Input({
   const errorId = `${inputId}-error`;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={cn('flex flex-col gap-1.5', className)}>
       <label
         htmlFor={inputId}
         className={cn('text-text text-sm font-medium', hideLabel && 'sr-only')}
@@ -55,7 +55,6 @@ export function Input({
           'focus-visible:outline-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
           error ? 'border-negative' : 'border-border',
           type === 'money' && 'font-money',
-          className,
         )}
         aria-invalid={!!error}
         aria-describedby={error ? errorId : undefined}

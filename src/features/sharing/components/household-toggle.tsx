@@ -60,11 +60,12 @@ export function HouseholdToggle({ households, value, onChange }: HouseholdToggle
         aria-label={activeName ? `Ditandai ke ${activeName}` : 'Tandai ke keluarga'}
         aria-pressed={active}
         className={cn(
-          'pressable-tint rounded-inner flex size-11 items-center justify-center',
+          'pressable-tint rounded-inner flex h-11 items-center gap-1.5 px-2 text-sm font-medium',
           active ? 'text-brand-readable' : 'text-text-muted',
         )}
       >
-        <Home className="size-4" aria-hidden="true" />
+        <Home className="size-4 shrink-0" aria-hidden="true" />
+        <span className="max-w-20 truncate">{activeName ?? 'Keluarga'}</span>
       </button>
 
       {households.length > 1 && (

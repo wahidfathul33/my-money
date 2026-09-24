@@ -38,8 +38,13 @@ interface SheetContentProps extends ComponentPropsWithoutRef<typeof DialogPrimit
 }
 
 const CONTENT_VARIANT_CLASS: Record<Variant, string> = {
+  // Sheet naik dari bawah di bawah breakpoint `md`; di atasnya menjadi
+  // dialog tengah — docs/07 §14.1 "Dialog — padanan desktop dari Sheet,
+  // komponen yang sama". `.sheet-content-responsive` (globals.css)
+  // beralih dari animasi translate (geser) ke scale (muncul di tengah)
+  // tepat di breakpoint yang sama.
   bottom:
-    'sheet-content fixed inset-x-0 bottom-0 rounded-t-sheet material-glass sheet-scroll safe-bottom',
+    'sheet-content-responsive fixed inset-x-0 bottom-0 rounded-t-sheet material-glass sheet-scroll safe-bottom md:inset-x-auto md:bottom-auto md:left-1/2 md:top-1/2 md:w-[min(32rem,calc(100vw-2rem))] md:rounded-card',
   side: 'dialog-content fixed inset-y-0 right-0 h-full w-full max-w-sm rounded-l-sheet bg-surface shadow-float',
   center:
     'dialog-content fixed left-1/2 top-1/2 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-card bg-surface shadow-float',
@@ -119,7 +124,7 @@ export function SheetContent({
           <button
             type="button"
             aria-label="Tarik atau ketuk untuk menutup"
-            className="flex h-11 w-full items-center justify-center"
+            className="flex h-11 w-full items-center justify-center md:hidden"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -127,9 +132,15 @@ export function SheetContent({
             <span className="bg-separator h-[5px] w-9 rounded-full" />
           </button>
         )}
-        <div className="flex items-center justify-between px-4 pb-2">
+        {/* md: padding lebih lega + garis pemisah — begitu grabber (di atas)
+            hilang, header perlu menegaskan sendiri batasnya dari isi
+            dialog. */}
+        <div className="md:border-border flex items-center justify-between px-4 pb-2 md:border-b md:px-6 md:pt-5 md:pb-4">
           <DialogPrimitive.Title
-            className={cn('text-heading text-text font-semibold', hideTitle && 'sr-only')}
+            className={cn(
+              'text-heading text-text font-semibold md:text-title',
+              hideTitle && 'sr-only',
+            )}
           >
             {title}
           </DialogPrimitive.Title>
@@ -141,14 +152,14 @@ export function SheetContent({
           </DialogPrimitive.Close>
         </div>
         {description && (
-          <DialogPrimitive.Description className="text-text-muted px-4 pb-2 text-sm">
+          <DialogPrimitive.Description className="text-text-muted px-4 pb-2 text-sm md:px-6">
             {description}
           </DialogPrimitive.Description>
         )}
         {!description && (
           <DialogPrimitive.Description className="sr-only">{title}</DialogPrimitive.Description>
         )}
-        <div className="px-4 pb-4">{children}</div>
+        <div className="px-4 pb-4 md:px-6 md:pb-6">{children}</div>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   );

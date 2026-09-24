@@ -425,6 +425,71 @@ a {
   }
 }
 
+/* Sheet responsif (src/components/ui/sheet.tsx `variant="bottom"`) — geser
+   dari bawah di mobile, sama seperti `.sheet-content` di atas. Di `md` ke
+   atas ia MENJADI dialog tengah: animasinya beralih dari translate ke
+   scale supaya tidak berebut properti `translate` dengan posisi tengahnya
+   sendiri (yang juga dipegang lewat `translate`, bukan utilitas Tailwind,
+   persis karena alasan yang sama). */
+.sheet-content-responsive[data-state='open'] {
+  translate: 0 0;
+  opacity: 1;
+}
+
+.sheet-content-responsive {
+  transition:
+    translate var(--dur-sheet) var(--ease-spring),
+    opacity var(--dur-fast) var(--ease-out-soft),
+    display var(--dur-sheet) allow-discrete,
+    overlay var(--dur-sheet) allow-discrete;
+}
+
+.sheet-content-responsive[data-state='closed'] {
+  translate: 0 100%;
+  opacity: 0;
+}
+
+@starting-style {
+  .sheet-content-responsive[data-state='open'] {
+    translate: 0 100%;
+    opacity: 0;
+  }
+}
+
+@media (min-width: 768px) {
+  .sheet-content-responsive {
+    background: var(--color-surface);
+    border-top: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    transition:
+      scale var(--dur-normal) var(--ease-spring),
+      opacity var(--dur-fast) var(--ease-out-soft),
+      display var(--dur-normal) allow-discrete,
+      overlay var(--dur-normal) allow-discrete;
+  }
+
+  .sheet-content-responsive[data-state='open'] {
+    translate: -50% -50%;
+    scale: 1;
+    opacity: 1;
+  }
+
+  .sheet-content-responsive[data-state='closed'] {
+    translate: -50% -50%;
+    scale: 0.96;
+    opacity: 0;
+  }
+
+  @starting-style {
+    .sheet-content-responsive[data-state='open'] {
+      translate: -50% -50%;
+      scale: 0.96;
+      opacity: 0;
+    }
+  }
+}
+
 .overlay[data-state='open'] {
   opacity: 1;
 }

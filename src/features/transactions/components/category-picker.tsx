@@ -34,7 +34,7 @@ export function CategoryPicker({ quick, full, value, onChange }: CategoryPickerP
   return (
     <div>
       <p className="text-text mb-2 text-sm font-medium">Kategori</p>
-      <div className="flex gap-3 overflow-x-auto pb-1">
+      <div className="flex gap-3 overflow-x-auto pt-1 pb-1">
         {quick.map((category) => (
           <CategoryChip
             key={category.id}

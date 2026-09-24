@@ -462,6 +462,15 @@ a {
     border-top: none;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
+    /* `transform`, bukan `translate` (properti standalone yang dipakai
+       versi mobile di atas) — di sini translate TIDAK ikut dianimasikan
+       (hanya scale+opacity), jadi tidak ada alasan menghindari `transform`
+       lagi seperti komentar di atas file ini menjelaskan. `transform`
+       memakai mesin resolusi persentase yang jauh lebih lama/matang
+       ketimbang `translate` standalone, jadi ini pilihan yang lebih aman
+       untuk sekadar memposisikan di tengah (bukan menganimasikannya). */
+    transform: translate(-50%, -50%);
+    translate: none;
     transition:
       scale var(--dur-normal) var(--ease-spring),
       opacity var(--dur-fast) var(--ease-out-soft),
@@ -470,20 +479,17 @@ a {
   }
 
   .sheet-content-responsive[data-state='open'] {
-    translate: -50% -50%;
     scale: 1;
     opacity: 1;
   }
 
   .sheet-content-responsive[data-state='closed'] {
-    translate: -50% -50%;
     scale: 0.96;
     opacity: 0;
   }
 
   @starting-style {
     .sheet-content-responsive[data-state='open'] {
-      translate: -50% -50%;
       scale: 0.96;
       opacity: 0;
     }

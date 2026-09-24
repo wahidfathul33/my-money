@@ -46,8 +46,14 @@ const CONTENT_VARIANT_CLASS: Record<Variant, string> = {
   bottom:
     'sheet-content-responsive fixed inset-x-0 bottom-0 rounded-t-sheet material-glass sheet-scroll safe-bottom md:inset-x-auto md:bottom-auto md:left-1/2 md:top-1/2 md:w-[min(32rem,calc(100vw-2rem))] md:rounded-card',
   side: 'dialog-content fixed inset-y-0 right-0 h-full w-full max-w-sm rounded-l-sheet bg-surface shadow-float',
+  // `[transform:translate(-50%,-50%)]` instead of Tailwind's
+  // `-translate-x-1/2 -translate-y-1/2` (which compiles to the standalone
+  // `translate` property) — `.dialog-content` only ever animates `scale`,
+  // never `translate`, so there's no reason to use the newer/less mature
+  // property just for static centering; `transform`'s percentage handling
+  // is long-standardized.
   center:
-    'dialog-content fixed left-1/2 top-1/2 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-card bg-surface shadow-float',
+    'dialog-content fixed left-1/2 top-1/2 w-[min(28rem,calc(100vw-2rem))] [transform:translate(-50%,-50%)] rounded-card bg-surface shadow-float',
 };
 
 const DRAG_CLOSE_DISTANCE_RATIO = 0.25; // >25% tinggi sheet

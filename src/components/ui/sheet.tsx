@@ -138,10 +138,12 @@ export function SheetContent({
             <span className="bg-separator h-[5px] w-9 rounded-full" />
           </button>
         )}
-        {/* md: padding lebih lega + garis pemisah — begitu grabber (di atas)
-            hilang, header perlu menegaskan sendiri batasnya dari isi
-            dialog. */}
-        <div className="md:border-border flex items-center justify-between px-4 pb-2 md:border-b md:px-6 md:pt-5 md:pb-4">
+        {/* md: garis pemisah — begitu grabber (di atas) hilang, header perlu
+            menegaskan sendiri batasnya dari isi dialog. Jeda dari garis ke
+            konten datang dari padding ATAS pembungkus konten di bawah
+            (bukan padding bawah header ini) — supaya deskripsi (jika ada)
+            ikut mendapat jeda yang sama, bukan cuma judul. */}
+        <div className="md:border-border flex items-center justify-between px-4 pb-2 md:border-b md:px-6 md:pt-4 md:pb-3">
           <DialogPrimitive.Title
             className={cn(
               'text-heading text-text font-semibold md:text-title',
@@ -158,14 +160,14 @@ export function SheetContent({
           </DialogPrimitive.Close>
         </div>
         {description && (
-          <DialogPrimitive.Description className="text-text-muted px-4 pb-2 text-sm md:px-6">
+          <DialogPrimitive.Description className="text-text-muted px-4 pb-2 text-sm md:px-6 md:pt-4">
             {description}
           </DialogPrimitive.Description>
         )}
         {!description && (
           <DialogPrimitive.Description className="sr-only">{title}</DialogPrimitive.Description>
         )}
-        <div className="px-4 pb-4 md:px-6 md:pb-6">{children}</div>
+        <div className="px-4 pb-4 md:px-6 md:pt-4 md:pb-6">{children}</div>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   );

@@ -83,10 +83,10 @@ export function Sidebar({ addTransactionSheetData, households, unacknowledgedCou
   return (
     <nav
       aria-label="Navigasi utama"
-      className="border-border bg-surface hidden shrink-0 flex-col border-r md:flex md:w-[72px] lg:w-60"
+      className="border-border bg-surface hidden shrink-0 flex-col border-r md:sticky md:top-0 md:flex md:h-dvh md:w-[72px] lg:w-60"
     >
       {/* Rail — 768–1023px */}
-      <div className="flex flex-col items-center gap-2 py-4 lg:hidden">
+      <div className="flex flex-col items-center gap-2 overflow-y-auto py-4 lg:hidden">
         <AddEntryDialog
           addTransactionSheetData={addTransactionSheetData}
           trigger={
@@ -148,7 +148,7 @@ export function Sidebar({ addTransactionSheetData, households, unacknowledgedCou
             <ContextSwitcher households={households} variant="desktop" unacknowledgedCount={unacknowledgedCount} />
           </div>
         )}
-        <ul className="flex flex-1 flex-col gap-1">
+        <ul className="flex flex-1 flex-col gap-1 overflow-y-auto">
           {items.map((item) => (
             <li key={item.label}>
               {item.href ? (

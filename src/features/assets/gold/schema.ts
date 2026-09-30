@@ -79,17 +79,6 @@ export const sellGoldSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
-/** `YYYY-MM-DD` — matches how `gold_prices.price_date` (a `date` column)
- * round-trips through Drizzle, same convention as
- * src/features/savings/schema.ts's `targetDateSchema`. */
-export const priceDateSchema = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tanggal tidak valid');
-
-export const recordGoldPriceSchema = z.object({
-  priceDate: priceDateSchema,
-  sellPerGram: priceAmountSchema,
-  buybackPerGram: priceAmountSchema,
-});
-
 export const updateGoldLotSchema = z.object({
   lotId: z.uuid('Lot tidak valid'),
   weightGrams: gramsSchema,
@@ -105,6 +94,5 @@ export const deleteGoldLotSchema = z.object({
 
 export type BuyGoldActionInput = z.infer<typeof buyGoldSchema>;
 export type SellGoldActionInput = z.infer<typeof sellGoldSchema>;
-export type RecordGoldPriceActionInput = z.infer<typeof recordGoldPriceSchema>;
 export type UpdateGoldLotActionInput = z.infer<typeof updateGoldLotSchema>;
 export type DeleteGoldLotActionInput = z.infer<typeof deleteGoldLotSchema>;

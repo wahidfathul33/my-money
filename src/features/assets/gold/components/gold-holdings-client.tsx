@@ -10,9 +10,11 @@
  * `summary.currentValue`, which src/features/assets/gold/queries.ts's
  * `getGoldHoldingsSummary` computed using the BUYBACK price — never the
  * sell price, and hidden entirely (`summary.hasPrice === false`) rather
- * than shown as a misleading number when no price has ever been recorded
- * (spec.md: "Belum ada harga sama sekali -> valuasi disembunyikan, CTA
- * 'Masukkan harga saat ini'").
+ * than shown as a misleading number when no price has ever been recorded.
+ * Price itself is sourced entirely from the ADR-008 external provider
+ * (`GOLD_PRICE_PROVIDER=external`, `/api/cron/gold-price` →
+ * `refreshGoldPrices` → `recordGoldPrice`) — there is no manual-entry UI
+ * here for the user to set it themselves.
  */
 import { useState } from 'react';
 import { AlertTriangle, Gem, Info, TrendingDown, TrendingUp } from 'lucide-react';
@@ -32,7 +34,6 @@ import type {
 } from '../client-types';
 import { BuyGoldSheet } from './buy-gold-sheet';
 import { SellGoldSheet } from './sell-gold-sheet';
-import { RecordPriceSheet } from './record-price-sheet';
 import { GoldLotList } from './gold-lot-list';
 
 const BUYBACK_TOOLTIP =
@@ -70,7 +71,6 @@ export function GoldHoldingsClient({
 }: GoldHoldingsClientProps) {
   const [buyOpen, setBuyOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
-  const [priceOpen, setPriceOpen] = useState(false);
 
   const currentValue = deserializeMoney(summary.currentValue);
   const unrealizedGain = deserializeMoney(summary.unrealizedGain);
@@ -108,11 +108,9 @@ export function GoldHoldingsClient({
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center gap-3 pt-2">
+            <div className="flex flex-col items-center gap-1 pt-2">
               <p className="text-text-muted text-body">Nilai belum tersedia</p>
-              <Button size="sm" onClick={() => setPriceOpen(true)}>
-                Masukkan harga saat ini
-              </Button>
+              <p className="text-text-subtle text-xs">Harga akan diperbarui otomatis</p>
             </div>
           )}
         </div>
@@ -126,34 +124,35 @@ export function GoldHoldingsClient({
       )}
 
       {summary.hasHoldings && latestPrice && (
-        <div className="bg-surface rounded-card flex items-center justify-between gap-3 p-4">
-          <div className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="text-text-muted text-sm">Harga buyback</span>
-              <Tooltip content={BUYBACK_TOOLTIP}>
-                <Info className="text-text-subtle size-3.5" aria-hidden="true" />
-              </Tooltip>
-            </div>
-            <MoneyText amount={deserializeMoney(latestPrice.buybackPricePerGram)} tone="plain" size="md" />
-            <span
-              className={cn(
-                'inline-flex items-center gap-1 text-xs',
-                latestPrice.isStale ? 'text-warning-readable font-medium' : 'text-text-muted',
-              )}
-            >
-              {latestPrice.isStale && <AlertTriangle className="size-3" aria-hidden="true" />}
-              Diperbarui {latestPrice.ageDays === 0 ? 'hari ini' : `${latestPrice.ageDays} hari lalu`}
-              {latestPrice.isStale && ' — perbarui harga'}
-            </span>
+        <div className="bg-surface rounded-card flex flex-col gap-0.5 p-4">
+          <div className="flex items-center gap-1.5">
+            <span className="text-text-muted text-sm">Harga buyback</span>
+            <Tooltip content={BUYBACK_TOOLTIP}>
+              <Info className="text-text-subtle size-3.5" aria-hidden="true" />
+            </Tooltip>
           </div>
-          <Button variant="secondary" size="sm" onClick={() => setPriceOpen(true)}>
-            Ubah
-          </Button>
+          <MoneyText amount={deserializeMoney(latestPrice.buybackPricePerGram)} tone="plain" size="md" />
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 text-xs',
+              latestPrice.isStale ? 'text-warning-readable font-medium' : 'text-text-muted',
+            )}
+          >
+            {latestPrice.isStale && <AlertTriangle className="size-3" aria-hidden="true" />}
+            Diperbarui {latestPrice.ageDays === 0 ? 'hari ini' : `${latestPrice.ageDays} hari lalu`}
+            {latestPrice.isStale && ' — pembaruan otomatis berikutnya'}
+          </span>
         </div>
       )}
 
       {assetId && (
-        <ExclusionToggle entityType="asset" entityId={assetId} label="Emas ini" excluded={excludeFromHousehold} />
+        <div className="border-border flex items-center justify-between gap-3 border-t pt-3">
+          <div className="flex flex-col">
+            <span className="text-text text-sm font-medium">Sembunyikan dari keluarga</span>
+            <span className="text-text-muted text-xs">Tidak ikut dihitung di kekayaan keluarga.</span>
+          </div>
+          <ExclusionToggle entityType="asset" entityId={assetId} label="Emas ini" excluded={excludeFromHousehold} />
+        </div>
       )}
 
       {summary.hasHoldings && (
@@ -195,13 +194,6 @@ export function GoldHoldingsClient({
           defaultWalletId={defaultWalletId}
         />
       )}
-
-      <RecordPriceSheet
-        open={priceOpen}
-        onOpenChange={setPriceOpen}
-        defaultSellPerGram={defaultSellRupiah}
-        defaultBuybackPerGram={defaultBuybackRupiah}
-      />
     </div>
   );
 }

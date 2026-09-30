@@ -22,16 +22,10 @@
  */
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth/require-user';
-import { buyGold, deleteGoldLot, recordGoldPrice, sellGold, updateGoldLot } from '@/lib/services/gold';
+import { buyGold, deleteGoldLot, sellGold, updateGoldLot } from '@/lib/services/gold';
 import { fromRupiah } from '@/lib/finance/money';
 import { AppError, ValidationError } from '@/lib/api/errors';
-import {
-  buyGoldSchema,
-  deleteGoldLotSchema,
-  recordGoldPriceSchema,
-  sellGoldSchema,
-  updateGoldLotSchema,
-} from './schema';
+import { buyGoldSchema, deleteGoldLotSchema, sellGoldSchema, updateGoldLotSchema } from './schema';
 
 export interface ActionState {
   error: string | null;
@@ -146,43 +140,6 @@ export async function sellGoldAction(input: SellGoldActionInput): Promise<GoldAc
     });
     revalidateGold();
     return { error: null, id: sale.id };
-  } catch (err) {
-    return toActionError(err);
-  }
-}
-
-export interface RecordGoldPriceActionInput {
-  priceDate: string;
-  sellPerGram: string;
-  buybackPerGram: string;
-}
-
-export async function recordGoldPriceAction(input: RecordGoldPriceActionInput): Promise<ActionState> {
-  const user = await requireUser();
-
-  const parsed = recordGoldPriceSchema.safeParse(input);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? 'Input tidak valid' };
-  }
-
-  let sellPerGram: bigint;
-  let buybackPerGram: bigint;
-  try {
-    sellPerGram = fromRupiah(parsed.data.sellPerGram);
-    buybackPerGram = fromRupiah(parsed.data.buybackPerGram);
-  } catch {
-    return { error: 'Harga tidak valid' };
-  }
-
-  try {
-    await recordGoldPrice(user.id, {
-      priceDate: parsed.data.priceDate,
-      sellPerGram,
-      buybackPerGram,
-      source: 'manual',
-    });
-    revalidateGold();
-    return OK;
   } catch (err) {
     return toActionError(err);
   }

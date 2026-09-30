@@ -15,6 +15,7 @@
  * drop every OAuth token field.
  */
 import type { NextAuthConfig } from 'next-auth';
+import type { AdapterUser } from 'next-auth/adapters';
 import Google from 'next-auth/providers/google';
 import Nodemailer from 'next-auth/providers/nodemailer';
 import { getEnv } from '@/lib/env';
@@ -90,6 +91,29 @@ export function buildAuthConfig(): NextAuthConfig {
       async createUser({ user }) {
         if (user.id) {
           await seedNewUserAccount(user.id);
+        }
+      },
+      // Bug fix: @auth/core's handleLoginOrRegister hardcodes a brand new
+      // OAuth user's `emailVerified` to `null` and never revisits it on
+      // later sign-ins (see handle-login.js — `createUser({ ...profile,
+      // emailVerified: null })`), regardless of what the provider's own
+      // profile says. acceptInvitation (src/lib/services/invitations.ts)
+      // requires `emailVerified !== null` before matching an invitee's
+      // email, so a Google-only account could NEVER accept an invitation —
+      // every attempt failed with the uniform "tidak valid" error, even for
+      // a freshly sent, still-within-7-days token.
+      //
+      // `linkAccount` fires the first time a Google account links to a user
+      // row (new sign-up, or linking Google to an already-signed-in user),
+      // with the raw OIDC profile, which — unlike the trimmed `profile()`
+      // Auth.js stores on `user` — still has Google's own `email_verified`
+      // claim. Google only issues that claim as `true` for addresses it has
+      // itself verified, so it's safe to trust here.
+      async linkAccount({ user, account, profile }) {
+        const adapterUser = user as AdapterUser;
+        const emailVerified = (profile as { email_verified?: boolean }).email_verified;
+        if (account.provider === 'google' && adapterUser.id && !adapterUser.emailVerified && emailVerified === true) {
+          await authAdapter.updateUser?.({ id: adapterUser.id, emailVerified: new Date() });
         }
       },
     },

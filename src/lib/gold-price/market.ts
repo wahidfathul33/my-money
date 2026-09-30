@@ -5,10 +5,29 @@
  * separate from `external.ts` deliberately: that class feeds the per-user
  * single-quote valuation fallback (ADR-008) behind `GOLD_PRICE_PROVIDER
  * =external` and expects a flat `{sellPerGram, buybackPerGram}` body with a
- * `Bearer` Authorization header — neither matches this API's real shape
- * (`{status, data: [...]}`, one row per vendor/product) or its real auth
- * (`X-API-KEY`). This module fetches the REAL shape and is always used by
- * the market-price cron, independent of that unrelated toggle.
+ * `Bearer` Authorization header — neither matches this API's real shape or
+ * its real auth (`X-API-KEY`). This module fetches the REAL shape and is
+ * always used by the market-price cron, independent of that unrelated
+ * toggle.
+ *
+ * The REAL response (confirmed against the live `SLK-DEV-…` sandbox key)
+ * differs from the flat `{status, message, data: [{vendor_name,
+ * product_name, id, ...}]}` shape a hand-written example might suggest:
+ * it's `{data: [...]}`, each row nests `vendor`/`product` objects, and the
+ * feed is NOT pre-filtered to Indonesian physical gold despite the
+ * `/fisik` path — it also returns international spot benchmarks (Kitco,
+ * LBMA, BullionStar, ...) and other metals (silver, platinum, palladium,
+ * copper) in both IDR and USD. `vendor.type === 'physical' && currency ===
+ * 'IDR'` is what actually isolates "an Indonesian shop selling physical
+ * gold" — every row satisfying that in the observed feed (Antam, Galeri 24,
+ * Lotus Archi, Sampoerna Gold, Hartadinata) is a genuine gold product,
+ * unlike a `product.name` prefix check (misses non-"Emas"-prefixed names
+ * like "Lotus Archi 0.1g").
+ *
+ * `product.id` (not `vendor.id`) is the upsert key: it's unique per
+ * vendor+product pair in the observed feed (e.g. "Emas Antam 1 Gram" has a
+ * different `product.id` under Galeri 24 vs. under Antam directly), which
+ * is exactly the row granularity `gold_market_prices.external_id` needs.
  *
  * Never cached (`cache: 'no-store'`) and throws on any failure — same
  * discipline as `external.ts`; the caller (src/lib/services/gold-market.ts)
@@ -18,18 +37,23 @@ import { z } from 'zod';
 import { getEnv } from '@/lib/env';
 
 const marketPriceItemSchema = z.object({
-  id: z.union([z.number(), z.string()]),
-  vendor_name: z.string(),
-  product_name: z.string(),
-  price_date: z.string(),
   buy_price: z.union([z.number(), z.string()]),
   buyback_price: z.union([z.number(), z.string()]),
-  currency: z.string().default('IDR'),
+  currency: z.string(),
+  price_date: z.string().nullable(),
   as_of: z.string(),
+  vendor: z.object({
+    id: z.union([z.number(), z.string()]),
+    name: z.string(),
+    type: z.string(),
+  }),
+  product: z.object({
+    id: z.union([z.number(), z.string()]),
+    name: z.string(),
+  }),
 });
 
 const marketPriceResponseSchema = z.object({
-  status: z.string(),
   data: z.array(marketPriceItemSchema),
 });
 
@@ -76,14 +100,22 @@ export async function fetchGoldMarketPrices(): Promise<GoldMarketPriceItem[]> {
     throw new Error('fetchGoldMarketPrices: response body does not match the expected shape');
   }
 
-  return parsed.data.data.map((item) => ({
-    externalId: BigInt(item.id),
-    vendorName: item.vendor_name,
-    productName: item.product_name,
-    priceDate: item.price_date,
-    buyPrice: toMoney(item.buy_price),
-    buybackPrice: toMoney(item.buyback_price),
-    currency: item.currency,
-    asOf: new Date(item.as_of),
-  }));
+  return parsed.data.data
+    .filter((item) => item.vendor.type === 'physical' && item.currency === 'IDR')
+    .map((item) => ({
+      externalId: BigInt(item.product.id),
+      vendorName: item.vendor.name,
+      productName: item.product.name,
+      // `price_date` is a full ISO datetime in this feed (e.g.
+      // "2026-09-30T00:00:00Z"), not a plain date, and is nullable (seen on
+      // at least one malformed row) — slice to `YYYY-MM-DD` either way for
+      // the `date`-typed `gold_market_prices.price_date` column, falling
+      // back to `as_of`'s own date so a null `price_date` still produces
+      // something honest rather than failing the whole refresh over one row.
+      priceDate: (item.price_date ?? item.as_of).slice(0, 10),
+      buyPrice: toMoney(item.buy_price),
+      buybackPrice: toMoney(item.buyback_price),
+      currency: item.currency,
+      asOf: new Date(item.as_of),
+    }));
 }

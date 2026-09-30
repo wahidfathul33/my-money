@@ -19,6 +19,10 @@
       "schedule": "0 19 * * *"
     },
     {
+      "path": "/api/cron/gold-market-price",
+      "schedule": "0 3 * * *"
+    },
+    {
       "path": "/api/cron/reconcile",
       "schedule": "0 20 * * *"
     },

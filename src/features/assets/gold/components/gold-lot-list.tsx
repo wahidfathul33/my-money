@@ -27,9 +27,8 @@ function formatDateId(isoDate: string): string {
 }
 
 function GoldLotRow({ lot }: { lot: GoldLotClientData }) {
-  const heading = lot.goldForm
-    ? `${lot.goldForm} ${lot.remainingGramsDisplay} gr`
-    : `${lot.remainingGramsDisplay} gr`;
+  const form = [lot.vendorName, lot.goldForm].filter(Boolean).join(' · ');
+  const heading = form ? `${form} · ${lot.remainingGramsDisplay} gr` : `${lot.remainingGramsDisplay} gr`;
   const isGain = lot.gainPct !== null && lot.gainPct >= 0;
 
   return (
@@ -40,6 +39,7 @@ function GoldLotRow({ lot }: { lot: GoldLotClientData }) {
       <p className="text-text-muted text-xs">
         Beli Rp{(deserializeMoney(lot.purchasePricePerGram) / 100n).toLocaleString('id-ID')}/gr
       </p>
+      {lot.notes && <p className="text-text-muted text-xs">{lot.notes}</p>}
       {lot.currentValue !== null && lot.gainPct !== null ? (
         <div className="flex items-center gap-2">
           <MoneyText amount={deserializeMoney(lot.currentValue)} tone="plain" size="sm" />

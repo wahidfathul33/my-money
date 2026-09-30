@@ -71,6 +71,8 @@ export interface GoldLotItem {
   purchasePricePerGram: Money;
   purchaseDate: string; // DATE column -> `YYYY-MM-DD`.
   goldForm: string | null;
+  vendorName: string | null;
+  notes: string | null;
 }
 
 /** Every lot with grams still remaining, oldest purchase first — matches
@@ -90,6 +92,8 @@ export async function listGoldLots(userId: string): Promise<GoldLotItem[]> {
       purchasePricePerGram: goldLots.purchasePricePerGram,
       purchaseDate: goldLots.purchaseDate,
       goldForm: goldLots.goldForm,
+      vendorName: goldLots.vendorName,
+      notes: goldLots.notes,
     })
     .from(goldLots)
     .where(and(eq(goldLots.assetId, asset.id), sql`${goldLots.remainingGrams} > 0`))

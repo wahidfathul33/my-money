@@ -65,6 +65,8 @@ export interface BuyGoldActionInput {
   walletId: string;
   purchaseDate: Date;
   goldForm: string | null;
+  vendorName: string | null;
+  notes: string | null;
   idempotencyKey: string;
 }
 
@@ -94,6 +96,8 @@ export async function buyGoldAction(input: BuyGoldActionInput): Promise<GoldActi
       walletId: parsed.data.walletId,
       purchaseDate: parsed.data.purchaseDate,
       goldForm: parsed.data.goldForm,
+      vendorName: parsed.data.vendorName,
+      notes: parsed.data.notes,
       idempotencyKey: parsed.data.idempotencyKey,
     });
     revalidateGold();

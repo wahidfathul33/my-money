@@ -227,6 +227,10 @@ export interface BuyGoldInput {
   walletId: string;
   purchaseDate: Date;
   goldForm: string | null;
+  /** Optional — omitted by every pre-existing caller/test that predates this
+   * field. Defaults to `null` inside `buyGold`. */
+  vendorName?: string | null;
+  notes?: string | null;
   idempotencyKey: string;
 }
 
@@ -272,6 +276,8 @@ export async function buyGold(userId: string, input: BuyGoldInput): Promise<Gold
           purchasePricePerGram: input.pricePerGram,
           purchaseDate: toDateOnly(input.purchaseDate),
           goldForm: input.goldForm,
+          vendorName: input.vendorName ?? null,
+          notes: input.notes ?? null,
           ledgerEntryId: entry!.id,
           idempotencyKey: input.idempotencyKey,
         })

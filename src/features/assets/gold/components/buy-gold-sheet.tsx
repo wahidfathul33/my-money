@@ -17,11 +17,21 @@ import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { WalletPicker } from '@/features/transactions/components/wallet-picker';
 import { buyGoldAction } from '../actions';
 import type { WalletOption } from '@/features/transactions/sheet-data';
+import type { GoldVendorOption } from '../market-queries';
+
+/** `YYYY-MM-DD` in the browser's local timezone — the `en-CA` locale is a
+ * well-known trick for getting that exact format from `Date` formatting
+ * instead of hand-rolling a UTC-offset calculation. Matches what
+ * `<input type="date">` reads/writes. */
+function todayLocalDate(): string {
+  return new Date().toLocaleDateString('en-CA');
+}
 
 interface BuyGoldSheetProps {
   open: boolean;
@@ -32,6 +42,11 @@ interface BuyGoldSheetProps {
    * `"1250000"`) ready to prefill an `Input type="money"` — `null` when no
    * price has ever been recorded. */
   defaultPricePerGram: string | null;
+  /** Vendor names from the daily-refreshed market price table
+   * (src/features/assets/gold/market-queries.ts) — empty before the first
+   * cron run, in which case the "Penyedia" field is skipped entirely rather
+   * than blocking the purchase on it. */
+  vendors: GoldVendorOption[];
 }
 
 export function BuyGoldSheet(props: BuyGoldSheetProps) {
@@ -50,17 +65,22 @@ function BuyGoldSheetForm({
   wallets,
   defaultWalletId,
   defaultPricePerGram,
+  vendors,
 }: BuyGoldSheetProps) {
   const router = useRouter();
   const toast = useToast();
   const [weightGrams, setWeightGrams] = useState('');
   const [pricePerGram, setPricePerGram] = useState(defaultPricePerGram ?? '');
   const [walletId, setWalletId] = useState(defaultWalletId ?? wallets[0]?.id ?? '');
+  const [purchaseDate, setPurchaseDate] = useState(todayLocalDate());
+  const [vendorName, setVendorName] = useState('');
+  const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
 
-  const saveDisabled = weightGrams.trim() === '' || pricePerGram.trim() === '' || walletId === '' || isPending;
+  const saveDisabled =
+    weightGrams.trim() === '' || pricePerGram.trim() === '' || walletId === '' || purchaseDate === '' || isPending;
 
   function handleSave() {
     if (saveDisabled) return;
@@ -70,8 +90,14 @@ function BuyGoldSheetForm({
         weightGrams,
         pricePerGram,
         walletId,
-        purchaseDate: new Date(),
+        // Constructed at UTC midnight so `toDateOnly` (src/lib/services/gold.ts)
+        // — which reads the date back out via `toISOString().slice(0, 10)` —
+        // round-trips to exactly the date the user picked, regardless of
+        // their local timezone offset.
+        purchaseDate: new Date(`${purchaseDate}T00:00:00.000Z`),
         goldForm: null,
+        vendorName: vendorName === '' ? null : vendorName,
+        notes: notes.trim() === '' ? null : notes.trim(),
         idempotencyKey: idempotencyKeyRef.current,
       });
       if (result.error) {
@@ -103,6 +129,34 @@ function BuyGoldSheetForm({
         onChange={(e) => setPricePerGram(e.target.value)}
       />
       <WalletPicker wallets={wallets} value={walletId} onChange={setWalletId} triggerLabel="Dompet sumber" />
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-text text-sm font-medium">Tanggal beli</span>
+        <input
+          type="date"
+          value={purchaseDate}
+          onChange={(e) => setPurchaseDate(e.target.value)}
+          className="rounded-input border-border bg-surface text-body text-text h-11 border px-3"
+        />
+      </label>
+
+      {vendors.length > 0 && (
+        <Select
+          label="Penyedia"
+          placeholder="Pilih penyedia (opsional)"
+          options={vendors}
+          value={vendorName}
+          onValueChange={setVendorName}
+        />
+      )}
+
+      <Input
+        label="Keterangan"
+        type="text"
+        placeholder="Opsional"
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+      />
 
       {error && (
         <p role="alert" className="text-negative text-center text-sm">

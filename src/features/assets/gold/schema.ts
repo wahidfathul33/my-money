@@ -42,12 +42,32 @@ const goldFormSchema = z
   .optional()
   .transform((value) => (value === undefined || value === null || value === '' ? null : value));
 
+/** Same nullable/optional shape as `goldFormSchema` above, for the same
+ * "plain object, not FormData" reason. */
+const vendorNameSchema = z
+  .string()
+  .trim()
+  .max(80, 'Nama penyedia terlalu panjang')
+  .nullable()
+  .optional()
+  .transform((value) => (value === undefined || value === null || value === '' ? null : value));
+
+const notesSchema = z
+  .string()
+  .trim()
+  .max(280, 'Keterangan terlalu panjang')
+  .nullable()
+  .optional()
+  .transform((value) => (value === undefined || value === null || value === '' ? null : value));
+
 export const buyGoldSchema = z.object({
   weightGrams: gramsSchema,
   pricePerGram: priceAmountSchema,
   walletId: z.uuid('Dompet tidak valid'),
   purchaseDate: z.coerce.date({ message: 'Tanggal tidak valid' }),
   goldForm: goldFormSchema,
+  vendorName: vendorNameSchema,
+  notes: notesSchema,
   idempotencyKey: idempotencyKeySchema,
 });
 

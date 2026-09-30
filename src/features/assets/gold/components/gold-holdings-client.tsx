@@ -24,6 +24,7 @@ import { deserializeMoney } from '@/lib/finance/money';
 import { cn } from '@/lib/utils';
 import { ExclusionToggle } from '@/features/sharing/components/exclusion-toggle';
 import type { WalletOption } from '@/features/transactions/sheet-data';
+import type { GoldVendorOption } from '../market-queries';
 import type {
   GoldHoldingsSummaryClientData,
   GoldLotClientData,
@@ -46,6 +47,7 @@ interface GoldHoldingsClientProps {
   excludeFromHousehold: boolean;
   wallets: WalletOption[];
   defaultWalletId: string | null;
+  vendors: GoldVendorOption[];
 }
 
 /** Whole-rupiah string (e.g. `"1250000"`) from a serialized `Money` —
@@ -64,6 +66,7 @@ export function GoldHoldingsClient({
   excludeFromHousehold,
   wallets,
   defaultWalletId,
+  vendors,
 }: GoldHoldingsClientProps) {
   const [buyOpen, setBuyOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
@@ -177,6 +180,7 @@ export function GoldHoldingsClient({
         wallets={wallets}
         defaultWalletId={defaultWalletId}
         defaultPricePerGram={defaultSellRupiah}
+        vendors={vendors}
       />
 
       {summary.hasHoldings && (

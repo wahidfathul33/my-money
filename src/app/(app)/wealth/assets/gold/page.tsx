@@ -1,4 +1,6 @@
+import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
 import { requireUser } from '@/lib/auth/require-user';
 import {
   getGoldAsset,
@@ -7,6 +9,7 @@ import {
   listGoldLots,
   listWalletOptions,
 } from '@/features/assets/gold/queries';
+import { listGoldVendors } from '@/features/assets/gold/market-queries';
 import { resolveDefaultWalletId } from '@/features/transactions/queries';
 import {
   toGoldHoldingsSummaryClientData,
@@ -24,20 +27,28 @@ import { GoldHoldingsClient } from '@/features/assets/gold/components/gold-holdi
 export default async function GoldAssetPage() {
   const user = await requireUser();
 
-  const [asset, summary, lots, latestPrice, wallets, defaultWalletId] = await Promise.all([
+  const [asset, summary, lots, latestPrice, wallets, defaultWalletId, vendors] = await Promise.all([
     getGoldAsset(user.id),
     getGoldHoldingsSummary(user.id),
     listGoldLots(user.id),
     getLatestGoldPrice(user.id),
     listWalletOptions(user.id),
     resolveDefaultWalletId(user.id),
+    listGoldVendors(),
   ]);
 
   const buybackPerGram = latestPrice?.buybackPricePerGram ?? null;
 
   return (
     <>
-      <PageHeader title="Emas" />
+      <PageHeader
+        title="Emas"
+        action={
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/wealth/assets/gold/prices">Harga Pasar</Link>
+          </Button>
+        }
+      />
       <GoldHoldingsClient
         summary={toGoldHoldingsSummaryClientData(summary)}
         lots={lots.map((lot) => toGoldLotClientData(lot, buybackPerGram))}
@@ -46,6 +57,7 @@ export default async function GoldAssetPage() {
         excludeFromHousehold={asset?.excludeFromHousehold ?? false}
         wallets={wallets}
         defaultWalletId={defaultWalletId}
+        vendors={vendors}
       />
     </>
   );

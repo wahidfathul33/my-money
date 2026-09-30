@@ -50,6 +50,13 @@
       "when": 1790229739749,
       "tag": "0006_adorable_meteorite",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790782318706,
+      "tag": "0007_lonely_loki",
+      "breakpoints": true
     }
   ]
 }

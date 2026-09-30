@@ -72,6 +72,8 @@ export const goldLots = pgTable(
     purchasePricePerGram: bigint('purchase_price_per_gram', { mode: 'bigint' }).notNull(),
     purchaseDate: date('purchase_date').notNull(),
     goldForm: text('gold_form'),
+    vendorName: text('vendor_name'),
+    notes: text('notes'),
     ledgerEntryId: uuid('ledger_entry_id').references(() => ledgerEntries.id, {
       onDelete: 'restrict',
     }),
@@ -115,6 +117,35 @@ export const goldPrices = pgTable(
       sql`${table.sellPricePerGram} > 0 AND ${table.buybackPricePerGram} > 0`,
     ),
     check('gold_buyback_lte_sell', sql`${table.buybackPricePerGram} <= ${table.sellPricePerGram}`),
+  ],
+);
+
+/**
+ * Multi-vendor market reference prices, mirrored daily from the external
+ * bogortech API (src/lib/gold-price/market.ts) via the
+ * `/api/cron/gold-market-price` cron — global, NOT per-user (unlike
+ * `gold_prices` above, which is each user's own valuation price). Feeds the
+ * "Harga Pasar" page and the buy sheet's vendor dropdown. `externalId` is
+ * the API's own `id` field — the upsert key, so a re-fetch overwrites the
+ * same row instead of accumulating duplicates.
+ */
+export const goldMarketPrices = pgTable(
+  'gold_market_prices',
+  {
+    id: uuid('id').primaryKey(),
+    externalId: bigint('external_id', { mode: 'bigint' }).notNull(),
+    vendorName: text('vendor_name').notNull(),
+    productName: text('product_name').notNull(),
+    priceDate: date('price_date').notNull(),
+    buyPrice: bigint('buy_price', { mode: 'bigint' }).notNull(),
+    buybackPrice: bigint('buyback_price', { mode: 'bigint' }).notNull(),
+    currency: text('currency').notNull().default('IDR'),
+    asOf: timestamp('as_of', { withTimezone: true }).notNull(),
+    fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('gold_market_prices_external_id_uniq').on(table.externalId),
+    index('gold_market_prices_price_date_idx').on(table.priceDate),
   ],
 );
 

@@ -14,6 +14,7 @@ import type {
   GoldSaleItem,
   LatestGoldPrice,
 } from './queries';
+import type { GoldMarketPriceItem } from './market-queries';
 
 export interface GoldHoldingsSummaryClientData {
   totalGramsDisplay: string;
@@ -47,6 +48,8 @@ export interface GoldLotClientData {
   purchasePricePerGram: string;
   purchaseDate: string;
   goldForm: string | null;
+  vendorName: string | null;
+  notes: string | null;
   /** `null` when there is no recorded price yet — the row shows cost basis
    * only, per spec.md's "Belum ada harga -> valuasi disembunyikan". */
   currentValue: string | null;
@@ -88,6 +91,8 @@ export function toGoldLotClientData(lot: GoldLotItem, buybackPerGram: Money | nu
     purchasePricePerGram: serializeMoney(lot.purchasePricePerGram),
     purchaseDate: lot.purchaseDate,
     goldForm: lot.goldForm,
+    vendorName: lot.vendorName,
+    notes: lot.notes,
     currentValue,
     gainPct,
   };
@@ -129,5 +134,26 @@ export function toLatestGoldPriceClientData(price: LatestGoldPrice): LatestGoldP
     ...price,
     sellPricePerGram: serializeMoney(price.sellPricePerGram),
     buybackPricePerGram: serializeMoney(price.buybackPricePerGram),
+  };
+}
+
+export interface GoldMarketPriceClientData {
+  id: string;
+  vendorName: string;
+  productName: string;
+  buyPrice: string;
+  buybackPrice: string;
+  /** ISO string — `asOf` is a `timestamptz`, not a wire-safe `Date`. */
+  asOf: string;
+}
+
+export function toGoldMarketPriceClientData(item: GoldMarketPriceItem): GoldMarketPriceClientData {
+  return {
+    id: item.id,
+    vendorName: item.vendorName,
+    productName: item.productName,
+    buyPrice: serializeMoney(item.buyPrice),
+    buybackPrice: serializeMoney(item.buybackPrice),
+    asOf: item.asOf.toISOString(),
   };
 }

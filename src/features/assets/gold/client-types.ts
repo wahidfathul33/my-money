@@ -43,6 +43,9 @@ export function toGoldHoldingsSummaryClientData(summary: GoldHoldingsSummary): G
 export interface GoldLotClientData {
   id: string;
   weightGramsDisplay: string;
+  /** Raw `NUMERIC(18,4)`-shaped decimal string — prefills the edit sheet's
+   * weight input, same idea as `remainingGramsRaw` below. */
+  weightGramsRaw: string;
   remainingGramsDisplay: string;
   remainingGramsRaw: string;
   purchasePricePerGram: string;
@@ -60,6 +63,12 @@ export interface GoldLotClientData {
    * `currentValue` when unpriced, or when the lot's own cost basis is `0`
    * (denominator would be zero). */
   gainPct: number | null;
+  /** `true` when no grams have ever been sold from this lot — gold's cost
+   * basis is weighted-average across ALL lots and `gold_sales` doesn't
+   * record which lots it drew from, so a lot that contributed to a past
+   * sale can't be edited or deleted without corrupting that sale's
+   * already-recorded `cost_basis`/`realized_gain`. */
+  canEdit: boolean;
 }
 
 /** Attaches the CURRENT buyback price (if any) to one lot, producing every
@@ -67,6 +76,7 @@ export interface GoldLotClientData {
  * needs: "Nilai Rp11.900.000 ↗ +13,3%". */
 export function toGoldLotClientData(lot: GoldLotItem, buybackPerGram: Money | null): GoldLotClientData {
   const remainingGrams = parseGrams(lot.remainingGrams);
+  const weightGrams = parseGrams(lot.weightGrams);
   const costBasis = lotCostBasis({ remainingGrams, purchasePricePerGram: lot.purchasePricePerGram });
 
   let currentValue: string | null = null;
@@ -85,7 +95,8 @@ export function toGoldLotClientData(lot: GoldLotItem, buybackPerGram: Money | nu
 
   return {
     id: lot.id,
-    weightGramsDisplay: formatGramsDisplay(parseGrams(lot.weightGrams)),
+    weightGramsDisplay: formatGramsDisplay(weightGrams),
+    weightGramsRaw: lot.weightGrams,
     remainingGramsDisplay: formatGramsDisplay(remainingGrams),
     remainingGramsRaw: lot.remainingGrams,
     purchasePricePerGram: serializeMoney(lot.purchasePricePerGram),
@@ -95,6 +106,7 @@ export function toGoldLotClientData(lot: GoldLotItem, buybackPerGram: Money | nu
     notes: lot.notes,
     currentValue,
     gainPct,
+    canEdit: remainingGrams === weightGrams,
   };
 }
 

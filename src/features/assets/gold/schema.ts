@@ -44,7 +44,7 @@ const goldFormSchema = z
 
 /** Same nullable/optional shape as `goldFormSchema` above, for the same
  * "plain object, not FormData" reason. */
-const vendorNameSchema = z
+export const vendorNameSchema = z
   .string()
   .trim()
   .max(80, 'Nama penyedia terlalu panjang')
@@ -52,7 +52,7 @@ const vendorNameSchema = z
   .optional()
   .transform((value) => (value === undefined || value === null || value === '' ? null : value));
 
-const notesSchema = z
+export const notesSchema = z
   .string()
   .trim()
   .max(280, 'Keterangan terlalu panjang')
@@ -90,6 +90,21 @@ export const recordGoldPriceSchema = z.object({
   buybackPerGram: priceAmountSchema,
 });
 
+export const updateGoldLotSchema = z.object({
+  lotId: z.uuid('Lot tidak valid'),
+  weightGrams: gramsSchema,
+  pricePerGram: priceAmountSchema,
+  purchaseDate: z.coerce.date({ message: 'Tanggal tidak valid' }),
+  vendorName: vendorNameSchema,
+  notes: notesSchema,
+});
+
+export const deleteGoldLotSchema = z.object({
+  lotId: z.uuid('Lot tidak valid'),
+});
+
 export type BuyGoldActionInput = z.infer<typeof buyGoldSchema>;
 export type SellGoldActionInput = z.infer<typeof sellGoldSchema>;
 export type RecordGoldPriceActionInput = z.infer<typeof recordGoldPriceSchema>;
+export type UpdateGoldLotActionInput = z.infer<typeof updateGoldLotSchema>;
+export type DeleteGoldLotActionInput = z.infer<typeof deleteGoldLotSchema>;

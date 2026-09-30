@@ -22,10 +22,16 @@
  */
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth/require-user';
-import { buyGold, recordGoldPrice, sellGold } from '@/lib/services/gold';
+import { buyGold, deleteGoldLot, recordGoldPrice, sellGold, updateGoldLot } from '@/lib/services/gold';
 import { fromRupiah } from '@/lib/finance/money';
 import { AppError, ValidationError } from '@/lib/api/errors';
-import { buyGoldSchema, recordGoldPriceSchema, sellGoldSchema } from './schema';
+import {
+  buyGoldSchema,
+  deleteGoldLotSchema,
+  recordGoldPriceSchema,
+  sellGoldSchema,
+  updateGoldLotSchema,
+} from './schema';
 
 export interface ActionState {
   error: string | null;
@@ -175,6 +181,66 @@ export async function recordGoldPriceAction(input: RecordGoldPriceActionInput): 
       buybackPerGram,
       source: 'manual',
     });
+    revalidateGold();
+    return OK;
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+export interface UpdateGoldLotActionInput {
+  lotId: string;
+  weightGrams: string;
+  pricePerGram: string;
+  purchaseDate: Date;
+  vendorName: string | null;
+  notes: string | null;
+}
+
+export async function updateGoldLotAction(input: UpdateGoldLotActionInput): Promise<ActionState> {
+  const user = await requireUser();
+
+  const parsed = updateGoldLotSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Input tidak valid' };
+  }
+
+  let pricePerGram: bigint;
+  try {
+    pricePerGram = fromRupiah(parsed.data.pricePerGram);
+  } catch {
+    return { error: 'Harga tidak valid' };
+  }
+
+  try {
+    await updateGoldLot(user.id, parsed.data.lotId, {
+      weightGrams: parsed.data.weightGrams,
+      pricePerGram,
+      purchaseDate: parsed.data.purchaseDate,
+      vendorName: parsed.data.vendorName,
+      notes: parsed.data.notes,
+    });
+    revalidateGold();
+    return OK;
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+export interface DeleteGoldLotActionInput {
+  lotId: string;
+}
+
+export async function deleteGoldLotAction(input: DeleteGoldLotActionInput): Promise<ActionState> {
+  const user = await requireUser();
+
+  const parsed = deleteGoldLotSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Input tidak valid' };
+  }
+
+  try {
+    await deleteGoldLot(user.id, parsed.data.lotId);
     revalidateGold();
     return OK;
   } catch (err) {

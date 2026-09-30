@@ -170,7 +170,7 @@ export function GoldHoldingsClient({
       {lots.length > 0 && (
         <section className="flex flex-col gap-2">
           <h3 className="text-text text-sm font-semibold">Kepemilikan</h3>
-          <GoldLotList lots={lots} />
+          <GoldLotList lots={lots} vendors={vendors} />
         </section>
       )}
 

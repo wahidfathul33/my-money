@@ -22,11 +22,11 @@
  * this exact shape, for debts). A concurrent `buyGold` racing in only ever
  * RAISES what's available, so `buyGold` itself doesn't need this lock.
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { dbRead } from '@/lib/db/read';
 import { dbWrite } from '@/lib/db/write';
-import { assets, goldLots, goldPrices, goldSales, wallets } from '@/lib/db/schema';
+import { assets, goldLots, goldPrices, goldSales, ledgerEntries, wallets } from '@/lib/db/schema';
 import { ownedBy } from '@/lib/db/scoped';
 import { postEntries } from '@/lib/finance/ledger';
 import { type Money } from '@/lib/finance/money';
@@ -40,7 +40,7 @@ import {
   type Grams,
 } from '@/lib/finance/gold';
 import { fetchGoldPriceWithFallback, type GoldPriceProviderId, getConfiguredProviderId } from '@/lib/gold-price/provider';
-import { ValidationError } from '@/lib/api/errors';
+import { NotFoundError, ValidationError } from '@/lib/api/errors';
 import type { TransactionClient } from '@/lib/db';
 
 export type GoldAssetRow = typeof assets.$inferSelect;
@@ -418,6 +418,150 @@ export async function sellGold(userId: string, input: SellGoldInput): Promise<Go
     }
     throw err;
   }
+}
+
+/** Thrown as a `ValidationError` — a lot that has contributed grams to any
+ * past sale can't be edited or deleted: `gold_sales` doesn't record which
+ * lots it drew from (weighted-average cost basis, not FIFO —
+ * docs/03-domain-model.md §11.2), so there is no way to retroactively
+ * correct that sale's `cost_basis`/`realized_gain`. Same "block once there's
+ * dependent history" shape as src/features/wallets/components/delete-wallet-dialog.tsx's
+ * `hasEntries` branch. */
+function assertLotUntouchedBySale(lot: GoldLotRow): void {
+  if (lot.remainingGrams !== lot.weightGrams) {
+    throw new ValidationError({
+      weightGrams: ['Tidak bisa diubah karena sudah pernah dijual sebagian'],
+    });
+  }
+}
+
+async function lockOwnedLot(tx: TransactionClient, userId: string, lotId: string): Promise<GoldLotRow> {
+  const [lot] = await tx
+    .select()
+    .from(goldLots)
+    .where(and(eq(goldLots.id, lotId), eq(goldLots.userId, userId)))
+    .for('update');
+  if (!lot) {
+    throw new NotFoundError('Kepemilikan emas tidak ditemukan');
+  }
+  return lot;
+}
+
+/** Reverses a lot's current ledger entry (`postEntries` a same-amount,
+ * opposite-sign entry to the same wallet, then marks both `voided_at`) —
+ * the exact pattern src/lib/services/transactions.ts's `updateTransaction`
+ * uses (see that function's doc comment), applied here to gold's
+ * `ledger_entries.source = 'gold_purchase'` row instead of a `transaction`
+ * row. Returns the original entry's `walletId` so callers that post a
+ * replacement entry (`updateGoldLot`) don't need to re-select it. */
+async function reverseLotLedgerEntry(
+  tx: TransactionClient,
+  userId: string,
+  lot: GoldLotRow,
+): Promise<string | null> {
+  if (!lot.ledgerEntryId) return null;
+  const [entry] = await tx.select().from(ledgerEntries).where(eq(ledgerEntries.id, lot.ledgerEntryId)).limit(1);
+  if (!entry) return null;
+
+  const [reversal] = await postEntries(tx, [
+    {
+      userId,
+      walletId: entry.walletId,
+      amount: -entry.amount,
+      source: 'gold_purchase',
+      entryDate: new Date(),
+      sourceId: lot.id,
+    },
+  ]);
+
+  await tx
+    .update(ledgerEntries)
+    .set({ voidedAt: new Date() })
+    .where(inArray(ledgerEntries.id, [entry.id, reversal!.id]));
+
+  return entry.walletId;
+}
+
+export interface UpdateGoldLotInput {
+  weightGrams: string;
+  pricePerGram: Money;
+  purchaseDate: Date;
+  vendorName?: string | null;
+  notes?: string | null;
+}
+
+/**
+ * Edits a purchase lot — weight, price, date, vendor, notes. Only allowed
+ * when the lot has never had grams sold from it (`assertLotUntouchedBySale`
+ * above); walletId and goldForm aren't re-exposed here (same as
+ * `buy-gold-sheet.tsx`, which never exposes `goldForm` either). Reverses the
+ * lot's old ledger entry and posts a fresh one for the new weight × price,
+ * same reversal shape `deleteGoldLot` below uses.
+ */
+export async function updateGoldLot(userId: string, lotId: string, input: UpdateGoldLotInput): Promise<GoldLotRow> {
+  const grams = assertPositiveGrams(input.weightGrams);
+  assertPositiveMoney(input.pricePerGram, 'pricePerGram');
+  assertNotTooFarInFuture(input.purchaseDate, 'purchaseDate');
+
+  return dbWrite.transaction(async (tx) => {
+    const lot = await lockOwnedLot(tx, userId, lotId);
+    assertLotUntouchedBySale(lot);
+
+    const walletId = await reverseLotLedgerEntry(tx, userId, lot);
+    if (!walletId) {
+      throw new NotFoundError('Kepemilikan emas tidak ditemukan');
+    }
+
+    const cost = gramsToMoney(grams, input.pricePerGram);
+    const [newEntry] = await postEntries(tx, [
+      {
+        userId,
+        walletId,
+        amount: -cost,
+        source: 'gold_purchase',
+        entryDate: input.purchaseDate,
+        sourceId: lotId,
+      },
+    ]);
+
+    const [updated] = await tx
+      .update(goldLots)
+      .set({
+        weightGrams: formatGramsForDb(grams),
+        remainingGrams: formatGramsForDb(grams),
+        purchasePricePerGram: input.pricePerGram,
+        purchaseDate: toDateOnly(input.purchaseDate),
+        vendorName: input.vendorName ?? null,
+        notes: input.notes ?? null,
+        ledgerEntryId: newEntry!.id,
+      })
+      .where(eq(goldLots.id, lotId))
+      .returning();
+
+    await recalculateCachedValue(tx, userId, lot.assetId);
+
+    return updated!;
+  });
+}
+
+/**
+ * Deletes a purchase lot outright — same `assertLotUntouchedBySale` guard as
+ * `updateGoldLot`. Reverses the lot's ledger entry (restoring the wallet
+ * balance the purchase originally drew down) before removing the row;
+ * nothing references `gold_lots.id` with a blocking FK (`ledger_entries.source_id`
+ * is a plain polymorphic column, not a foreign key).
+ */
+export async function deleteGoldLot(userId: string, lotId: string): Promise<void> {
+  await dbWrite.transaction(async (tx) => {
+    const lot = await lockOwnedLot(tx, userId, lotId);
+    assertLotUntouchedBySale(lot);
+
+    await reverseLotLedgerEntry(tx, userId, lot);
+
+    await tx.delete(goldLots).where(eq(goldLots.id, lotId));
+
+    await recalculateCachedValue(tx, userId, lot.assetId);
+  });
 }
 
 export interface RecordGoldPriceInput {

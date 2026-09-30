@@ -47,6 +47,25 @@ describe('updateTransactionSchema', () => {
     expect('idempotencyKey' in updateTransactionSchema.shape).toBe(false);
   });
 
+  it('accepts a literal null note, not just an omitted/empty-string one', () => {
+    // edit-transaction-sheet.tsx sends `note: null` (a plain object, not
+    // FormData) for "no note" — a bare `.optional()` on noteSchema widens
+    // the accepted type to `string | undefined` only, NOT `null`, which
+    // previously surfaced Zod's raw English `invalid_type` message
+    // ("Invalid input: expected string, received null") straight into the
+    // edit sheet's error banner for any edit with an empty note.
+    const parsed = updateTransactionSchema.parse({
+      transactionId: '00000000-0000-7000-8000-000000000001',
+      type: 'expense',
+      amount: '4500000',
+      categoryId: '00000000-0000-7000-8000-000000000002',
+      walletId: '00000000-0000-7000-8000-000000000003',
+      transactionDate: new Date(),
+      note: null,
+    });
+    expect(parsed.note).toBeNull();
+  });
+
   it('drops an unknown idempotencyKey field smuggled into the payload', () => {
     const parsed = updateTransactionSchema.parse({
       transactionId: '00000000-0000-7000-8000-000000000001',

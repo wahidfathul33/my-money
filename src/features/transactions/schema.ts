@@ -19,12 +19,24 @@ export const transactionTypeSchema = z.enum(['income', 'expense'], {
 
 export const moneyAmountSchema = z.string().trim().regex(/^\d+$/, 'Jumlah tidak valid');
 
+/**
+ * `.nullable().optional()`, not a bare `.optional()` — `updateTransactionAction`
+ * (edit-transaction-sheet.tsx) is called with a plain object, not `FormData`,
+ * and sends a literal `null` for "no note" rather than omitting the key.
+ * `.optional()` alone only widens the accepted type to `string | undefined`;
+ * Zod's `invalid_type` check still rejects a literal `null` with its default
+ * English message ("Invalid input: expected string, received null"), which
+ * is exactly what surfaced verbatim in the edit sheet's error banner before
+ * this was caught. Same pitfall src/features/assets/gold/schema.ts's
+ * `goldFormSchema` documents at length.
+ */
 export const noteSchema = z
   .string()
   .trim()
   .max(280, 'Catatan maksimal 280 karakter')
+  .nullable()
   .optional()
-  .transform((value) => (value === undefined || value === '' ? null : value));
+  .transform((value) => (value === undefined || value === null || value === '' ? null : value));
 
 export const idempotencyKeySchema = z.uuid('Kunci idempotensi tidak valid');
 

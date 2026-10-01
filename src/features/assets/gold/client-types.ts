@@ -7,13 +7,14 @@
  * types from ./queries.ts.
  */
 import { serializeMoney, type Money } from '@/lib/finance/money';
-import { formatGramsDisplay, formatGramsForDb, gramsToMoney, lotCostBasis, parseGrams } from '@/lib/finance/gold';
-import type {
-  GoldHoldingsSummary,
-  GoldLotItem,
-  GoldSaleItem,
-  LatestGoldPrice,
-} from './queries';
+import {
+  formatGramsDisplay,
+  formatGramsForDb,
+  gramsToMoney,
+  lotCostBasis,
+  parseGrams,
+} from '@/lib/finance/gold';
+import type { GoldHoldingsSummary, GoldLotItem, GoldSaleItem, LatestGoldPrice } from './queries';
 import type { GoldMarketPriceItem } from './market-queries';
 
 export interface GoldHoldingsSummaryClientData {
@@ -26,9 +27,14 @@ export interface GoldHoldingsSummaryClientData {
   currentValue: string;
   unrealizedGain: string;
   hasPrice: boolean;
+  valuationVendors: string[];
+  priceAgeDays: number | null;
+  isPriceStale: boolean;
 }
 
-export function toGoldHoldingsSummaryClientData(summary: GoldHoldingsSummary): GoldHoldingsSummaryClientData {
+export function toGoldHoldingsSummaryClientData(
+  summary: GoldHoldingsSummary,
+): GoldHoldingsSummaryClientData {
   return {
     totalGramsDisplay: formatGramsDisplay(summary.totalGrams),
     totalGramsRaw: formatGramsForDb(summary.totalGrams),
@@ -37,6 +43,9 @@ export function toGoldHoldingsSummaryClientData(summary: GoldHoldingsSummary): G
     currentValue: serializeMoney(summary.currentValue),
     unrealizedGain: serializeMoney(summary.unrealizedGain),
     hasPrice: summary.hasPrice,
+    valuationVendors: summary.valuationVendors,
+    priceAgeDays: summary.priceAgeDays,
+    isPriceStale: summary.isPriceStale,
   };
 }
 
@@ -53,8 +62,12 @@ export interface GoldLotClientData {
   goldForm: string | null;
   vendorName: string | null;
   notes: string | null;
-  /** `null` when there is no recorded price yet — the row shows cost basis
-   * only, per spec.md's "Belum ada harga -> valuasi disembunyikan". */
+  /** Vendor whose buyback quote was used for this lot, if market-priced. */
+  valuationVendorName: string | null;
+  /** `true` when the selected market quote came from a vendor other than
+   * this lot's recorded vendor. */
+  isFallbackVendorPrice: boolean;
+  /** `null` when neither market data nor a recorded per-user price exists. */
   currentValue: string | null;
   /** Percentage (e.g. `13.3` for "+13,3%"), rounded via the same
    * scaled-bigint-then-Number discipline as
@@ -74,11 +87,19 @@ export interface GoldLotClientData {
 /** Attaches the CURRENT buyback price (if any) to one lot, producing every
  * per-lot display figure docs/09-screen-specs.md §6's "Kepemilikan" list
  * needs: "Nilai Rp11.900.000 ↗ +13,3%". */
-export function toGoldLotClientData(lot: GoldLotItem, buybackPerGram: Money | null): GoldLotClientData {
+export function toGoldLotClientData(
+  lot: GoldLotItem,
+  fallbackBuybackPerGram: Money | null,
+): GoldLotClientData {
   const remainingGrams = parseGrams(lot.remainingGrams);
   const weightGrams = parseGrams(lot.weightGrams);
-  const costBasis = lotCostBasis({ remainingGrams, purchasePricePerGram: lot.purchasePricePerGram });
+  const costBasis = lotCostBasis({
+    remainingGrams,
+    purchasePricePerGram: lot.purchasePricePerGram,
+  });
 
+  const selectedMarketQuote = lot.marketQuote;
+  const buybackPerGram = selectedMarketQuote?.buybackPricePerGram ?? fallbackBuybackPerGram;
   let currentValue: string | null = null;
   let gainPct: number | null = null;
   if (buybackPerGram !== null) {
@@ -104,6 +125,12 @@ export function toGoldLotClientData(lot: GoldLotItem, buybackPerGram: Money | nu
     goldForm: lot.goldForm,
     vendorName: lot.vendorName,
     notes: lot.notes,
+    valuationVendorName: selectedMarketQuote?.vendorName ?? null,
+    isFallbackVendorPrice:
+      selectedMarketQuote !== null &&
+      (lot.vendorName === null ||
+        selectedMarketQuote.vendorName.toLocaleLowerCase('id-ID') !==
+          lot.vendorName.toLocaleLowerCase('id-ID')),
     currentValue,
     gainPct,
     canEdit: remainingGrams === weightGrams,
@@ -157,6 +184,8 @@ export interface GoldMarketPriceClientData {
   buybackPrice: string;
   /** ISO string — `asOf` is a `timestamptz`, not a wire-safe `Date`. */
   asOf: string;
+  priceDate: string;
+  weightGrams: string | null;
 }
 
 export function toGoldMarketPriceClientData(item: GoldMarketPriceItem): GoldMarketPriceClientData {
@@ -167,5 +196,7 @@ export function toGoldMarketPriceClientData(item: GoldMarketPriceItem): GoldMark
     buyPrice: serializeMoney(item.buyPrice),
     buybackPrice: serializeMoney(item.buybackPrice),
     asOf: item.asOf.toISOString(),
+    priceDate: item.priceDate,
+    weightGrams: item.weightGrams,
   };
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "gold_market_prices" ADD COLUMN "weight_grams" numeric(18, 4);

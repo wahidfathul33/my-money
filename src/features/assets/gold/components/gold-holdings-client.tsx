@@ -78,7 +78,9 @@ export function GoldHoldingsClient({
   // Scaled-bigint division before ever touching `Number` — same discipline
   // src/lib/finance/savings.ts's `calculateGoalProgress` uses for its ratio.
   const gainPct =
-    summary.hasPrice && costBasis > 0n ? Number((unrealizedGain * 1_000_000n) / costBasis) / 10_000 : null;
+    summary.hasPrice && costBasis > 0n
+      ? Number((unrealizedGain * 1_000_000n) / costBasis) / 10_000
+      : null;
   const isGain = unrealizedGain >= 0n;
 
   const defaultSellRupiah = latestPrice ? toRupiahString(latestPrice.sellPricePerGram) : null;
@@ -106,6 +108,13 @@ export function GoldHoldingsClient({
                   </span>
                 )}
               </div>
+              {summary.valuationVendors.length > 0 && (
+                <p className="text-text-muted text-xs">
+                  Harga buyback: {summary.valuationVendors.join(', ')}
+                  {summary.priceAgeDays !== null &&
+                    ` · diperbarui ${summary.priceAgeDays === 0 ? 'hari ini' : `${summary.priceAgeDays} hari lalu`}`}
+                </p>
+              )}
             </>
           ) : (
             <div className="flex flex-col items-center gap-1 pt-2">
@@ -131,7 +140,11 @@ export function GoldHoldingsClient({
               <Info className="text-text-subtle size-3.5" aria-hidden="true" />
             </Tooltip>
           </div>
-          <MoneyText amount={deserializeMoney(latestPrice.buybackPricePerGram)} tone="plain" size="md" />
+          <MoneyText
+            amount={deserializeMoney(latestPrice.buybackPricePerGram)}
+            tone="plain"
+            size="md"
+          />
           <span
             className={cn(
               'inline-flex items-center gap-1 text-xs',
@@ -149,9 +162,16 @@ export function GoldHoldingsClient({
         <div className="border-border flex items-center justify-between gap-3 border-t pt-3">
           <div className="flex flex-col">
             <span className="text-text text-sm font-medium">Sembunyikan dari keluarga</span>
-            <span className="text-text-muted text-xs">Tidak ikut dihitung di kekayaan keluarga.</span>
+            <span className="text-text-muted text-xs">
+              Tidak ikut dihitung di kekayaan keluarga.
+            </span>
           </div>
-          <ExclusionToggle entityType="asset" entityId={assetId} label="Emas ini" excluded={excludeFromHousehold} />
+          <ExclusionToggle
+            entityType="asset"
+            entityId={assetId}
+            label="Emas ini"
+            excluded={excludeFromHousehold}
+          />
         </div>
       )}
 

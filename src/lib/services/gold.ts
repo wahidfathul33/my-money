@@ -26,12 +26,21 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { dbRead } from '@/lib/db/read';
 import { dbWrite } from '@/lib/db/write';
-import { assets, goldLots, goldPrices, goldSales, ledgerEntries, wallets } from '@/lib/db/schema';
+import {
+  assets,
+  goldLots,
+  goldMarketPrices,
+  goldPrices,
+  goldSales,
+  ledgerEntries,
+  wallets,
+} from '@/lib/db/schema';
 import { ownedBy } from '@/lib/db/scoped';
 import { postEntries } from '@/lib/finance/ledger';
 import { type Money } from '@/lib/finance/money';
 import {
   computeSale,
+  currentValue,
   formatGramsForDb,
   formatGramsDisplay,
   gramsToMoney,
@@ -39,7 +48,12 @@ import {
   totalRemainingGrams,
   type Grams,
 } from '@/lib/finance/gold';
-import { fetchGoldPriceWithFallback, type GoldPriceProviderId, getConfiguredProviderId } from '@/lib/gold-price/provider';
+import { buybackPerGram, selectGoldMarketQuote } from '@/lib/finance/gold-market';
+import {
+  fetchGoldPriceWithFallback,
+  type GoldPriceProviderId,
+  getConfiguredProviderId,
+} from '@/lib/gold-price/provider';
 import { NotFoundError, ValidationError } from '@/lib/api/errors';
 import type { TransactionClient } from '@/lib/db';
 
@@ -110,13 +124,19 @@ function assertBuybackLteSell(sellPerGram: Money, buybackPerGram: Money): void {
     throw new ValidationError({ buybackPerGram: ['Harga harus lebih dari Rp0'] });
   }
   if (buybackPerGram > sellPerGram) {
-    throw new ValidationError({ buybackPerGram: ['Harga buyback tidak boleh melebihi harga jual'] });
+    throw new ValidationError({
+      buybackPerGram: ['Harga buyback tidak boleh melebihi harga jual'],
+    });
   }
 }
 
 /** Verifies the wallet belongs to `userId` AND is active — same guard shape
  * as src/lib/services/savings.ts's `assertWalletOwnedAndActive`. */
-async function assertWalletOwnedAndActive(tx: TransactionClient, userId: string, walletId: string): Promise<void> {
+async function assertWalletOwnedAndActive(
+  tx: TransactionClient,
+  userId: string,
+  walletId: string,
+): Promise<void> {
   const [wallet] = await tx
     .select({ id: wallets.id, isArchived: wallets.isArchived })
     .from(wallets)
@@ -181,13 +201,19 @@ async function findOrCreateGoldAsset(tx: TransactionClient, userId: string): Pro
  * misleading 0, but the cache itself has to hold SOME value, and 0 is the
  * honest one: unpriced holdings contribute nothing knowable to net worth).
  */
-async function recalculateCachedValue(tx: TransactionClient, userId: string, assetId: string): Promise<void> {
+async function recalculateCachedValue(
+  tx: TransactionClient,
+  userId: string,
+  assetId: string,
+): Promise<void> {
   const lots = await tx
-    .select({ remainingGrams: goldLots.remainingGrams })
+    .select({
+      remainingGrams: goldLots.remainingGrams,
+      weightGrams: goldLots.weightGrams,
+      vendorName: goldLots.vendorName,
+    })
     .from(goldLots)
     .where(and(eq(goldLots.assetId, assetId), sql`${goldLots.remainingGrams} > 0`));
-  const totalGrams = totalRemainingGrams(lots.map((l) => ({ remainingGrams: parseGrams(l.remainingGrams) })));
-
   const [latestPrice] = await tx
     .select({ buybackPricePerGram: goldPrices.buybackPricePerGram })
     .from(goldPrices)
@@ -195,12 +221,50 @@ async function recalculateCachedValue(tx: TransactionClient, userId: string, ass
     .orderBy(sql`${goldPrices.priceDate} DESC`)
     .limit(1);
 
-  const cachedValue = latestPrice ? gramsToMoney(totalGrams, latestPrice.buybackPricePerGram) : 0n;
+  const weights = [...new Set(lots.map((lot) => lot.weightGrams))];
+  const marketRows =
+    weights.length > 0
+      ? await tx
+          .select({
+            vendorName: goldMarketPrices.vendorName,
+            productName: goldMarketPrices.productName,
+            weightGrams: goldMarketPrices.weightGrams,
+            buybackPrice: goldMarketPrices.buybackPrice,
+            priceDate: goldMarketPrices.priceDate,
+            asOf: goldMarketPrices.asOf,
+          })
+          .from(goldMarketPrices)
+          .where(
+            and(
+              inArray(goldMarketPrices.weightGrams, weights),
+              eq(goldMarketPrices.currency, 'IDR'),
+            ),
+          )
+      : [];
+  const cachedValue = lots.reduce((sum, lot) => {
+    const selected = selectGoldMarketQuote(
+      marketRows.filter(
+        (row): row is typeof row & { weightGrams: string } => row.weightGrams !== null,
+      ),
+      lot.vendorName,
+      parseGrams(lot.weightGrams),
+    );
+    const unitPrice = selected ? buybackPerGram(selected) : latestPrice?.buybackPricePerGram;
+    return unitPrice === undefined
+      ? sum
+      : sum + currentValue(parseGrams(lot.remainingGrams), unitPrice);
+  }, 0n);
 
-  await tx.update(assets).set({ cachedValue, cachedAt: new Date(), updatedAt: new Date() }).where(eq(assets.id, assetId));
+  await tx
+    .update(assets)
+    .set({ cachedValue, cachedAt: new Date(), updatedAt: new Date() })
+    .where(eq(assets.id, assetId));
 }
 
-async function findLotByIdempotencyKey(userId: string, idempotencyKey: string): Promise<GoldLotRow | undefined> {
+async function findLotByIdempotencyKey(
+  userId: string,
+  idempotencyKey: string,
+): Promise<GoldLotRow | undefined> {
   const [row] = await dbWrite
     .select()
     .from(goldLots)
@@ -209,7 +273,10 @@ async function findLotByIdempotencyKey(userId: string, idempotencyKey: string): 
   return row;
 }
 
-async function findSaleByIdempotencyKey(userId: string, idempotencyKey: string): Promise<GoldSaleRow | undefined> {
+async function findSaleByIdempotencyKey(
+  userId: string,
+  idempotencyKey: string,
+): Promise<GoldSaleRow | undefined> {
   const [row] = await dbWrite
     .select()
     .from(goldSales)
@@ -287,7 +354,10 @@ export async function buyGold(userId: string, input: BuyGoldInput): Promise<Gold
       // spec.md defines disposal semantics for gold, but leaving `status`
       // stuck at `disposed` after a fresh purchase would be visibly wrong.
       if (asset.status !== 'active') {
-        await tx.update(assets).set({ status: 'active', updatedAt: new Date() }).where(eq(assets.id, asset.id));
+        await tx
+          .update(assets)
+          .set({ status: 'active', updatedAt: new Date() })
+          .where(eq(assets.id, asset.id));
       }
 
       await recalculateCachedValue(tx, userId, asset.id);
@@ -359,7 +429,9 @@ export async function sellGold(userId: string, input: SellGoldInput): Promise<Go
 
       if (gramsSold > totalAvailable) {
         throw new ValidationError({
-          weightGrams: [`Melebihi kepemilikan emas Anda. Tersedia ${formatGramsDisplay(totalAvailable)} gram.`],
+          weightGrams: [
+            `Melebihi kepemilikan emas Anda. Tersedia ${formatGramsDisplay(totalAvailable)} gram.`,
+          ],
         });
       }
 
@@ -374,7 +446,9 @@ export async function sellGold(userId: string, input: SellGoldInput): Promise<Go
         // quantity mutation in this codebase, not two.
         await tx
           .update(goldLots)
-          .set({ remainingGrams: sql`${goldLots.remainingGrams} - ${formatGramsForDb(reduction.reduceBy)}` })
+          .set({
+            remainingGrams: sql`${goldLots.remainingGrams} - ${formatGramsForDb(reduction.reduceBy)}`,
+          })
           .where(eq(goldLots.id, reduction.lotId));
       }
 
@@ -435,7 +509,11 @@ function assertLotUntouchedBySale(lot: GoldLotRow): void {
   }
 }
 
-async function lockOwnedLot(tx: TransactionClient, userId: string, lotId: string): Promise<GoldLotRow> {
+async function lockOwnedLot(
+  tx: TransactionClient,
+  userId: string,
+  lotId: string,
+): Promise<GoldLotRow> {
   const [lot] = await tx
     .select()
     .from(goldLots)
@@ -460,7 +538,11 @@ async function reverseLotLedgerEntry(
   lot: GoldLotRow,
 ): Promise<string | null> {
   if (!lot.ledgerEntryId) return null;
-  const [entry] = await tx.select().from(ledgerEntries).where(eq(ledgerEntries.id, lot.ledgerEntryId)).limit(1);
+  const [entry] = await tx
+    .select()
+    .from(ledgerEntries)
+    .where(eq(ledgerEntries.id, lot.ledgerEntryId))
+    .limit(1);
   if (!entry) return null;
 
   const [reversal] = await postEntries(tx, [
@@ -498,7 +580,11 @@ export interface UpdateGoldLotInput {
  * lot's old ledger entry and posts a fresh one for the new weight × price,
  * same reversal shape `deleteGoldLot` below uses.
  */
-export async function updateGoldLot(userId: string, lotId: string, input: UpdateGoldLotInput): Promise<GoldLotRow> {
+export async function updateGoldLot(
+  userId: string,
+  lotId: string,
+  input: UpdateGoldLotInput,
+): Promise<GoldLotRow> {
   const grams = assertPositiveGrams(input.weightGrams);
   assertPositiveMoney(input.pricePerGram, 'pricePerGram');
   assertNotTooFarInFuture(input.purchaseDate, 'purchaseDate');
@@ -579,7 +665,21 @@ export interface RecordGoldPriceInput {
  * change alone moves the valuation — todo.md's "update harga → gain
  * berubah" flow.
  */
-export async function recordGoldPrice(userId: string, input: RecordGoldPriceInput): Promise<GoldPriceRow> {
+export async function refreshGoldAssetCachedValues(): Promise<void> {
+  const goldAssets = await dbRead
+    .select({ id: assets.id, userId: assets.userId })
+    .from(assets)
+    .where(and(eq(assets.assetType, 'gold'), eq(assets.status, 'active')));
+
+  for (const asset of goldAssets) {
+    await dbWrite.transaction((tx) => recalculateCachedValue(tx, asset.userId, asset.id));
+  }
+}
+
+export async function recordGoldPrice(
+  userId: string,
+  input: RecordGoldPriceInput,
+): Promise<GoldPriceRow> {
   assertBuybackLteSell(input.sellPerGram, input.buybackPerGram);
 
   return dbWrite.transaction(async (tx) => {

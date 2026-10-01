@@ -39,7 +39,9 @@ function formatDateId(isoDate: string): string {
 
 function GoldLotRow({ lot, onOpen }: { lot: GoldLotClientData; onOpen: () => void }) {
   const form = [lot.vendorName, lot.goldForm].filter(Boolean).join(' · ');
-  const heading = form ? `${form} · ${lot.remainingGramsDisplay} gr` : `${lot.remainingGramsDisplay} gr`;
+  const heading = form
+    ? `${form} · ${lot.remainingGramsDisplay} gr`
+    : `${lot.remainingGramsDisplay} gr`;
   const isGain = lot.gainPct !== null && lot.gainPct >= 0;
 
   return (
@@ -55,6 +57,13 @@ function GoldLotRow({ lot, onOpen }: { lot: GoldLotClientData; onOpen: () => voi
         {lot.currentValue !== null && lot.gainPct !== null ? (
           <div className="flex items-center gap-2">
             <MoneyText amount={deserializeMoney(lot.currentValue)} tone="plain" size="sm" />
+            {lot.valuationVendorName && (
+              <span className="text-text-muted text-xs">
+                {lot.isFallbackVendorPrice
+                  ? `Harga ${lot.valuationVendorName}`
+                  : lot.valuationVendorName}
+              </span>
+            )}
             <span
               className={cn(
                 'inline-flex items-center gap-0.5 text-xs font-medium',
@@ -78,7 +87,13 @@ function GoldLotRow({ lot, onOpen }: { lot: GoldLotClientData; onOpen: () => voi
   );
 }
 
-export function GoldLotList({ lots, vendors }: { lots: GoldLotClientData[]; vendors: GoldVendorOption[] }) {
+export function GoldLotList({
+  lots,
+  vendors,
+}: {
+  lots: GoldLotClientData[];
+  vendors: GoldVendorOption[];
+}) {
   const [selectedLot, setSelectedLot] = useState<GoldLotClientData | null>(null);
   const [editingLot, setEditingLot] = useState<GoldLotClientData | null>(null);
   const [deletingLot, setDeletingLot] = useState<GoldLotClientData | null>(null);

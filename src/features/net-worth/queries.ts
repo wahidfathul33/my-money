@@ -38,6 +38,7 @@ import {
   debts,
   deposits,
   goldLots,
+  goldMarketPrices,
   goldPrices,
   householdMembers,
   netWorthSnapshots,
@@ -53,7 +54,12 @@ import { householdWealthJoin, notExcludedFromHousehold } from '@/lib/visibility/
 import { DEFAULT_TIMEZONE, toLocalDate } from '@/lib/date/timezone';
 import type { Money } from '@/lib/finance/money';
 import { deserializeMoney } from '@/lib/finance/money';
-import { currentValue, parseGrams, type Grams } from '@/lib/finance/gold';
+import { currentValue, parseGrams } from '@/lib/finance/gold';
+import {
+  buybackPerGram,
+  selectGoldMarketQuote,
+  type GoldMarketQuote,
+} from '@/lib/finance/gold-market';
 import {
   calculateNetWorth,
   type NetWorthAssetBreakdown,
@@ -113,7 +119,13 @@ async function getTotalOtherAssets(userId: string): Promise<Money> {
   const [row] = await dbRead
     .select({ total: sql<string>`COALESCE(SUM(${assets.cachedValue}), 0)` })
     .from(assets)
-    .where(and(ownedBy(assets, userId), eq(assets.status, 'active'), sql`${assets.assetType} NOT IN ('gold','deposit')`));
+    .where(
+      and(
+        ownedBy(assets, userId),
+        eq(assets.status, 'active'),
+        sql`${assets.assetType} NOT IN ('gold','deposit')`,
+      ),
+    );
   return BigInt(row?.total ?? '0');
 }
 
@@ -124,17 +136,25 @@ async function getTotalOtherAssets(userId: string): Promise<Money> {
  * decisions about what counts.
  */
 export async function getNetWorth(userId: string): Promise<NetWorthResult> {
-  const [walletSplit, totalSavings, goldSummary, totalDepositValue, totalOtherAssets, totalDebts, totalReceivables, preferences] =
-    await Promise.all([
-      getWalletSplit(userId),
-      getTotalSavings(userId),
-      getGoldHoldingsSummary(userId),
-      getTotalDepositValue(userId),
-      getTotalOtherAssets(userId),
-      getTotalDebt(userId),
-      getTotalReceivable(userId),
-      getUserPreferences(userId),
-    ]);
+  const [
+    walletSplit,
+    totalSavings,
+    goldSummary,
+    totalDepositValue,
+    totalOtherAssets,
+    totalDebts,
+    totalReceivables,
+    preferences,
+  ] = await Promise.all([
+    getWalletSplit(userId),
+    getTotalSavings(userId),
+    getGoldHoldingsSummary(userId),
+    getTotalDepositValue(userId),
+    getTotalOtherAssets(userId),
+    getTotalDebt(userId),
+    getTotalReceivable(userId),
+    getUserPreferences(userId),
+  ]);
 
   return calculateNetWorth({
     totalCashAssets: walletSplit.cashAssets,
@@ -168,11 +188,12 @@ const ASSET_LABELS: Record<keyof NetWorthAssetBreakdown, { label: string; href: 
   receivables: { label: 'Piutang', href: '/wealth/debts' },
 };
 
-const LIABILITY_LABELS: Record<keyof NetWorthLiabilityBreakdown, { label: string; href: string }> = {
-  debts: { label: 'Hutang', href: '/wealth/debts' },
-  creditCards: { label: 'Kartu Kredit', href: '/wallets' },
-  cashOverdraft: { label: 'Saldo Minus', href: '/wallets' },
-};
+const LIABILITY_LABELS: Record<keyof NetWorthLiabilityBreakdown, { label: string; href: string }> =
+  {
+    debts: { label: 'Hutang', href: '/wealth/debts' },
+    creditCards: { label: 'Kartu Kredit', href: '/wallets' },
+    cashOverdraft: { label: 'Saldo Minus', href: '/wallets' },
+  };
 
 /** Non-zero asset composition rows, largest first — docs/09-screen-specs.md
  * §8's exact ordering (Deposito 37% · Emas 32% · Tabungan 19% · Kas 12%). */
@@ -184,7 +205,9 @@ export function buildAssetComposition(breakdown: NetWorthAssetBreakdown): Compos
 }
 
 /** Non-zero liability composition rows, largest first. */
-export function buildLiabilityComposition(breakdown: NetWorthLiabilityBreakdown): CompositionItem[] {
+export function buildLiabilityComposition(
+  breakdown: NetWorthLiabilityBreakdown,
+): CompositionItem[] {
   return (Object.keys(LIABILITY_LABELS) as (keyof NetWorthLiabilityBreakdown)[])
     .map((key) => ({ key, amount: breakdown[key], ...LIABILITY_LABELS[key] }))
     .filter((item) => item.amount > 0n)
@@ -204,10 +227,16 @@ export interface HouseholdRosterMember {
  * labeled, per ADR-029. */
 async function listActiveMembersWithSharing(householdId: string): Promise<HouseholdRosterMember[]> {
   const rows = await dbRead
-    .select({ userId: householdMembers.userId, name: users.name, sharing: householdMembers.shareWealth })
+    .select({
+      userId: householdMembers.userId,
+      name: users.name,
+      sharing: householdMembers.shareWealth,
+    })
     .from(householdMembers)
     .innerJoin(users, eq(users.id, householdMembers.userId))
-    .where(and(eq(householdMembers.householdId, householdId), eq(householdMembers.status, 'active')));
+    .where(
+      and(eq(householdMembers.householdId, householdId), eq(householdMembers.status, 'active')),
+    );
   return rows;
 }
 
@@ -230,7 +259,11 @@ async function walletTotalsByMember(householdId: string): Promise<Map<string, Wa
   return new Map(
     rows.map((r) => [
       r.userId,
-      { cashAssets: BigInt(r.cashAssets), cashLiabilities: BigInt(r.cashLiabilities), creditCardLiabilities: BigInt(r.creditCardLiabilities) },
+      {
+        cashAssets: BigInt(r.cashAssets),
+        cashLiabilities: BigInt(r.cashLiabilities),
+        creditCardLiabilities: BigInt(r.creditCardLiabilities),
+      },
     ]),
   );
 }
@@ -241,69 +274,115 @@ async function walletTotalsByMember(householdId: string): Promise<Map<string, Wa
  * GOAL's own `exclude_from_household` (the two live on different tables —
  * see this file's header comment). */
 async function savingsTotalsByMember(householdId: string): Promise<Map<string, Money>> {
-  const virtualTable = { userId: savingsContributions.userId, excludeFromHousehold: savingsGoals.excludeFromHousehold };
+  const virtualTable = {
+    userId: savingsContributions.userId,
+    excludeFromHousehold: savingsGoals.excludeFromHousehold,
+  };
   const rows = await dbRead
-    .select({ userId: savingsContributions.userId, total: sql<string>`COALESCE(SUM(${savingsContributions.amount}), 0)` })
+    .select({
+      userId: savingsContributions.userId,
+      total: sql<string>`COALESCE(SUM(${savingsContributions.amount}), 0)`,
+    })
     .from(savingsContributions)
     .innerJoin(savingsGoals, eq(savingsGoals.id, savingsContributions.savingsGoalId))
     .innerJoin(householdMembers, householdWealthJoin(virtualTable, householdId))
-    .where(and(notExcludedFromHousehold(virtualTable), sql`${savingsContributions.voidedAt} IS NULL`))
+    .where(
+      and(notExcludedFromHousehold(virtualTable), sql`${savingsContributions.voidedAt} IS NULL`),
+    )
     .groupBy(savingsContributions.userId);
 
   return new Map(rows.map((r) => [r.userId, BigInt(r.total)]));
 }
 
-/** Σ remaining_grams per gold-lot OWNER, gated by that lot's own asset's
- * `exclude_from_household` — see this file's header comment. */
-async function goldGramsByMember(householdId: string): Promise<Map<string, Grams>> {
-  const virtualTable = { userId: goldLots.userId, excludeFromHousehold: assets.excludeFromHousehold };
-  const rows = await dbRead
-    .select({ userId: goldLots.userId, grams: sql<string>`COALESCE(SUM(${goldLots.remainingGrams}), 0)` })
+interface HouseholdGoldLot {
+  userId: string;
+  remainingGrams: string;
+  weightGrams: string;
+  vendorName: string | null;
+}
+
+/** Per-member gold values: exact-denomination market quote first (own vendor,
+ * then freshest other vendor), then that member's own recorded price. */
+async function goldValueByMember(householdId: string): Promise<Map<string, Money>> {
+  const virtualTable = {
+    userId: goldLots.userId,
+    excludeFromHousehold: assets.excludeFromHousehold,
+  };
+  const lots: HouseholdGoldLot[] = await dbRead
+    .select({
+      userId: goldLots.userId,
+      remainingGrams: goldLots.remainingGrams,
+      weightGrams: goldLots.weightGrams,
+      vendorName: goldLots.vendorName,
+    })
     .from(goldLots)
     .innerJoin(assets, eq(assets.id, goldLots.assetId))
     .innerJoin(householdMembers, householdWealthJoin(virtualTable, householdId))
-    .where(and(notExcludedFromHousehold(virtualTable), eq(assets.status, 'active')))
-    .groupBy(goldLots.userId);
+    .where(
+      and(
+        notExcludedFromHousehold(virtualTable),
+        eq(assets.status, 'active'),
+        sql`${goldLots.remainingGrams} > 0`,
+      ),
+    );
+  if (lots.length === 0) return new Map();
 
-  return new Map(rows.map((r) => [r.userId, parseGrams(r.grams)]));
-}
-
-/** Each member's own most recent buyback price — gold is ALWAYS valued at
- * ITS OWNER's own latest recorded price (there is no single household-wide
- * gold price), reusing `currentValue` (src/lib/finance/gold.ts, ADR-007)
- * exactly as the personal path does via `getGoldHoldingsSummary`. */
-async function latestGoldBuybackPriceByMember(userIds: string[]): Promise<Map<string, Money>> {
-  if (userIds.length === 0) return new Map();
-  // No `DISTINCT ON` support in this drizzle-orm version's pg-core query
-  // builder, and a raw-SQL `= ANY($1)` template doesn't bind a JS array as
-  // a valid Postgres array literal here (caused a real
-  // "malformed array literal" runtime error, caught by this task's own
-  // reconciliation test). Fetch every matching row ordered newest-first
-  // instead and keep only the first (most recent) occurrence per user —
-  // same result as `DISTINCT ON`, and household size keeps the row count
-  // small enough that this is cheap.
-  const rows = await dbRead
+  const weights = [...new Set(lots.map((lot) => lot.weightGrams))];
+  const marketRows = await dbRead
+    .select({
+      vendorName: goldMarketPrices.vendorName,
+      productName: goldMarketPrices.productName,
+      weightGrams: goldMarketPrices.weightGrams,
+      buybackPrice: goldMarketPrices.buybackPrice,
+      priceDate: goldMarketPrices.priceDate,
+      asOf: goldMarketPrices.asOf,
+    })
+    .from(goldMarketPrices)
+    .where(
+      and(inArray(goldMarketPrices.weightGrams, weights), eq(goldMarketPrices.currency, 'IDR')),
+    );
+  const quotes: GoldMarketQuote[] = marketRows.flatMap((row) =>
+    row.weightGrams === null ? [] : [{ ...row, weightGrams: row.weightGrams }],
+  );
+  const priceRows = await dbRead
     .select({ userId: goldPrices.userId, buybackPricePerGram: goldPrices.buybackPricePerGram })
     .from(goldPrices)
-    .where(inArray(goldPrices.userId, userIds))
+    .where(inArray(goldPrices.userId, [...new Set(lots.map((lot) => lot.userId))]))
     .orderBy(desc(goldPrices.priceDate));
+  const fallbackByMember = new Map<string, Money>();
+  for (const row of priceRows)
+    if (!fallbackByMember.has(row.userId))
+      fallbackByMember.set(row.userId, row.buybackPricePerGram);
 
-  const result = new Map<string, Money>();
-  for (const row of rows) {
-    if (!result.has(row.userId)) {
-      result.set(row.userId, row.buybackPricePerGram);
-    }
+  const totals = new Map<string, Money>();
+  for (const lot of lots) {
+    const selected = selectGoldMarketQuote(
+      quotes,
+      lot.vendorName,
+      parseGrams(lot.weightGrams),
+      lot.vendorName !== null,
+    );
+    const price = selected ? buybackPerGram(selected) : fallbackByMember.get(lot.userId);
+    if (price === undefined) continue;
+    const value = currentValue(parseGrams(lot.remainingGrams), price);
+    totals.set(lot.userId, (totals.get(lot.userId) ?? 0n) + value);
   }
-  return result;
+  return totals;
 }
 
 /** Σ principal of `active` deposits per OWNER, gated by the deposit's own
  * asset's `exclude_from_household` — mirrors `getTotalDepositValue`'s
  * principal-only, active-only rule (task 17, I10) exactly. */
 async function depositPrincipalByMember(householdId: string): Promise<Map<string, Money>> {
-  const virtualTable = { userId: deposits.userId, excludeFromHousehold: assets.excludeFromHousehold };
+  const virtualTable = {
+    userId: deposits.userId,
+    excludeFromHousehold: assets.excludeFromHousehold,
+  };
   const rows = await dbRead
-    .select({ userId: deposits.userId, total: sql<string>`COALESCE(SUM(${deposits.principal}), 0)` })
+    .select({
+      userId: deposits.userId,
+      total: sql<string>`COALESCE(SUM(${deposits.principal}), 0)`,
+    })
     .from(deposits)
     .innerJoin(assets, eq(assets.id, deposits.assetId))
     .innerJoin(householdMembers, householdWealthJoin(virtualTable, householdId))
@@ -319,7 +398,13 @@ async function otherAssetsByMember(householdId: string): Promise<Map<string, Mon
     .select({ userId: assets.userId, total: sql<string>`COALESCE(SUM(${assets.cachedValue}), 0)` })
     .from(assets)
     .innerJoin(householdMembers, householdWealthJoin(assets, householdId))
-    .where(and(notExcludedFromHousehold(assets), eq(assets.status, 'active'), sql`${assets.assetType} NOT IN ('gold','deposit')`))
+    .where(
+      and(
+        notExcludedFromHousehold(assets),
+        eq(assets.status, 'active'),
+        sql`${assets.assetType} NOT IN ('gold','deposit')`,
+      ),
+    )
     .groupBy(assets.userId);
 
   return new Map(rows.map((r) => [r.userId, BigInt(r.total)]));
@@ -328,10 +413,15 @@ async function otherAssetsByMember(householdId: string): Promise<Map<string, Mon
 /** Σ remaining_amount of live debts per owner — ALWAYS a liability. */
 async function debtsByMember(householdId: string): Promise<Map<string, Money>> {
   const rows = await dbRead
-    .select({ userId: debts.userId, total: sql<string>`COALESCE(SUM(${debts.remainingAmount}), 0)` })
+    .select({
+      userId: debts.userId,
+      total: sql<string>`COALESCE(SUM(${debts.remainingAmount}), 0)`,
+    })
     .from(debts)
     .innerJoin(householdMembers, householdWealthJoin(debts, householdId))
-    .where(and(notExcludedFromHousehold(debts), sql`${debts.status} IN ('active','partially_paid')`))
+    .where(
+      and(notExcludedFromHousehold(debts), sql`${debts.status} IN ('active','partially_paid')`),
+    )
     .groupBy(debts.userId);
 
   return new Map(rows.map((r) => [r.userId, BigInt(r.total)]));
@@ -356,10 +446,20 @@ async function receivablesByMember(householdId: string): Promise<Map<string, Rec
     .from(receivables)
     .innerJoin(householdMembers, householdWealthJoin(receivables, householdId))
     .innerJoin(users, eq(users.id, receivables.userId))
-    .where(and(notExcludedFromHousehold(receivables), sql`${receivables.status} IN ('active','partially_paid')`))
+    .where(
+      and(
+        notExcludedFromHousehold(receivables),
+        sql`${receivables.status} IN ('active','partially_paid')`,
+      ),
+    )
     .groupBy(receivables.userId, users.countReceivablesAsAsset);
 
-  return new Map(rows.map((r) => [r.userId, { remaining: BigInt(r.total), countAsAsset: r.countReceivablesAsAsset }]));
+  return new Map(
+    rows.map((r) => [
+      r.userId,
+      { remaining: BigInt(r.total), countAsAsset: r.countReceivablesAsAsset },
+    ]),
+  );
 }
 
 export interface HouseholdNetWorthOverview extends HouseholdNetWorthResult {
@@ -373,8 +473,19 @@ export interface HouseholdNetWorthOverview extends HouseholdNetWorthResult {
   };
 }
 
-const ZERO_ASSETS: NetWorthAssetBreakdown = { cash: 0n, savings: 0n, gold: 0n, deposits: 0n, otherAssets: 0n, receivables: 0n };
-const ZERO_LIABILITIES: NetWorthLiabilityBreakdown = { cashOverdraft: 0n, creditCards: 0n, debts: 0n };
+const ZERO_ASSETS: NetWorthAssetBreakdown = {
+  cash: 0n,
+  savings: 0n,
+  gold: 0n,
+  deposits: 0n,
+  otherAssets: 0n,
+  receivables: 0n,
+};
+const ZERO_LIABILITIES: NetWorthLiabilityBreakdown = {
+  cashOverdraft: 0n,
+  creditCards: 0n,
+  debts: 0n,
+};
 
 function addAssets(a: NetWorthAssetBreakdown, b: NetWorthAssetBreakdown): NetWorthAssetBreakdown {
   return {
@@ -387,8 +498,15 @@ function addAssets(a: NetWorthAssetBreakdown, b: NetWorthAssetBreakdown): NetWor
   };
 }
 
-function addLiabilities(a: NetWorthLiabilityBreakdown, b: NetWorthLiabilityBreakdown): NetWorthLiabilityBreakdown {
-  return { cashOverdraft: a.cashOverdraft + b.cashOverdraft, creditCards: a.creditCards + b.creditCards, debts: a.debts + b.debts };
+function addLiabilities(
+  a: NetWorthLiabilityBreakdown,
+  b: NetWorthLiabilityBreakdown,
+): NetWorthLiabilityBreakdown {
+  return {
+    cashOverdraft: a.cashOverdraft + b.cashOverdraft,
+    creditCards: a.creditCards + b.creditCards,
+    debts: a.debts + b.debts,
+  };
 }
 
 /**
@@ -401,29 +519,40 @@ function addLiabilities(a: NetWorthLiabilityBreakdown, b: NetWorthLiabilityBreak
  * doesn't re-verify membership, same convention as every other query under
  * src/features/household/**.
  */
-export async function getHouseholdNetWorth(householdId: string): Promise<HouseholdNetWorthOverview> {
+export async function getHouseholdNetWorth(
+  householdId: string,
+): Promise<HouseholdNetWorthOverview> {
   const roster = await listActiveMembersWithSharing(householdId);
 
-  const [walletTotals, savingsTotals, gramsByMember, depositTotals, otherAssetTotals, debtTotals, receivableTotals] = await Promise.all([
+  const [
+    walletTotals,
+    savingsTotals,
+    goldTotals,
+    depositTotals,
+    otherAssetTotals,
+    debtTotals,
+    receivableTotals,
+  ] = await Promise.all([
     walletTotalsByMember(householdId),
     savingsTotalsByMember(householdId),
-    goldGramsByMember(householdId),
+    goldValueByMember(householdId),
     depositPrincipalByMember(householdId),
     otherAssetsByMember(householdId),
     debtsByMember(householdId),
     receivablesByMember(householdId),
   ]);
-  const priceByMember = await latestGoldBuybackPriceByMember([...gramsByMember.keys()]);
 
   let compositionAssets = ZERO_ASSETS;
   let compositionLiabilities = ZERO_LIABILITIES;
 
   const members: HouseholdMemberNetWorthInput[] = roster.map((m) => {
-    const wallet = walletTotals.get(m.userId) ?? { cashAssets: 0n, cashLiabilities: 0n, creditCardLiabilities: 0n };
+    const wallet = walletTotals.get(m.userId) ?? {
+      cashAssets: 0n,
+      cashLiabilities: 0n,
+      creditCardLiabilities: 0n,
+    };
     const savings = savingsTotals.get(m.userId) ?? 0n;
-    const grams = gramsByMember.get(m.userId) ?? 0n;
-    const buyback = priceByMember.get(m.userId);
-    const gold = buyback !== undefined ? currentValue(grams, buyback) : 0n;
+    const gold = goldTotals.get(m.userId) ?? 0n;
     const depositValue = depositTotals.get(m.userId) ?? 0n;
     const otherAssetsValue = otherAssetTotals.get(m.userId) ?? 0n;
     const debtValue = debtsByMemberValue(debtTotals, m.userId);
@@ -449,14 +578,32 @@ export async function getHouseholdNetWorth(householdId: string): Promise<Househo
       compositionLiabilities = addLiabilities(compositionLiabilities, liabilitiesBreakdown);
     }
 
-    const assetsTotal = assetsBreakdown.cash + assetsBreakdown.savings + assetsBreakdown.gold + assetsBreakdown.deposits + assetsBreakdown.otherAssets + assetsBreakdown.receivables;
-    const liabilitiesTotal = liabilitiesBreakdown.cashOverdraft + liabilitiesBreakdown.creditCards + liabilitiesBreakdown.debts;
+    const assetsTotal =
+      assetsBreakdown.cash +
+      assetsBreakdown.savings +
+      assetsBreakdown.gold +
+      assetsBreakdown.deposits +
+      assetsBreakdown.otherAssets +
+      assetsBreakdown.receivables;
+    const liabilitiesTotal =
+      liabilitiesBreakdown.cashOverdraft +
+      liabilitiesBreakdown.creditCards +
+      liabilitiesBreakdown.debts;
 
-    return { userId: m.userId, name: m.name, sharing: m.sharing, assets: assetsTotal, liabilities: liabilitiesTotal };
+    return {
+      userId: m.userId,
+      name: m.name,
+      sharing: m.sharing,
+      assets: assetsTotal,
+      liabilities: liabilitiesTotal,
+    };
   });
 
   const result = calculateHouseholdNetWorth(members);
-  return { ...result, composition: { assets: compositionAssets, liabilities: compositionLiabilities } };
+  return {
+    ...result,
+    composition: { assets: compositionAssets, liabilities: compositionLiabilities },
+  };
 }
 
 function debtsByMemberValue(map: Map<string, Money>, userId: string): Money {
@@ -467,7 +614,11 @@ function debtsByMemberValue(map: Map<string, Money>, userId: string): Money {
 
 export type NetWorthHistoryRange = '3m' | '6m' | '1y' | 'all';
 
-const MONTHS_BY_RANGE: Record<Exclude<NetWorthHistoryRange, 'all'>, number> = { '3m': 3, '6m': 6, '1y': 12 };
+const MONTHS_BY_RANGE: Record<Exclude<NetWorthHistoryRange, 'all'>, number> = {
+  '3m': 3,
+  '6m': 6,
+  '1y': 12,
+};
 
 /** `dateStr` (`YYYY-MM-DD`) shifted by `monthsDelta` whole months, clamping
  * the day to the target month's length — same day-overflow-normalizing
@@ -518,7 +669,12 @@ export async function getNetWorthHistory(
       breakdown: netWorthSnapshots.breakdown,
     })
     .from(netWorthSnapshots)
-    .where(and(eq(netWorthSnapshots.userId, userId), cutoff ? gte(netWorthSnapshots.snapshotDate, cutoff) : undefined))
+    .where(
+      and(
+        eq(netWorthSnapshots.userId, userId),
+        cutoff ? gte(netWorthSnapshots.snapshotDate, cutoff) : undefined,
+      ),
+    )
     .orderBy(asc(netWorthSnapshots.snapshotDate));
   return rows;
 }
@@ -570,12 +726,25 @@ export async function getHouseholdNetWorthHistory(
  * never crashes a history chart. */
 export function deserializeAssetBreakdown(raw: unknown): NetWorthAssetBreakdown {
   const obj = (raw as Record<string, unknown>) ?? {};
-  const get = (key: string) => (typeof obj[key] === 'string' ? deserializeMoney(obj[key] as string) : 0n);
-  return { cash: get('cash'), savings: get('savings'), gold: get('gold'), deposits: get('deposits'), otherAssets: get('otherAssets'), receivables: get('receivables') };
+  const get = (key: string) =>
+    typeof obj[key] === 'string' ? deserializeMoney(obj[key] as string) : 0n;
+  return {
+    cash: get('cash'),
+    savings: get('savings'),
+    gold: get('gold'),
+    deposits: get('deposits'),
+    otherAssets: get('otherAssets'),
+    receivables: get('receivables'),
+  };
 }
 
 export function deserializeLiabilityBreakdown(raw: unknown): NetWorthLiabilityBreakdown {
   const obj = (raw as Record<string, unknown>) ?? {};
-  const get = (key: string) => (typeof obj[key] === 'string' ? deserializeMoney(obj[key] as string) : 0n);
-  return { cashOverdraft: get('cashOverdraft'), creditCards: get('creditCards'), debts: get('debts') };
+  const get = (key: string) =>
+    typeof obj[key] === 'string' ? deserializeMoney(obj[key] as string) : 0n;
+  return {
+    cashOverdraft: get('cashOverdraft'),
+    creditCards: get('creditCards'),
+    debts: get('debts'),
+  };
 }

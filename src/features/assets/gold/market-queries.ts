@@ -3,20 +3,18 @@
  * (docs/11-tech-architecture.md §2). NOT scoped by `ownedBy`: unlike the rest
  * of ./queries.ts, `gold_market_prices` isn't per-user.
  */
-import { asc, ilike, or } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, or } from 'drizzle-orm';
 import { dbRead } from '@/lib/db/read';
 import { goldMarketPrices } from '@/lib/db/schema';
 import type { Money } from '@/lib/finance/money';
+import type { GoldMarketQuote } from '@/lib/finance/gold-market';
 
-export interface GoldMarketPriceItem {
+export interface GoldMarketPriceItem extends Omit<GoldMarketQuote, 'weightGrams'> {
   id: string;
-  vendorName: string;
-  productName: string;
-  priceDate: string;
   buyPrice: Money;
-  buybackPrice: Money;
   currency: string;
-  asOf: Date;
+  /** `null` for rows whose source doesn't provide a known weight. */
+  weightGrams: string | null;
 }
 
 /** Every vendor/product row, optionally filtered by a case-insensitive
@@ -26,7 +24,10 @@ export interface GoldMarketPriceItem {
 export async function listGoldMarketPrices(search?: string): Promise<GoldMarketPriceItem[]> {
   const trimmed = search?.trim();
   const where = trimmed
-    ? or(ilike(goldMarketPrices.vendorName, `%${trimmed}%`), ilike(goldMarketPrices.productName, `%${trimmed}%`))
+    ? or(
+        ilike(goldMarketPrices.vendorName, `%${trimmed}%`),
+        ilike(goldMarketPrices.productName, `%${trimmed}%`),
+      )
     : undefined;
 
   return dbRead
@@ -37,12 +38,44 @@ export async function listGoldMarketPrices(search?: string): Promise<GoldMarketP
       priceDate: goldMarketPrices.priceDate,
       buyPrice: goldMarketPrices.buyPrice,
       buybackPrice: goldMarketPrices.buybackPrice,
+      weightGrams: goldMarketPrices.weightGrams,
       currency: goldMarketPrices.currency,
       asOf: goldMarketPrices.asOf,
     })
     .from(goldMarketPrices)
     .where(where)
     .orderBy(asc(goldMarketPrices.vendorName), asc(goldMarketPrices.productName));
+}
+
+/** Market rows for only the lot denominations we need to value. A null weight
+ * is intentionally excluded; it remains visible on the reference page but
+ * cannot safely be converted to a per-gram price. */
+export async function listGoldMarketQuotesForWeights(
+  weightGrams: string[],
+): Promise<GoldMarketQuote[]> {
+  if (weightGrams.length === 0) return [];
+
+  const uniqueWeights = [...new Set(weightGrams)];
+  const rows = await dbRead
+    .select({
+      vendorName: goldMarketPrices.vendorName,
+      productName: goldMarketPrices.productName,
+      weightGrams: goldMarketPrices.weightGrams,
+      buybackPrice: goldMarketPrices.buybackPrice,
+      priceDate: goldMarketPrices.priceDate,
+      asOf: goldMarketPrices.asOf,
+    })
+    .from(goldMarketPrices)
+    .where(
+      and(
+        inArray(goldMarketPrices.weightGrams, uniqueWeights),
+        eq(goldMarketPrices.currency, 'IDR'),
+      ),
+    );
+
+  return rows.flatMap((row) =>
+    row.weightGrams === null ? [] : [{ ...row, weightGrams: row.weightGrams }],
+  );
 }
 
 export interface GoldVendorOption {

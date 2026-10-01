@@ -9,15 +9,17 @@ import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { dbRead } from '@/lib/db/read';
 import { assets, goldLots, goldPrices, goldSales, wallets } from '@/lib/db/schema';
 import { ownedBy } from '@/lib/db/scoped';
+import { listGoldMarketQuotesForWeights } from './market-queries';
+import { buybackPerGram, selectGoldMarketQuote } from '@/lib/finance/gold-market';
 import type { Money } from '@/lib/finance/money';
 import {
   averageCostPerGram,
   currentValue,
+  gramsToMoney,
   isPriceStale,
   parseGrams,
   priceAgeDays,
   totalRemainingGrams,
-  unrealizedGain,
   type Grams,
 } from '@/lib/finance/gold';
 import type { WalletOption } from '@/features/transactions/sheet-data';
@@ -73,6 +75,29 @@ export interface GoldLotItem {
   goldForm: string | null;
   vendorName: string | null;
   notes: string | null;
+  marketQuote: ResolvedGoldMarketQuote | null;
+}
+
+export interface ResolvedGoldMarketQuote {
+  vendorName: string;
+  productName: string;
+  priceDate: string;
+  asOf: Date;
+  buybackPricePerGram: Money;
+}
+
+async function attachMarketQuotes(
+  lots: Omit<GoldLotItem, 'marketQuote'>[],
+): Promise<GoldLotItem[]> {
+  const weights = [...new Set(lots.map((lot) => lot.weightGrams))];
+  const quotes = await listGoldMarketQuotesForWeights(weights);
+  return lots.map((lot) => {
+    const selected = selectGoldMarketQuote(quotes, lot.vendorName, parseGrams(lot.weightGrams));
+    return {
+      ...lot,
+      marketQuote: selected ? { ...selected, buybackPricePerGram: buybackPerGram(selected) } : null,
+    };
+  });
 }
 
 /** Every lot with grams still remaining, oldest purchase first — matches
@@ -84,7 +109,7 @@ export async function listGoldLots(userId: string): Promise<GoldLotItem[]> {
   const asset = await getGoldAsset(userId);
   if (!asset) return [];
 
-  return dbRead
+  const lots = await dbRead
     .select({
       id: goldLots.id,
       weightGrams: goldLots.weightGrams,
@@ -98,6 +123,7 @@ export async function listGoldLots(userId: string): Promise<GoldLotItem[]> {
     .from(goldLots)
     .where(and(eq(goldLots.assetId, asset.id), sql`${goldLots.remainingGrams} > 0`))
     .orderBy(asc(goldLots.purchaseDate));
+  return attachMarketQuotes(lots);
 }
 
 export interface LatestGoldPrice {
@@ -163,33 +189,62 @@ export interface GoldHoldingsSummary {
   totalGrams: Grams;
   hasHoldings: boolean;
   averageCostPerGram: Money;
-  /** `0n` when `hasPrice` is `false` — valuation is hidden in the UI in
-   * that case rather than shown as a misleading zero. */
+  /** `0n` when no lot is priced; the UI hides the valuation in that state. */
   currentValue: Money;
   unrealizedGain: Money;
   hasPrice: boolean;
+  /** Aggregate market quote metadata for the optional summary card. */
+  valuationVendors: string[];
+  priceAgeDays: number | null;
+  isPriceStale: boolean;
 }
 
-/** `getGoldHoldings` (todo.md) — total gram, cost basis, nilai kini, gain,
- * combining `listGoldLots` + `getLatestGoldPrice` through the pure
- * functions in src/lib/finance/gold.ts. ALWAYS values at the buyback price
- * (ADR-007), never the sell price. */
+/** Uses market quotes per lot where available and falls back to the user's
+ * latest manually/external-recorded buyback price for lots without an exact
+ * weight quote. Both paths value only at buyback (ADR-007). */
 export async function getGoldHoldingsSummary(userId: string): Promise<GoldHoldingsSummary> {
   const [lots, latestPrice] = await Promise.all([listGoldLots(userId), getLatestGoldPrice(userId)]);
   const lotInputs = lots.map((lot) => ({
     remainingGrams: parseGrams(lot.remainingGrams),
     purchasePricePerGram: lot.purchasePricePerGram,
   }));
+  const pricedLots = lots.flatMap((lot) => {
+    const price = lot.marketQuote?.buybackPricePerGram ?? latestPrice?.buybackPricePerGram ?? null;
+    if (price === null) return [];
+    return [{ lot, buybackPricePerGram: price }];
+  });
 
-  const totalGrams = totalRemainingGrams(lotInputs);
-  const hasPrice = latestPrice !== null;
+  const currentValueTotal = pricedLots.reduce(
+    (sum, { lot, buybackPricePerGram }) =>
+      sum + currentValue(parseGrams(lot.remainingGrams), buybackPricePerGram),
+    0n,
+  );
+  const costForPricedLots = pricedLots.reduce(
+    (sum, { lot }) => sum + gramsToMoney(parseGrams(lot.remainingGrams), lot.purchasePricePerGram),
+    0n,
+  );
+  const quoteDates = pricedLots.flatMap(({ lot }) =>
+    lot.marketQuote ? [lot.marketQuote.priceDate] : [],
+  );
+  const priceAge =
+    quoteDates.length > 0
+      ? Math.max(...quoteDates.map((date) => priceAgeDays(date)))
+      : (latestPrice?.ageDays ?? null);
+  const valuationVendors = [
+    ...new Set(
+      pricedLots.flatMap(({ lot }) => (lot.marketQuote ? [lot.marketQuote.vendorName] : [])),
+    ),
+  ];
 
   return {
-    totalGrams,
+    totalGrams: totalRemainingGrams(lotInputs),
     hasHoldings: lots.length > 0,
     averageCostPerGram: averageCostPerGram(lotInputs),
-    currentValue: hasPrice ? currentValue(totalGrams, latestPrice.buybackPricePerGram) : 0n,
-    unrealizedGain: hasPrice ? unrealizedGain(lotInputs, latestPrice.buybackPricePerGram) : 0n,
-    hasPrice,
+    currentValue: currentValueTotal,
+    unrealizedGain: currentValueTotal - costForPricedLots,
+    hasPrice: pricedLots.length > 0,
+    valuationVendors,
+    priceAgeDays: priceAge,
+    isPriceStale: priceAge !== null && isPriceStale(priceAge),
   };
 }

@@ -45,7 +45,9 @@ export const assets = pgTable(
     name: text('name').notNull(),
     assetType: assetTypeEnum('asset_type').notNull(),
     status: assetStatusEnum('status').notNull().default('active'),
-    cachedValue: bigint('cached_value', { mode: 'bigint' }).notNull().default(sql`0`), // CACHE, derived per type
+    cachedValue: bigint('cached_value', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`), // CACHE, derived per type
     cachedAt: timestamp('cached_at', { withTimezone: true }),
     excludeFromHousehold: boolean('exclude_from_household').notNull().default(false),
     note: text('note'),
@@ -139,6 +141,7 @@ export const goldMarketPrices = pgTable(
     priceDate: date('price_date').notNull(),
     buyPrice: bigint('buy_price', { mode: 'bigint' }).notNull(),
     buybackPrice: bigint('buyback_price', { mode: 'bigint' }).notNull(),
+    weightGrams: numeric('weight_grams', { precision: 18, scale: 4 }),
     currency: text('currency').notNull().default('IDR'),
     asOf: timestamp('as_of', { withTimezone: true }).notNull(),
     fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
@@ -256,4 +259,3 @@ export const deposits = pgTable(
     check('deposit_tax_sane', sql`${table.taxRate} BETWEEN 0 AND 1`),
   ],
 );
-

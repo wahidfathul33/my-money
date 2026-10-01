@@ -13,7 +13,10 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { uuidv7 } from 'uuidv7';
+import { inArray } from 'drizzle-orm';
 import { buyGold, recordGoldPrice, sellGold } from '@/lib/services/gold';
+import { dbWrite } from '@/lib/db/write';
+import { goldMarketPrices } from '@/lib/db/schema/assets';
 import { createTestUser, createTestWallet, deleteTestUser } from '@/lib/db/__tests__/test-helpers';
 import { gramsToMoney, parseGrams } from '@/lib/finance/gold';
 import {
@@ -26,12 +29,33 @@ import {
 
 describe('gold queries', () => {
   const userIds: string[] = [];
+  const marketIds: bigint[] = [];
 
   afterEach(async () => {
+    const ids = marketIds.splice(0);
+    if (ids.length > 0)
+      await dbWrite.delete(goldMarketPrices).where(inArray(goldMarketPrices.externalId, ids));
     for (const id of userIds.splice(0)) {
       await deleteTestUser(id);
     }
   });
+
+  async function seedMarketQuote(vendorName: string, weightGrams: string, buybackPrice: bigint) {
+    const externalId = BigInt(Date.now()) * 1000n + BigInt(marketIds.length + 1);
+    marketIds.push(externalId);
+    await dbWrite.insert(goldMarketPrices).values({
+      id: uuidv7(),
+      externalId,
+      vendorName,
+      productName: `Emas ${weightGrams} Gram`,
+      priceDate: '2026-10-01',
+      buyPrice: buybackPrice + 10_000_00n,
+      buybackPrice,
+      weightGrams,
+      currency: 'IDR',
+      asOf: new Date('2026-10-01T10:00:00Z'),
+    });
+  }
 
   async function setupUser() {
     const userId = await createTestUser();
@@ -61,6 +85,9 @@ describe('gold queries', () => {
         currentValue: 0n,
         unrealizedGain: 0n,
         hasPrice: false,
+        valuationVendors: [],
+        priceAgeDays: null,
+        isPriceStale: false,
       });
     });
 
@@ -76,6 +103,48 @@ describe('gold queries', () => {
   });
 
   describe('a user with holdings but no recorded price', () => {
+    it('uses same-vendor exact-weight market buyback price for lot valuation', async () => {
+      const { userId, walletId } = await setupUser();
+      await buyGold(userId, {
+        weightGrams: '1',
+        pricePerGram: 2_500_000_00n,
+        walletId,
+        purchaseDate: new Date(),
+        goldForm: null,
+        vendorName: 'Galeri 24',
+        idempotencyKey: uuidv7(),
+      });
+      await seedMarketQuote('Antam', '1.0000', 2_400_000_00n);
+      await seedMarketQuote('Galeri 24', '1.0000', 2_300_000_00n);
+
+      const [lot] = await listGoldLots(userId);
+      const summary = await getGoldHoldingsSummary(userId);
+      expect(lot?.marketQuote?.vendorName).toBe('Galeri 24');
+      expect(summary.hasPrice).toBe(true);
+      expect(summary.currentValue).toBe(gramsToMoney(parseGrams('1'), 2_300_000_00n));
+      expect(summary.valuationVendors).toEqual(['Galeri 24']);
+    });
+
+    it('uses an exact-weight other-vendor quote when the lot vendor has no quote', async () => {
+      const { userId, walletId } = await setupUser();
+      await buyGold(userId, {
+        weightGrams: '1',
+        pricePerGram: 2_500_000_00n,
+        walletId,
+        purchaseDate: new Date(),
+        goldForm: null,
+        vendorName: 'Galeri 24',
+        idempotencyKey: uuidv7(),
+      });
+      await seedMarketQuote('Antam', '1.0000', 2_400_000_00n);
+
+      const [lot] = await listGoldLots(userId);
+      const summary = await getGoldHoldingsSummary(userId);
+      expect(lot?.marketQuote?.vendorName).toBe('Antam');
+      expect(summary.currentValue).toBe(gramsToMoney(parseGrams('1'), 2_400_000_00n));
+      expect(summary.valuationVendors).toEqual(['Antam']);
+    });
+
     it('getGoldHoldingsSummary hides valuation (hasPrice false, value/gain 0) but still reports cost basis', async () => {
       const { userId, walletId } = await setupUser();
       await buyGold(userId, {
@@ -130,7 +199,9 @@ describe('gold queries', () => {
       // Weighted avg: (10*1_000_000 + 5*1_300_000)/15 = 1_100_000.
       expect(summary.averageCostPerGram).toBe(1_100_000_00n);
       expect(summary.currentValue).toBe(gramsToMoney(parseGrams('15'), 1_190_000_00n));
-      expect(summary.unrealizedGain).toBe(summary.currentValue - gramsToMoney(parseGrams('15'), 1_100_000_00n));
+      expect(summary.unrealizedGain).toBe(
+        summary.currentValue - gramsToMoney(parseGrams('15'), 1_100_000_00n),
+      );
     });
 
     it('listGoldLots excludes fully-sold lots but includes ones bought afterward, oldest purchase first', async () => {

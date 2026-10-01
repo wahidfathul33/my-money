@@ -62,8 +62,58 @@ describe('fetchGoldMarketPrices', () => {
       buyPrice: 263_400_000n,
       buybackPrice: 234_800_000n,
       currency: 'IDR',
+      weightGrams: '1.0000',
     });
     expect(items[0]!.asOf.toISOString()).toBe('2026-09-30T23:00:02.000Z');
+  });
+
+  it('converts a non-gram unit (kg) to its gram-equivalent decimal weight', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          physicalRow({
+            product: { id: 20, brand_id: 2, name: 'Emas Antam 1 Kg', weight: 1, unit: 'kg' },
+          }),
+        ],
+      }),
+    }) as unknown as typeof fetch;
+
+    const items = await fetchGoldMarketPrices();
+    expect(items[0]!.weightGrams).toBe('1000.0000');
+  });
+
+  it('leaves weightGrams null for an unrecognized unit rather than guessing, keeping the row', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          physicalRow({
+            product: { id: 21, brand_id: 2, name: 'Emas Misterius', weight: 1, unit: 'batang' },
+          }),
+        ],
+      }),
+    }) as unknown as typeof fetch;
+
+    const items = await fetchGoldMarketPrices();
+    expect(items).toHaveLength(1);
+    expect(items[0]!.weightGrams).toBeNull();
+  });
+
+  it('leaves weightGrams null for a non-positive weight', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          physicalRow({
+            product: { id: 22, brand_id: 2, name: 'Emas Nol', weight: 0, unit: 'gram' },
+          }),
+        ],
+      }),
+    }) as unknown as typeof fetch;
+
+    const items = await fetchGoldMarketPrices();
+    expect(items[0]!.weightGrams).toBeNull();
   });
 
   it('excludes spot/international/non-IDR rows even though they share the same feed', async () => {
@@ -80,7 +130,9 @@ describe('fetchGoldMarketPrices', () => {
   it('falls back to the as_of date when price_date is null', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ data: [physicalRow({ price_date: null, as_of: '2026-01-28T22:00:10Z' })] }),
+      json: async () => ({
+        data: [physicalRow({ price_date: null, as_of: '2026-01-28T22:00:10Z' })],
+      }),
     }) as unknown as typeof fetch;
 
     const items = await fetchGoldMarketPrices();

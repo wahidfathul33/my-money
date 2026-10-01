@@ -8,6 +8,7 @@ import { uuidv7 } from 'uuidv7';
 import { dbWrite } from '@/lib/db/write';
 import { goldMarketPrices } from '@/lib/db/schema';
 import { fetchGoldMarketPrices } from '@/lib/gold-price/market';
+import { refreshGoldAssetCachedValues } from './gold';
 
 export interface RefreshGoldMarketPricesResult {
   count: number;
@@ -41,6 +42,7 @@ export async function refreshGoldMarketPrices(): Promise<RefreshGoldMarketPrices
         priceDate: item.priceDate,
         buyPrice: item.buyPrice,
         buybackPrice: item.buybackPrice,
+        weightGrams: item.weightGrams,
         currency: item.currency,
         asOf: item.asOf,
         fetchedAt: new Date(),
@@ -53,6 +55,7 @@ export async function refreshGoldMarketPrices(): Promise<RefreshGoldMarketPrices
           priceDate: item.priceDate,
           buyPrice: item.buyPrice,
           buybackPrice: item.buybackPrice,
+          weightGrams: item.weightGrams,
           currency: item.currency,
           asOf: item.asOf,
           fetchedAt: new Date(),
@@ -60,5 +63,6 @@ export async function refreshGoldMarketPrices(): Promise<RefreshGoldMarketPrices
       });
   }
 
+  await refreshGoldAssetCachedValues();
   return { count: items.length };
 }

@@ -20,7 +20,11 @@ import { deserializeMoney } from '@/lib/finance/money';
 import { cn } from '@/lib/utils';
 import type { GoldLotClientData } from '../client-types';
 
-const LONG_DATE_FORMAT = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+const LONG_DATE_FORMAT = new Intl.DateTimeFormat('id-ID', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
 
 function formatDateId(isoDate: string): string {
   return LONG_DATE_FORMAT.format(new Date(`${isoDate}T00:00:00.000Z`));
@@ -34,7 +38,13 @@ interface GoldLotDetailSheetProps {
   onDelete: () => void;
 }
 
-export function GoldLotDetailSheet({ open, onOpenChange, lot, onEdit, onDelete }: GoldLotDetailSheetProps) {
+export function GoldLotDetailSheet({
+  open,
+  onOpenChange,
+  lot,
+  onEdit,
+  onDelete,
+}: GoldLotDetailSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent title="Detail kepemilikan emas">
@@ -71,9 +81,19 @@ function DetailContent({
       {lot.currentValue !== null ? (
         <div className="flex items-center gap-2">
           <MoneyText amount={deserializeMoney(lot.currentValue)} tone="plain" size="display" />
+          {lot.valuationVendorName && (
+            <span className="text-text-muted text-xs">
+              {lot.isFallbackVendorPrice
+                ? `Harga ${lot.valuationVendorName}`
+                : lot.valuationVendorName}
+            </span>
+          )}
           {lot.gainPct !== null && (
             <span
-              className={cn('text-sm font-medium', isGain ? 'text-positive-readable' : 'text-negative')}
+              className={cn(
+                'text-sm font-medium',
+                isGain ? 'text-positive-readable' : 'text-negative',
+              )}
             >
               {isGain ? '+' : ''}
               {lot.gainPct.toFixed(1)}%

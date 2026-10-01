@@ -50,6 +50,12 @@ const marketPriceItemSchema = z.object({
   product: z.object({
     id: z.union([z.number(), z.string()]),
     name: z.string(),
+    // Optional — not every row in the observed feed carries these (e.g. a
+    // future variant of the endpoint), so a missing/unrecognized weight
+    // degrades to `weightGrams: null` on that one row (see `weightToGrams`
+    // below) rather than failing the whole refresh.
+    weight: z.union([z.number(), z.string()]).optional(),
+    unit: z.string().optional(),
   }),
 });
 
@@ -66,6 +72,14 @@ export interface GoldMarketPriceItem {
   buybackPrice: bigint;
   currency: string;
   asOf: Date;
+  /** `NUMERIC(18,4)`-shaped decimal grams (e.g. `"1.0000"`), converted from
+   * `product.weight`/`product.unit` — `null` when either field is missing
+   * or the unit isn't one this module recognizes (see `weightToGrams`). A
+   * row with a `null` weight is still kept (same "don't fail the whole
+   * refresh over one row" discipline the `price_date` fallback below
+   * follows) since the Harga Pasar reference page has no need for it, only
+   * per-lot valuation matching does. */
+  weightGrams: string | null;
 }
 
 /** Rupiah amounts from this API are plain whole-rupiah numbers (no minor
@@ -74,6 +88,59 @@ export interface GoldMarketPriceItem {
  * values are already known-whole (never a decimal string to parse). */
 function toMoney(amount: number | string): bigint {
   return BigInt(Math.round(Number(amount))) * 100n;
+}
+
+/** Exact gram-equivalent of one unit, as a fraction — avoids float error
+ * for the irrational-looking troy-ounce conversion (31.1034768 g exactly
+ * per the international troy-ounce definition). */
+const UNIT_GRAMS_PER_UNIT: Record<string, { num: bigint; den: bigint }> = {
+  gram: { num: 1n, den: 1n },
+  gr: { num: 1n, den: 1n },
+  g: { num: 1n, den: 1n },
+  kg: { num: 1000n, den: 1n },
+  troy_oz: { num: 311_034_768n, den: 10_000_000n },
+  troyoz: { num: 311_034_768n, den: 10_000_000n },
+  oz: { num: 311_034_768n, den: 10_000_000n },
+  ons: { num: 311_034_768n, den: 10_000_000n },
+};
+
+/** `numerator / denominator`, half-up rounded — same rounding discipline
+ * as src/lib/finance/money.ts's `multiplyRatio`, reimplemented locally
+ * since this module stays dependency-free from the finance layer (pure
+ * I/O-adjacent parsing, not domain arithmetic). */
+function roundHalfUpDiv(numerator: bigint, denominator: bigint): bigint {
+  return (numerator + denominator / 2n) / denominator;
+}
+
+/** `product.weight`/`product.unit` → a `NUMERIC(18,4)`-shaped decimal gram
+ * string, or `null` for an unrecognized unit, a non-positive weight, or a
+ * weight that isn't a plain non-negative decimal. All arithmetic stays in
+ * exact bigint fractions (no float) until the very last step, which
+ * rounds to the column's 4 decimal places. */
+function weightToGrams(
+  weight: number | string | undefined,
+  unit: string | undefined,
+): string | null {
+  if (weight === undefined || unit === undefined) return null;
+  const factor = UNIT_GRAMS_PER_UNIT[unit.trim().toLowerCase()];
+  if (!factor) return null;
+
+  const weightStr = typeof weight === 'number' ? weight.toString() : weight.trim();
+  if (!/^\d+(\.\d+)?$/.test(weightStr)) return null;
+
+  const INPUT_PRECISION = 8n;
+  const [whole = '0', frac = ''] = weightStr.split('.');
+  const paddedFrac = (frac + '0'.repeat(Number(INPUT_PRECISION))).slice(0, Number(INPUT_PRECISION));
+  const weightScaled = BigInt(whole) * 10n ** INPUT_PRECISION + BigInt(paddedFrac);
+  if (weightScaled <= 0n) return null;
+
+  const gramsScaled = roundHalfUpDiv(weightScaled * factor.num, factor.den);
+  const gramsAt4Decimals = roundHalfUpDiv(gramsScaled, 10n ** (INPUT_PRECISION - 4n));
+  if (gramsAt4Decimals <= 0n) return null;
+
+  const gramsWhole = gramsAt4Decimals / 10_000n;
+  const gramsFrac = gramsAt4Decimals % 10_000n;
+  return `${gramsWhole}.${gramsFrac.toString().padStart(4, '0')}`;
 }
 
 export async function fetchGoldMarketPrices(): Promise<GoldMarketPriceItem[]> {
@@ -117,5 +184,6 @@ export async function fetchGoldMarketPrices(): Promise<GoldMarketPriceItem[]> {
       buybackPrice: toMoney(item.buyback_price),
       currency: item.currency,
       asOf: new Date(item.as_of),
+      weightGrams: weightToGrams(item.product.weight, item.product.unit),
     }));
 }

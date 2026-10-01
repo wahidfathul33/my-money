@@ -10,7 +10,11 @@ import { inArray } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { dbWrite } from '@/lib/db/write';
 import { goldMarketPrices } from '@/lib/db/schema';
-import { listGoldMarketPrices, listGoldVendors } from '../market-queries';
+import {
+  listGoldMarketPrices,
+  listGoldMarketQuotesForWeights,
+  listGoldVendors,
+} from '../market-queries';
 
 describe('gold market price queries', () => {
   const externalIds: bigint[] = [];
@@ -22,7 +26,14 @@ describe('gold market price queries', () => {
     }
   });
 
-  async function seed(rows: { externalId: bigint; vendorName: string; productName: string }[]) {
+  async function seed(
+    rows: {
+      externalId: bigint;
+      vendorName: string;
+      productName: string;
+      weightGrams?: string | null;
+    }[],
+  ) {
     for (const row of rows) {
       externalIds.push(row.externalId);
       await dbWrite.insert(goldMarketPrices).values({
@@ -33,6 +44,7 @@ describe('gold market price queries', () => {
         priceDate: '2026-08-29',
         buyPrice: 140_000_000n,
         buybackPrice: 125_000_000n,
+        weightGrams: row.weightGrams ?? null,
         currency: 'IDR',
         asOf: new Date('2026-08-29T08:15:00Z'),
       });
@@ -48,7 +60,9 @@ describe('gold market price queries', () => {
     ]);
 
     const productNames = (await listGoldMarketPrices()).map((i) => i.productName);
-    expect(productNames).toEqual(expect.arrayContaining(['Emas Antam 1 Gram', 'Emas Pegadaian 5 Gram']));
+    expect(productNames).toEqual(
+      expect.arrayContaining(['Emas Antam 1 Gram', 'Emas Pegadaian 5 Gram']),
+    );
   });
 
   it('listGoldMarketPrices filters by a case-insensitive vendor or product match', async () => {
@@ -60,13 +74,42 @@ describe('gold market price queries', () => {
     ]);
 
     const byVendor = await listGoldMarketPrices('antam');
-    expect(byVendor.map((i) => i.vendorName)).toEqual(['Antam']);
+    expect(byVendor).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ vendorName: 'Antam', productName: 'Emas Antam 1 Gram' }),
+      ]),
+    );
+    expect(byVendor.every((item) => item.productName.toLowerCase().includes('antam'))).toBe(true);
 
     const byProduct = await listGoldMarketPrices('5 Gram');
-    expect(byProduct.map((i) => i.vendorName)).toEqual(['Pegadaian']);
+    expect(byProduct).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ vendorName: 'Pegadaian', productName: 'Emas Pegadaian 5 Gram' }),
+      ]),
+    );
+    expect(byProduct.every((item) => item.productName.includes('5 Gram'))).toBe(true);
 
-    const noMatch = await listGoldMarketPrices('nonexistent-vendor-xyz');
-    expect(noMatch).toEqual([]);
+    expect(await listGoldMarketPrices('nonexistent-vendor-xyz')).toEqual([]);
+  });
+
+  it('lists only matching denomination quotes and omits rows with unknown weights', async () => {
+    const a = BigInt(Date.now()) + 3000n;
+    const b = a + 1n;
+    const c = a + 2n;
+    await seed([
+      { externalId: a, vendorName: 'Galeri 24', productName: 'Emas 1 Gram', weightGrams: '1.0000' },
+      { externalId: b, vendorName: 'Antam', productName: 'Emas 5 Gram', weightGrams: '5.0000' },
+      { externalId: c, vendorName: 'Unknown', productName: 'Emas?', weightGrams: null },
+    ]);
+
+    const quotes = await listGoldMarketQuotesForWeights(['1.0000']);
+    expect(quotes).toHaveLength(1);
+    expect(quotes[0]).toMatchObject({
+      vendorName: 'Galeri 24',
+      productName: 'Emas 1 Gram',
+      weightGrams: '1.0000',
+    });
+    expect(await listGoldMarketQuotesForWeights([])).toEqual([]);
   });
 
   it('listGoldVendors returns distinct vendor names, ordered', async () => {
